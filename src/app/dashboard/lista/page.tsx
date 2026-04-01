@@ -1,22 +1,162 @@
-import { WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
+"use client";
+
+import { useState } from "react";
+import { PlusIcon, XMarkIcon, CheckCircleIcon, CalendarIcon } from "@heroicons/react/24/outline";
+
+interface PlanoAcao {
+  id: string;
+  nome: string;
+  descricao: string;
+  prazo: string;
+  status: "Pendente" | "Concluído";
+}
 
 export default function ListaTarefas() {
+  const [planos, setPlanos] = useState<PlanoAcao[]>([
+    {
+      id: "1",
+      nome: "Substituição do Transformador TP-02",
+      descricao: "Realizar o isolamento e troca da peça defeituosa identificada na inspeção.",
+      prazo: "2026-04-15",
+      status: "Pendente"
+    }
+  ]);
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [nome, setNome] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [prazo, setPrazo] = useState("");
+
+  const criarPlano = (e: React.FormEvent) => {
+    e.preventDefault();
+    const novoPlano: PlanoAcao = {
+      id: Date.now().toString(),
+      nome,
+      descricao,
+      prazo,
+      status: "Pendente"
+    };
+    
+    setPlanos([...planos, novoPlano]);
+    setIsModalOpen(false);
+    setNome("");
+    setDescricao("");
+    setPrazo("");
+  };
+
+  const alternarStatus = (id: string) => {
+    setPlanos(planos.map(plano => {
+      if (plano.id === id) {
+        return { ...plano, status: plano.status === "Pendente" ? "Concluído" : "Pendente" };
+      }
+      return plano;
+    }));
+  };
+
   return (
-    <div className="h-full flex flex-col items-center justify-center">
-      <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-3xl p-12 text-center border border-white/40 shadow-xl max-w-lg w-full">
-        <div className="w-24 h-24 bg-gradient-to-br from-[#0b7336] to-[#298d4a] rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/30">
-          <WrenchScrewdriverIcon className="w-12 h-12 text-white" />
+    <div className="h-full flex flex-col">
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Planos de Ação</h1>
+          <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Acompanhe tarefas e prazos da equipe CYMI.</p>
         </div>
-        <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-4 tracking-tight">Lista de Tarefas</h2>
-        <p className="text-gray-500 dark:text-gray-400 text-lg leading-relaxed">
-          Este módulo está em desenvolvimento. Aqui você poderá acompanhar checklist de manutenções, tarefas diárias da equipe e designar responsáveis.
-        </p>
-        <div className="mt-8">
-          <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-bold bg-green-50 text-[#0b7336] dark:bg-green-500/10 dark:text-green-400 border border-green-200 dark:border-green-500/20">
-            Em breve
-          </span>
-        </div>
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="group flex items-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-green-500/50 hover:-translate-y-0.5"
+        >
+          <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
+          Novo Plano
+        </button>
       </div>
+
+      <div className="flex-1 overflow-y-auto pb-8">
+        {planos.length === 0 ? (
+           <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-3xl p-12 text-center border border-white/40 shadow-xl flex flex-col items-center justify-center min-h-[300px]">
+             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Nenhum plano ativo</h3>
+             <p className="mt-2 text-gray-500">Crie seu primeiro plano de ação acima.</p>
+           </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {planos.map((plano) => {
+               const estaAtrasado = plano.status === 'Pendente' && new Date(plano.prazo) < new Date();
+               return (
+                <div key={plano.id} className="group bg-white/70 dark:bg-gray-800/70 backdrop-blur-lg rounded-3xl p-6 border border-white/50 dark:border-gray-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(11,115,54,0.1)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between">
+                  <div className={`absolute left-0 top-0 w-1.5 h-full ${plano.status === 'Concluído' ? 'bg-[#0b7336]' : estaAtrasado ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+                  
+                  <div>
+                    <div className="flex justify-between items-start mb-2 pl-2">
+                       <h3 className={`text-xl font-bold leading-tight ${plano.status === 'Concluído' ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-white'}`}>
+                         {plano.nome}
+                       </h3>
+                       <button onClick={() => alternarStatus(plano.id)} className={`p-1.5 rounded-full transition-colors ${plano.status === 'Concluído' ? 'text-[#0b7336] bg-green-50' : 'text-gray-300 hover:text-green-500 hover:bg-green-50'}`}>
+                         <CheckCircleIcon className="w-8 h-8" />
+                       </button>
+                    </div>
+                    <p className={`pl-2 text-sm mb-6 ${plano.status === 'Concluído' ? 'text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
+                      {plano.descricao}
+                    </p>
+                  </div>
+                  
+                  <div className="pl-2 pt-4 border-t border-gray-100 dark:border-gray-700/50 flex items-center">
+                    <span className={`flex items-center text-sm font-bold px-3 py-1.5 rounded-xl ${plano.status === 'Concluído' ? 'bg-gray-100 text-gray-400' : estaAtrasado ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
+                      <CalendarIcon className="w-4 h-4 mr-2" />
+                      Prazo: {new Date(plano.prazo).toLocaleDateString('pt-BR')}
+                    </span>
+                  </div>
+                </div>
+               );
+            })}
+          </div>
+        )}
+      </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+          <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
+          <div className="relative bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl overflow-hidden w-full max-w-lg transform transition-all p-8">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white">Novo Plano de Ação</h3>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full transition-colors text-gray-500">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={criarPlano} className="space-y-5">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Nome do Plano</label>
+                <input
+                  type="text" required value={nome} onChange={(e) => setNome(e.target.value)}
+                  className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
+                  placeholder="Título resumido do plano"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Descrição / Escopo</label>
+                <textarea
+                  required value={descricao} onChange={(e) => setDescricao(e.target.value)}
+                  rows={3}
+                  className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium resize-none"
+                  placeholder="Detalhamento claro das ações tomadas..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Prazo de Cumprimento</label>
+                <input
+                  type="date" required value={prazo} onChange={(e) => setPrazo(e.target.value)}
+                  className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
+                />
+              </div>
+
+              <div className="pt-4">
+                <button type="submit" className="w-full py-4 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all hover:-translate-y-0.5">
+                  Adicionar Plano
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
