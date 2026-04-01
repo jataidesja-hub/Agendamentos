@@ -1,4 +1,6 @@
 import Sidebar from "./Sidebar";
+import MobileNav from "./MobileNav";
+import InstallPrompt from "@/components/InstallPrompt";
 import { MagnifyingGlassIcon, BellIcon } from "@heroicons/react/24/outline";
 
 export default function DashboardLayout({
@@ -45,12 +47,14 @@ export default function DashboardLayout({
           </div>
         </header>
         
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-8 pt-4">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 pt-4 pb-28 md:pb-8">
           <div className="max-w-7xl mx-auto h-full">
             {children}
           </div>
         </main>
       </div>
+      <MobileNav />
+      <InstallPrompt />
     </div>
   );
 }
