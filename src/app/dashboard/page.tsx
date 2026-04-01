@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 
 interface Agendamento {
