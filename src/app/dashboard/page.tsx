@@ -51,7 +51,13 @@ export default function Dashboard() {
       ])
       .select();
 
-    if (!error && data) {
+    if (error) {
+      alert("Erro ao salvar no banco (Verifique o Supabase / RLS): " + error.message);
+      console.error(error);
+      return;
+    }
+
+    if (data) {
       setAgendamentos([...agendamentos, data[0]]);
       setIsModalOpen(false);
       setDescricao(""); setDataAgendamento(""); setPrioridade("Média"); setAlerta(false);
