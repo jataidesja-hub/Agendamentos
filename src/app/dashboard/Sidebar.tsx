@@ -15,41 +15,45 @@ export default function Sidebar() {
   ];
 
   return (
-    <div className="w-64 bg-white dark:bg-gray-800 shadow-md flex flex-col hidden md:flex border-r dark:border-gray-700">
-      <div className="h-16 flex items-center px-6 border-b dark:border-gray-700 bg-gradient-to-r from-[#0b7336] to-[#298d4a]">
-        <h2 className="text-xl font-bold text-white tracking-tight">CYMI O&M</h2>
+    <div className="w-72 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-r border-white/40 dark:border-gray-800/40 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex flex-col hidden md:flex transition-all duration-300 z-10 relative">
+      <div className="h-24 flex items-center px-8 border-b border-gray-100/50 dark:border-gray-800/50 bg-gradient-to-r from-[#0b7336]/10 to-transparent">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0b7336] to-[#298d4a] shadow-lg shadow-green-500/30 flex items-center justify-center">
+            <span className="text-white font-bold text-xl tracking-tighter">C</span>
+          </div>
+          <h2 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-[#0b7336] to-[#298d4a] tracking-tight">CYMI O&M</h2>
+        </div>
       </div>
-      <nav className="flex-1 px-4 py-6 space-y-1">
-        {navigation.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`${
-                isActive
-                  ? "bg-green-50 dark:bg-gray-700 text-[#0b7336] dark:text-green-400"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-              } group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors`}
-            >
-              <item.icon
+      
+      <div className="px-6 py-4">
+        <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4 ml-2">Menu Principal</p>
+        <nav className="flex-1 space-y-2">
+          {navigation.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
                 className={`${
-                  isActive ? "text-[#0b7336] dark:text-green-400" : "text-gray-400 group-hover:text-gray-500"
-                } mr-3 flex-shrink-0 h-6 w-6`}
-                aria-hidden="true"
-              />
-              {item.name}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="p-4 border-t dark:border-gray-700">
-        <Link 
-          href="/" 
-          className="flex items-center text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-        >
-          Sair do Sistema
-        </Link>
+                  isActive
+                    ? "bg-white dark:bg-gray-800 shadow-md shadow-gray-200/50 dark:shadow-none text-[#0b7336] dark:text-green-400 scale-[1.02]"
+                    : "text-gray-500 dark:text-gray-400 hover:bg-white/50 dark:hover:bg-gray-800/50 hover:text-gray-800 dark:hover:text-gray-200"
+                } group flex items-center px-4 py-3.5 text-sm font-semibold rounded-2xl transition-all duration-300 ease-in-out`}
+              >
+                <item.icon
+                  className={`${
+                    isActive ? "text-[#0b7336] dark:text-green-400" : "text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300"
+                  } mr-4 flex-shrink-0 h-6 w-6 transition-colors duration-300`}
+                  aria-hidden="true"
+                />
+                {item.name}
+                {isActive && (
+                  <div className="ml-auto w-1.5 h-6 bg-[#0b7336] dark:bg-green-400 rounded-full" />
+                )}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );
