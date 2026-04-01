@@ -43,7 +43,7 @@ export default function Dashboard() {
   const criarAgendamento = async (e: React.FormEvent) => {
     e.preventDefault();
     const dateISO = new Date(dataAgendamento).toISOString();
-    
+
     const { data, error } = await supabase
       .from("agendamentos")
       .insert([
@@ -70,7 +70,7 @@ export default function Dashboard() {
   };
 
   const prioridadeColor = (nivel: string) => {
-    switch(nivel) {
+    switch (nivel) {
       case "Alta": return "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20";
       case "Média": return "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20";
       case "Baixa": return "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
@@ -79,7 +79,7 @@ export default function Dashboard() {
   };
 
   const statusColor = (status: string) => {
-    switch(status) {
+    switch (status) {
       case "Concluído": return "bg-[#0b7336] text-white";
       case "Em Andamento": return "bg-blue-500 text-white";
       case "Cancelado": return "bg-gray-500 text-white";
@@ -94,7 +94,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Visão Geral</h1>
           <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Você tem {agendamentos.length} agendamentos registrados no sistema.</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="group flex items-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-green-500/50 hover:-translate-y-0.5"
         >
@@ -122,7 +122,7 @@ export default function Dashboard() {
                 <div key={item.id} className="group bg-white/70 dark:bg-gray-800/70 backdrop-blur-lg rounded-3xl p-6 border border-white/50 dark:border-gray-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(11,115,54,0.1)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
                   {/* Accent Line */}
                   <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#0b7336] to-[#298d4a] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  
+
                   <div className="flex justify-between items-start mb-4">
                     <span className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-xl border ${prioridadeColor(item.prioridade)}`}>
                       {item.prioridade}
@@ -134,16 +134,16 @@ export default function Dashboard() {
                       </span>
                     )}
                   </div>
-                  
+
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 leading-tight line-clamp-2 min-h-[3.5rem]">
                     {item.descricao}
                   </h3>
-                  
+
                   <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm font-medium mb-6 bg-gray-50 dark:bg-gray-900/50 px-3 py-2 rounded-xl w-max">
                     <ClockIcon className="w-4 h-4 mr-2 text-[#0b7336]" />
-                    {data.toLocaleDateString('pt-BR')} às {data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit'})}
+                    {data.toLocaleDateString('pt-BR')} às {data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </div>
-                  
+
                   <div className="pt-4 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Status</span>
                     <select
@@ -183,7 +183,7 @@ export default function Dashboard() {
                   placeholder="Ex: Manutenção da Subestação A"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Quando ocorrerá?</label>
                 <input
@@ -198,9 +198,9 @@ export default function Dashboard() {
                   value={prioridade} onChange={(e) => setPrioridade(e.target.value as "Baixa" | "Média" | "Alta")}
                   className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium appearance-none"
                 >
-                   <option value="Baixa">🟢 Baixa (Rotina/Normal)</option>
-                   <option value="Média">🟡 Média (Atenção)</option>
-                   <option value="Alta">🔴 Alta (Crítico/Urgente)</option>
+                  <option value="Baixa">🟢 Baixa (Rotina/Normal)</option>
+                  <option value="Média">🟡 Média (Atenção)</option>
+                  <option value="Alta">🔴 Alta (Crítico/Urgente)</option>
                 </select>
               </div>
 
