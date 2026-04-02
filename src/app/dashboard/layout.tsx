@@ -13,6 +13,10 @@ export default function DashboardLayout({
       {/* Decorative background blobs */}
       <div className="absolute top-[-10%] left-[-5%] w-96 h-96 bg-[#0b7336]/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-5%] w-96 h-96 bg-[#298d4a]/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Background Brasil Map */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0" style={{ opacity: 0.04 }}>
+        <img src="/bg-brasil.png" alt="" className="w-[70%] max-w-[900px] select-none" draggable={false} />
+      </div>
 
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden relative z-0">
