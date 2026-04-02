@@ -292,73 +292,6 @@ export default function ControleChaves() {
           </div>
         ) : (
           <div className="space-y-12">
-            {/* Seção: Disponíveis */}
-            <section>
-              <div className="flex items-center space-x-3 mb-6">
-                <div className="w-2 h-8 bg-[#0b7336] rounded-full"></div>
-                <h2 className="text-2xl font-black dark:text-white uppercase tracking-tight">Disponíveis</h2>
-                <span className="px-3 py-1 bg-green-100 text-[#0b7336] dark:bg-green-500/10 text-xs font-black rounded-xl border border-green-100 dark:border-green-500/20">
-                  {veiculos.filter(v => v.status === "Disponível").length}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {veiculos.filter(v => v.status === "Disponível").length === 0 ? (
-                  <div className="col-span-1 md:col-span-2 text-center py-8 bg-gray-50/50 dark:bg-gray-800/30 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700 text-gray-400 text-sm">
-                    Nenhum veículo disponível no momento.
-                  </div>
-                ) : (
-                  veiculos.filter(v => v.status === "Disponível").map(item => (
-                    <div key={item.id} className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
-                      <div className="absolute left-0 top-0 w-2 h-full bg-[#0b7336]"></div>
-                      <div className="pl-4">
-                        <div className="flex justify-between items-start">
-                          <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block bg-green-100 text-green-700 dark:bg-green-500/20">
-                            {item.status}
-                          </span>
-                          <button onClick={() => excluirVeiculo(item.id)} className="p-2 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100">
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        </div>
-                        
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center mt-1">
-                          <KeyIcon className="w-5 h-5 mr-2 text-gray-400" /> {item.identificacao}
-                        </h3>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm font-medium flex items-center mt-1 bg-gray-100 dark:bg-gray-900 w-max px-2 py-1 rounded-lg">
-                          Placa: {item.placa}
-                        </p>
-
-                        <div className="mt-4 space-y-2">
-                          {item.ultima_devolucao && (
-                            <div className="text-xs font-medium text-gray-500">
-                              <span className="text-green-600 font-bold">Última devolução: </span>
-                              <ClockIcon className="w-3.5 h-3.5 inline mr-1"/>
-                              {formatarDataHora(item.ultima_devolucao)}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="mt-5 flex flex-wrap gap-3">
-                          <button 
-                            onClick={() => {
-                              if (funcionarios.length === 0) return toast.error("Cadastre pelo menos 1 funcionário primeiro!");
-                              setVeiculoParaSaida(item);
-                            }} 
-                            className="px-5 py-3 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 font-bold rounded-2xl transition-all flex items-center shadow-sm text-sm"
-                          >
-                            Entregar Chave <ArrowPathIcon className="w-4 h-4 ml-2" />
-                          </button>
-                          <button onClick={() => fetchHistorico(item.id)} className="px-5 py-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-bold rounded-2xl transition-all flex items-center shadow-sm text-sm">
-                            <EyeIcon className="w-4 h-4 mr-2" /> Ver Histórico
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
             {/* Seção: Em Uso */}
             <section>
               <div className="flex items-center space-x-3 mb-6">
@@ -414,6 +347,73 @@ export default function ControleChaves() {
                         <div className="mt-5 flex flex-wrap gap-3">
                           <button onClick={() => registrarDevolucao(item.id, item.funcionario_atual || "")} className="px-5 py-3 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 font-bold rounded-2xl transition-all flex items-center shadow-sm text-sm">
                             <ArrowPathIcon className="w-4 h-4 mr-2" /> Confirmar Devolução
+                          </button>
+                          <button onClick={() => fetchHistorico(item.id)} className="px-5 py-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-bold rounded-2xl transition-all flex items-center shadow-sm text-sm">
+                            <EyeIcon className="w-4 h-4 mr-2" /> Ver Histórico
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            {/* Seção: Disponíveis */}
+            <section>
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-2 h-8 bg-[#0b7336] rounded-full"></div>
+                <h2 className="text-2xl font-black dark:text-white uppercase tracking-tight">Disponíveis</h2>
+                <span className="px-3 py-1 bg-green-100 text-[#0b7336] dark:bg-green-500/10 text-xs font-black rounded-xl border border-green-100 dark:border-green-500/20">
+                  {veiculos.filter(v => v.status === "Disponível").length}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {veiculos.filter(v => v.status === "Disponível").length === 0 ? (
+                  <div className="col-span-1 md:col-span-2 text-center py-8 bg-gray-50/50 dark:bg-gray-800/30 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700 text-gray-400 text-sm">
+                    Nenhum veículo disponível no momento.
+                  </div>
+                ) : (
+                  veiculos.filter(v => v.status === "Disponível").map(item => (
+                    <div key={item.id} className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                      <div className="absolute left-0 top-0 w-2 h-full bg-[#0b7336]"></div>
+                      <div className="pl-4">
+                        <div className="flex justify-between items-start">
+                          <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block bg-green-100 text-green-700 dark:bg-green-500/20">
+                            {item.status}
+                          </span>
+                          <button onClick={() => excluirVeiculo(item.id)} className="p-2 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100">
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                        
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center mt-1">
+                          <KeyIcon className="w-5 h-5 mr-2 text-gray-400" /> {item.identificacao}
+                        </h3>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm font-medium flex items-center mt-1 bg-gray-100 dark:bg-gray-900 w-max px-2 py-1 rounded-lg">
+                          Placa: {item.placa}
+                        </p>
+
+                        <div className="mt-4 space-y-2">
+                          {item.ultima_devolucao && (
+                            <div className="text-xs font-medium text-gray-500">
+                              <span className="text-green-600 font-bold">Última devolução: </span>
+                              <ClockIcon className="w-3.5 h-3.5 inline mr-1"/>
+                              {formatarDataHora(item.ultima_devolucao)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-5 flex flex-wrap gap-3">
+                          <button 
+                            onClick={() => {
+                              if (funcionarios.length === 0) return toast.error("Cadastre pelo menos 1 funcionário primeiro!");
+                              setVeiculoParaSaida(item);
+                            }} 
+                            className="px-5 py-3 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 font-bold rounded-2xl transition-all flex items-center shadow-sm text-sm"
+                          >
+                            Entregar Chave <ArrowPathIcon className="w-4 h-4 ml-2" />
                           </button>
                           <button onClick={() => fetchHistorico(item.id)} className="px-5 py-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-bold rounded-2xl transition-all flex items-center shadow-sm text-sm">
                             <EyeIcon className="w-4 h-4 mr-2" /> Ver Histórico
