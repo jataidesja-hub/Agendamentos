@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, ArrowRightOnRectangleIcon } from "@heroicons/react/24/outline";
+import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, ArrowRightOnRectangleIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 
 export default function Sidebar() {
@@ -13,6 +13,7 @@ export default function Sidebar() {
     { name: "Lista de Tarefas", href: "/dashboard/lista", icon: QueueListIcon },
     { name: "Alertas", href: "/dashboard/alertas", icon: BellAlertIcon },
     { name: "Relatórios", href: "/dashboard/relatorios", icon: ChartBarIcon },
+    { name: "Configurações", href: "/dashboard/configuracoes", icon: Cog6ToothIcon },
   ];
 
   return (
