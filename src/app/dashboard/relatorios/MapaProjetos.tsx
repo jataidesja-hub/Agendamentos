@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 import { supabase } from '@/lib/supabase';
 import { MapPinIcon, PlusIcon, MapIcon, MagnifyingGlassIcon, CursorArrowRaysIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
@@ -17,8 +16,8 @@ interface Projeto {
   detalhes_json: any;
 }
 
-// Limites do Brasil
-const BRAZIL_BOUNDS: L.LatLngBoundsExpression = [
+// Limites do Brasil (Lat/Lng)
+const BRAZIL_BOUNDS: [[number, number], [number, number]] = [
   [-33.75, -73.99], // Sudoeste
   [5.27, -28.84]    // Nordeste
 ];
@@ -64,15 +63,19 @@ export default function MapaProjetos() {
   const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
-    import('leaflet').then((leaf) => {
-      const DefaultIcon = leaf.icon({
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
+    // Leaflet side effects must be inside useEffect
+    if (typeof window !== 'undefined') {
+      import('leaflet').then((L) => {
+        const DefaultIcon = L.icon({
+          iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+          shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+        });
+        L.Marker.prototype.options.icon = DefaultIcon;
       });
-      leaf.Marker.prototype.options.icon = DefaultIcon;
-    });
+    }
+    
     fetchProjetos();
   }, []);
 
@@ -209,9 +212,9 @@ export default function MapaProjetos() {
                   value={novoEndereco}
                   onChange={(e) => {
                     setNovoEndereco(e.target.value);
-                    if (coordsManuais) setCoordsManuais(null); // Reset manual flip if typing
+                    if (coordsManuais) setCoordsManuais(null); 
                   }}
-                  placeholder={coordsManuais ? "Coordenadas capturadas!" : "Buscal por texto..."} 
+                  placeholder={coordsManuais ? "Coordenadas capturadas!" : "Busca por texto..."} 
                   className={`w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border ${coordsManuais ? 'border-green-500 ring-2 ring-green-500/20' : 'border-gray-200 dark:border-gray-700'} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none transition-all`}
                 />
                 <MagnifyingGlassIcon className={`w-4 h-4 absolute left-3 top-3 ${coordsManuais ? 'text-green-500' : 'text-gray-400'}`} />
@@ -242,7 +245,7 @@ export default function MapaProjetos() {
       {/* Map Container */}
       <div className="relative flex-1 min-h-[600px] w-full rounded-3xl overflow-hidden shadow-2xl border border-white/20">
         <MapContainer 
-          center={[-15.78, -47.93]} // Brasília
+          center={[-15.78, -47.93]} 
           zoom={4} 
           minZoom={4}
           maxBounds={BRAZIL_BOUNDS}
@@ -294,14 +297,8 @@ export default function MapaProjetos() {
           {showAddForm && coordsManuais && (
             <Marker 
               position={[coordsManuais.lat, coordsManuais.lon]}
-              icon={L.icon({
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-                shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
-              })}
             >
-              <Popup autoOpen>
+              <Popup>
                 <span className="font-bold text-[#0b7336]">Nova Localização Selecionada</span>
               </Popup>
             </Marker>
