@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { PlusIcon, XMarkIcon, CheckCircleIcon, CalendarIcon, PencilIcon, ClockIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
+import { toast } from "react-hot-toast";
 
 interface PlanoAcao {
   id: string;
@@ -95,7 +96,7 @@ export default function ListaTarefas() {
     if (editingId) {
       setPlanos(planos.map(p => p.id === editingId ? { ...p, nome, descricao, prazo, horaOpcional } : p));
       enviarNotificacaoEmail(nome, "Atualizado");
-      alert("Sucesso! O Plano de Ação foi atualizado e um e-mail real foi enviado.");
+      toast.success("Plano atualizado com sucesso!");
     } else {
       const novoPlano: PlanoAcao = {
         id: Date.now().toString(),
@@ -107,7 +108,7 @@ export default function ListaTarefas() {
       };
       setPlanos([...planos, novoPlano]);
       enviarNotificacaoEmail(nome, "Criado");
-      alert("Plano criado! Verifique sua caixa de e-mail (foi enviado um e-mail real).");
+      toast.success("Plano criado e equipe notificada!");
     }
     setIsModalOpen(false);
   };

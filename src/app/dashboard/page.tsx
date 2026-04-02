@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon, UserIcon, PencilIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
+import { toast } from "react-hot-toast";
 import { User } from "@supabase/supabase-js";
 
 interface Agendamento {
@@ -116,6 +117,44 @@ export default function Dashboard() {
     }
   };
 
+  const gerarEBaixarICS = (nome: string, dataLocal: string, horaLocal: string) => {
+    try {
+      // Formata: YYYYMMDDTHHMMSS
+      const startDay = dataLocal.replace(/-/g, '');
+      const defaultTime = "090000";
+      const startTime = horaLocal ? horaLocal.replace(":", "") + "00" : defaultTime;
+      const startString = startDay + "T" + startTime;
+      
+      const horaNum = parseInt(startTime.substring(0,2));
+      const endHoraStr = (horaNum < 23 ? horaNum + 1 : 23).toString().padStart(2, '0');
+      const endTime = endHoraStr + startTime.substring(2);
+      const endString = startDay + "T" + endTime;
+
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//CYMI O&M//Agenda//PT
+BEGIN:VEVENT
+UID:${Date.now()}@cymi.com
+DTSTAMP:${startString}Z
+DTSTART:${startString}
+DTEND:${endString}
+SUMMARY:${nome}
+DESCRIPTION:Agendamento criado no sistema CYMI O&M
+END:VEVENT
+END:VCALENDAR`;
+
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const link = document.createElement('a');
+      link.href = window.URL.createObjectURL(blob);
+      link.download = `Agendamento_${nome.replace(/\s+/g, '_')}.ics`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch(err) {
+      console.error("Erro gerando ICS", err);
+    }
+  };
+
   const salvarAgendamento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -136,20 +175,21 @@ export default function Dashboard() {
     if (editingId) {
       const { error } = await supabase.from("agendamentos").update(payload).eq("id", editingId);
       if (error) {
-        alert("Erro ao atualizar: " + error.message);
+        toast.error("Erro ao atualizar: " + error.message);
       } else {
         enviarNotificacaoEmail(descricao, "Atualizado");
-        alert("Atualizado com sucesso! E-mail de notificação (real) enviado.");
+        toast.success("Atualizado com sucesso! E-mail enviado.");
         fetchAgendamentos(user.id);
         setIsModalOpen(false);
       }
     } else {
       const { data, error } = await supabase.from("agendamentos").insert([payload]).select();
       if (error) {
-        alert("Erro ao salvar! Certifique-se de ter criado a coluna 'user_id' e 'horaOpcional': " + error.message);
+        toast.error("Erro ao salvar! Verifique a conexão com o banco.");
       } else if (data) {
         enviarNotificacaoEmail(descricao, "Criado");
-        alert("Criado com sucesso! E-mail de notificação (real) enviado.");
+        toast.success("Agendamento criado! Seu calendário foi aberto.");
+        gerarEBaixarICS(descricao, dataAgendamento, horaAgendamento);
         setAgendamentos([...agendamentos, data[0]]);
         setIsModalOpen(false);
       }

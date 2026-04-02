@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { User } from "@supabase/supabase-js";
 import { PhoneIcon, EnvelopeIcon, BellAlertIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
+import { toast } from "react-hot-toast";
 
 export default function Configuracoes() {
   const [user, setUser] = useState<User | null>(null);
@@ -65,10 +66,9 @@ export default function Configuracoes() {
       .upsert(perfilData, { onConflict: 'user_id' });
 
     if (error) {
-      alert("Erro ao salvar! Verifique se você rodou o SQL de criação da tabela 'perfis'. Erro: " + error.message);
+      toast.error("Erro ao salvar! Erro: " + error.message);
     } else {
-      setSuccessMsg("Configurações de alerta salvas com sucesso!");
-      setTimeout(() => setSuccessMsg(""), 3000);
+      toast.success("Configurações salvas com sucesso!");
     }
     setSaving(false);
   };

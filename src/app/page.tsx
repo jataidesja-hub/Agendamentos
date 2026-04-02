@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { LockClosedIcon, EnvelopeIcon, ArrowRightIcon } from "@heroicons/react/24/outline";
+import { toast } from "react-hot-toast";
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -49,7 +50,7 @@ export default function Login() {
       });
       error = signUpError;
       if (!error) {
-        alert("Conta criada! Verifique seu e-mail ou faça login (se o Supabase estiver configurado para auto-confirmação).");
+        toast.success("Conta criada! Verifique seu e-mail.");
         setIsLogin(true);
       }
     }
