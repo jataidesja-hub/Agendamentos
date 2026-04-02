@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PlusIcon, XMarkIcon, CheckCircleIcon, CalendarIcon, PencilIcon, ClockIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, XMarkIcon, CheckCircleIcon, CalendarIcon, PencilIcon, ClockIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 import { toast } from "react-hot-toast";
 
@@ -122,6 +122,13 @@ export default function ListaTarefas() {
     }));
   };
 
+  const excluirPlano = (id: string) => {
+    if (confirm("Tem certeza que deseja excluir este plano permanente?")) {
+      setPlanos(planos.filter(p => p.id !== id));
+      toast.success("Plano de Ação excluído!");
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-end mb-8">
@@ -157,12 +164,15 @@ export default function ListaTarefas() {
                        <h3 className={`text-xl font-bold leading-tight ${plano.status === 'Concluído' ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-white'}`}>
                          {plano.nome}
                        </h3>
-                     <div className="flex space-x-2">
-                       <button onClick={() => abrirModalEditar(plano)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors">
+                     <div className="flex space-x-1">
+                       <button onClick={() => abrirModalEditar(plano)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Editar">
                          <PencilIcon className="w-6 h-6" />
                        </button>
-                       <button onClick={() => alternarStatus(plano.id)} className={`p-1.5 rounded-full transition-colors ${plano.status === 'Concluído' ? 'text-[#0b7336] bg-green-50' : 'text-gray-300 hover:text-green-500 hover:bg-green-50'}`}>
+                       <button onClick={() => alternarStatus(plano.id)} className={`p-1.5 rounded-full transition-colors ${plano.status === 'Concluído' ? 'text-[#0b7336] bg-green-50' : 'text-gray-300 hover:text-green-500 hover:bg-green-50'}`} title="Concluir">
                          <CheckCircleIcon className="w-8 h-8" />
+                       </button>
+                       <button onClick={() => excluirPlano(plano.id)} className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Excluir">
+                         <TrashIcon className="w-6 h-6" />
                        </button>
                      </div>
                     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon, UserIcon, PencilIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon, UserIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 import { toast } from "react-hot-toast";
 import { User } from "@supabase/supabase-js";
@@ -201,6 +201,18 @@ END:VCALENDAR`;
     if (!error && user) fetchAgendamentos(user.id);
   };
 
+  const excluirAgendamento = async (id: string) => {
+    if (confirm("Tem certeza que deseja excluir este agendamento?")) {
+      const { error } = await supabase.from("agendamentos").delete().eq("id", id);
+      if (error) {
+        toast.error("Erro ao excluir: " + error.message);
+      } else {
+        toast.success("Agendamento excluído permanentemente!");
+        if (user) fetchAgendamentos(user.id);
+      }
+    }
+  };
+
   const prioridadeColor = (nivel: string) => {
     switch (nivel) {
       case "Alta": return "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20";
@@ -273,9 +285,14 @@ END:VCALENDAR`;
                         </span>
                       )}
                     </div>
-                    <button onClick={() => abrirModalEditar(item)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors">
-                      <PencilIcon className="w-5 h-5" />
-                    </button>
+                    <div className="flex space-x-1">
+                      <button onClick={() => abrirModalEditar(item)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Editar">
+                        <PencilIcon className="w-5 h-5" />
+                      </button>
+                      <button onClick={() => excluirAgendamento(item.id)} className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Excluir">
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
 
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 leading-tight line-clamp-2 min-h-[3.5rem]">
