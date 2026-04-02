@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon } from "@heroicons/react/24/outline";
+import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, ArrowRightOnRectangleIcon } from "@heroicons/react/24/outline";
+import { supabase } from "@/lib/supabase";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -54,6 +55,19 @@ export default function Sidebar() {
             );
           })}
         </nav>
+      </div>
+
+      <div className="mt-auto px-6 py-6 border-t border-gray-100/50 dark:border-gray-800/50">
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut();
+            window.location.href = "/";
+          }}
+          className="w-full flex items-center px-4 py-3.5 text-sm font-semibold rounded-2xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-300"
+        >
+          <ArrowRightOnRectangleIcon className="mr-4 flex-shrink-0 h-6 w-6" />
+          Sair do Sistema
+        </button>
       </div>
     </div>
   );

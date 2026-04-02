@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon, UserIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
+import { User } from "@supabase/supabase-js";
 
 interface Agendamento {
   id: string;
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
 
   const [descricao, setDescricao] = useState("");
   const [dataAgendamento, setDataAgendamento] = useState("");
@@ -24,14 +26,35 @@ export default function Dashboard() {
   const [alerta, setAlerta] = useState(false);
 
   useEffect(() => {
-    fetchAgendamentos();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        window.location.href = "/";
+      } else {
+        setUser(session.user);
+        fetchAgendamentos(session.user.id);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        window.location.href = "/";
+      } else {
+        setUser(session.user);
+        fetchAgendamentos(session.user.id);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
-  const fetchAgendamentos = async () => {
+  const fetchAgendamentos = async (userId: string) => {
     setLoading(true);
     const { data, error } = await supabase
       .from("agendamentos")
       .select("*")
+      .eq("user_id", userId)
       .order("data", { ascending: true });
 
     if (!error && data) {
@@ -42,17 +65,19 @@ export default function Dashboard() {
 
   const criarAgendamento = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+    
     const dateISO = new Date(dataAgendamento).toISOString();
 
     const { data, error } = await supabase
       .from("agendamentos")
       .insert([
-        { descricao, data: dateISO, prioridade, alerta, status: "Pendente" }
+        { descricao, data: dateISO, prioridade, alerta, status: "Pendente", user_id: user.id }
       ])
       .select();
 
     if (error) {
-      alert("Erro ao salvar no banco (Verifique o Supabase / RLS): " + error.message);
+      alert("Erro ao salvar! Certifique-se de ter criado a coluna 'user_id' (uuid) na sua tabela 'agendamentos' no Supabase: " + error.message);
       console.error(error);
       return;
     }
@@ -66,7 +91,7 @@ export default function Dashboard() {
 
   const atualizarStatus = async (id: string, novoStatus: string) => {
     const { error } = await supabase.from("agendamentos").update({ status: novoStatus }).eq("id", id);
-    if (!error) fetchAgendamentos();
+    if (!error && user) fetchAgendamentos(user.id);
   };
 
   const prioridadeColor = (nivel: string) => {
@@ -91,6 +116,12 @@ export default function Dashboard() {
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-end mb-8">
         <div>
+          <div className="flex items-center space-x-3 mb-2">
+            <span className="flex items-center px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl text-sm font-bold">
+              <UserIcon className="w-4 h-4 mr-2" />
+              {user?.email}
+            </span>
+          </div>
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Visão Geral</h1>
           <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Você tem {agendamentos.length} agendamentos registrados no sistema.</p>
         </div>
