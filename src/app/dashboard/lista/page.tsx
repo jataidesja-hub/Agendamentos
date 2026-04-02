@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { PlusIcon, XMarkIcon, CheckCircleIcon, CalendarIcon, PencilIcon, ClockIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 import { toast } from "react-hot-toast";
+import { User } from "@supabase/supabase-js";
 
 interface PlanoAcao {
   id: string;
@@ -12,18 +13,13 @@ interface PlanoAcao {
   prazo: string;
   horaOpcional?: string;
   status: "Pendente" | "Concluído";
+  user_id?: string;
 }
 
 export default function ListaTarefas() {
-  const [planos, setPlanos] = useState<PlanoAcao[]>([
-    {
-      id: "1",
-      nome: "Substituição do Transformador TP-02",
-      descricao: "Realizar o isolamento e troca da peça defeituosa identificada na inspeção.",
-      prazo: "2026-04-15",
-      status: "Pendente"
-    }
-  ]);
+  const [user, setUser] = useState<User | null>(null);
+  const [planos, setPlanos] = useState<PlanoAcao[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,7 +32,9 @@ export default function ListaTarefas() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        // Busca o email configurado no perfil
+        setUser(session.user);
+        fetchPlanos(session.user.id);
+        // Busca email de notificação
         supabase
           .from("perfis")
           .select("email_notificacao")
@@ -49,6 +47,23 @@ export default function ListaTarefas() {
       }
     });
   }, []);
+
+  const fetchPlanos = async (userId: string) => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("planos_acao")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    
+    if (error) {
+      console.error("Erro ao buscar planos:", error.message);
+      toast.error("Erro ao carregar planos. Verifique se a tabela 'planos_acao' foi criada no Supabase.");
+    } else {
+      setPlanos(data || []);
+    }
+    setLoading(false);
+  };
 
   const enviarNotificacaoEmail = async (nomePlano: string, acao: 'Criado' | 'Atualizado') => {
     if (!userEmail) return;
@@ -93,39 +108,59 @@ export default function ListaTarefas() {
 
   const salvarPlano = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+
     if (editingId) {
-      setPlanos(planos.map(p => p.id === editingId ? { ...p, nome, descricao, prazo, horaOpcional } : p));
-      enviarNotificacaoEmail(nome, "Atualizado");
-      toast.success("Plano atualizado com sucesso!");
+      const { error } = await supabase
+        .from("planos_acao")
+        .update({ nome, descricao, prazo, horaOpcional })
+        .eq("id", editingId);
+      
+      if (error) {
+        toast.error("Erro ao atualizar: " + error.message);
+      } else {
+        enviarNotificacaoEmail(nome, "Atualizado");
+        toast.success("Plano atualizado com sucesso!");
+        fetchPlanos(user.id);
+      }
     } else {
-      const novoPlano: PlanoAcao = {
-        id: Date.now().toString(),
-        nome,
-        descricao,
-        prazo,
-        horaOpcional,
-        status: "Pendente"
-      };
-      setPlanos([...planos, novoPlano]);
-      enviarNotificacaoEmail(nome, "Criado");
-      toast.success("Plano criado e equipe notificada!");
+      const { error } = await supabase
+        .from("planos_acao")
+        .insert([{ nome, descricao, prazo, horaOpcional, status: "Pendente", user_id: user.id }]);
+      
+      if (error) {
+        toast.error("Erro ao criar plano: " + error.message);
+      } else {
+        enviarNotificacaoEmail(nome, "Criado");
+        toast.success("Plano criado e equipe notificada!");
+        fetchPlanos(user.id);
+      }
     }
     setIsModalOpen(false);
   };
 
-  const alternarStatus = (id: string) => {
-    setPlanos(planos.map(plano => {
-      if (plano.id === id) {
-        return { ...plano, status: plano.status === "Pendente" ? "Concluído" : "Pendente" };
-      }
-      return plano;
-    }));
+  const alternarStatus = async (id: string, statusAtual: string) => {
+    const novoStatus = statusAtual === "Pendente" ? "Concluído" : "Pendente";
+    const { error } = await supabase
+      .from("planos_acao")
+      .update({ status: novoStatus })
+      .eq("id", id);
+    
+    if (!error && user) {
+      toast.success(novoStatus === "Concluído" ? "Plano concluído!" : "Plano reaberto.");
+      fetchPlanos(user.id);
+    }
   };
 
-  const excluirPlano = (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este plano permanente?")) {
-      setPlanos(planos.filter(p => p.id !== id));
-      toast.success("Plano de Ação excluído!");
+  const excluirPlano = async (id: string) => {
+    if (confirm("Tem certeza que deseja excluir este plano permanentemente?")) {
+      const { error } = await supabase.from("planos_acao").delete().eq("id", id);
+      if (error) {
+        toast.error("Erro ao excluir: " + error.message);
+      } else {
+        toast.success("Plano de Ação excluído!");
+        if (user) fetchPlanos(user.id);
+      }
     }
   };
 
@@ -146,7 +181,11 @@ export default function ListaTarefas() {
       </div>
 
       <div className="flex-1 overflow-y-auto pb-8">
-        {planos.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0b7336]"></div>
+          </div>
+        ) : planos.length === 0 ? (
            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-3xl p-12 text-center border border-white/40 shadow-xl flex flex-col items-center justify-center min-h-[300px]">
              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Nenhum plano ativo</h3>
              <p className="mt-2 text-gray-500">Crie seu primeiro plano de ação acima.</p>
@@ -168,7 +207,7 @@ export default function ListaTarefas() {
                        <button onClick={() => abrirModalEditar(plano)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Editar">
                          <PencilIcon className="w-6 h-6" />
                        </button>
-                       <button onClick={() => alternarStatus(plano.id)} className={`p-1.5 rounded-full transition-colors ${plano.status === 'Concluído' ? 'text-[#0b7336] bg-green-50' : 'text-gray-300 hover:text-green-500 hover:bg-green-50'}`} title="Concluir">
+                       <button onClick={() => alternarStatus(plano.id, plano.status)} className={`p-1.5 rounded-full transition-colors ${plano.status === 'Concluído' ? 'text-[#0b7336] bg-green-50' : 'text-gray-300 hover:text-green-500 hover:bg-green-50'}`} title="Concluir">
                          <CheckCircleIcon className="w-8 h-8" />
                        </button>
                        <button onClick={() => excluirPlano(plano.id)} className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Excluir">
