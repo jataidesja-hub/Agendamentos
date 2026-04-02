@@ -93,37 +93,41 @@ export default function Configuracoes() {
       <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700">
         <form onSubmit={salvarPerfil} className="p-8 space-y-6">
           
-          <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Telefone (WhatsApp)</label>
+          <div className="opacity-60">
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+              Telefone (WhatsApp) <span className="text-orange-500 text-xs ml-2 uppercase bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded-full">Em Desenvolvimento</span>
+            </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <PhoneIcon className="h-5 w-5 text-gray-400" />
               </div>
               <input
+                disabled
                 type="tel"
                 value={telefone}
                 onChange={(e) => setTelefone(e.target.value)}
-                className="w-full pl-11 pr-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
-                placeholder="(11) 99999-9999"
+                className="w-full pl-11 pr-5 py-4 border-0 bg-gray-100 dark:bg-gray-800 rounded-2xl text-gray-500 dark:text-gray-500 cursor-not-allowed transition-all font-medium"
+                placeholder="(Em breve...)"
               />
             </div>
-            <p className="mt-2 text-xs text-gray-500">Usado para receber alertas pelo WhatsApp corporativo.</p>
+            <p className="mt-2 text-xs text-gray-500">O envio automatizado via WhatsApp será liberado em atualizações futuras.</p>
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">E-mail de Notificação</label>
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">E-mails de Notificação</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <EnvelopeIcon className="h-5 w-5 text-gray-400" />
               </div>
               <input
-                type="email"
+                type="text"
                 value={emailNotificacao}
                 onChange={(e) => setEmailNotificacao(e.target.value)}
                 className="w-full pl-11 pr-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
-                placeholder="seu.email@empresa.com"
+                placeholder="email1@empresa.com, email2@empresa.com"
               />
             </div>
+            <p className="mt-2 text-xs text-gray-500">Para notificar várias pessoas, separe os e-mails por vírgula (ex: email1@a.com, email2@b.com).</p>
           </div>
 
           <div className="border-t border-gray-100 dark:border-gray-700 pt-6 mt-6">

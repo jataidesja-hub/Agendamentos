@@ -12,9 +12,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltam campos obrigatórios (to, subject, html)' }, { status: 400 });
     }
 
+    const emailList = to.split(',').map((e: string) => e.trim()).filter(Boolean);
+
     const data = await resend.emails.send({
       from: 'Sistema CYMI <onboarding@resend.dev>', // onboarding@resend.dev funciona na camada gratuita com e-mails verificados na conta
-      to: [to],
+      to: emailList,
       subject: subject,
       html: html,
     });
