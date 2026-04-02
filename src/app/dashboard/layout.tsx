@@ -14,7 +14,7 @@ export default function DashboardLayout({
       <div className="absolute top-[-10%] left-[-5%] w-96 h-96 bg-[#0b7336]/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-5%] w-96 h-96 bg-[#298d4a]/10 rounded-full blur-3xl pointer-events-none" />
       {/* Background Brasil Map */}
-      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden" style={{ opacity: 0.03 }}>
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden" style={{ opacity: 0.08 }}>
         <img src="/bg-brasil-new.png" alt="" className="w-full h-full object-cover select-none" draggable={false} />
       </div>
       {/* Overlay to ensure readability */}
