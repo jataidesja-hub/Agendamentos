@@ -2,11 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, ArrowRightOnRectangleIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
+import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, ArrowRightOnRectangleIcon, Cog6ToothIcon, KeyIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
+import { useEffect, useState } from "react";
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setUserEmail(session.user.email || null);
+    });
+  }, []);
 
   const navigation = [
     { name: "Agendamentos", href: "/dashboard", icon: CalendarIcon },
@@ -15,6 +23,10 @@ export default function Sidebar() {
     { name: "Relatórios", href: "/dashboard/relatorios", icon: ChartBarIcon },
     { name: "Configurações", href: "/dashboard/configuracoes", icon: Cog6ToothIcon },
   ];
+
+  if (userEmail === "logistica@cymi.com.br") {
+    navigation.splice(4, 0, { name: "Controle de Chaves", href: "/dashboard/chaves", icon: KeyIcon });
+  }
 
   return (
     <div className="w-72 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-r border-white/40 dark:border-gray-800/40 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex flex-col hidden md:flex transition-all duration-300 z-10 relative">

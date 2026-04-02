@@ -2,10 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon } from "@heroicons/react/24/outline";
+import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, KeyIcon } from "@heroicons/react/24/outline";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function MobileNav() {
   const pathname = usePathname();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setUserEmail(session.user.email || null);
+    });
+  }, []);
 
   const navigation = [
     { name: "Agenda", href: "/dashboard", icon: CalendarIcon },
@@ -13,6 +22,10 @@ export default function MobileNav() {
     { name: "Alertas", href: "/dashboard/alertas", icon: BellAlertIcon },
     { name: "Painel", href: "/dashboard/relatorios", icon: ChartBarIcon },
   ];
+
+  if (userEmail === "logistica@cymi.com.br") {
+    navigation.splice(2, 0, { name: "Chaves", href: "/dashboard/chaves", icon: KeyIcon });
+  }
 
   return (
     <div className="md:hidden fixed bottom-6 left-4 right-4 z-50">
