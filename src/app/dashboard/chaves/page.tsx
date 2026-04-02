@@ -48,6 +48,26 @@ export default function ControleChaves() {
   useEffect(() => {
     fetchVeiculos();
     fetchFuncionarios();
+
+    // REALTIME: escuta mudanças na frota e funcionários
+    const channelFrota = supabase
+      .channel('realtime-frota')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'frota_veiculos' }, () => {
+        fetchVeiculos();
+      })
+      .subscribe();
+    
+    const channelFunc = supabase
+      .channel('realtime-funcionarios')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'funcionarios' }, () => {
+        fetchFuncionarios();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channelFrota);
+      supabase.removeChannel(channelFunc);
+    };
   }, []);
 
   const fetchVeiculos = async () => {

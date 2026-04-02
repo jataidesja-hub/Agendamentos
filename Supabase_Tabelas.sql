@@ -74,3 +74,17 @@ ALTER TABLE historico_chaves ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Acesso historico para autenticados" ON historico_chaves
   FOR ALL USING (auth.role() = 'authenticated');
+
+
+-- =============================================
+-- HABILITAR REALTIME EM TODAS AS TABELAS
+-- =============================================
+-- Isso permite que mudanças feitas por um usuário
+-- apareçam automaticamente na tela de outro usuário em tempo real.
+
+ALTER PUBLICATION supabase_realtime ADD TABLE agendamentos;
+ALTER PUBLICATION supabase_realtime ADD TABLE planos_acao;
+ALTER PUBLICATION supabase_realtime ADD TABLE frota_veiculos;
+ALTER PUBLICATION supabase_realtime ADD TABLE funcionarios;
+ALTER PUBLICATION supabase_realtime ADD TABLE historico_chaves;
+

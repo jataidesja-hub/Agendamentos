@@ -44,6 +44,16 @@ export default function Dashboard() {
           if (data?.email_notificacao) setUserEmail(data.email_notificacao);
           else setUserEmail(session.user.email || null);
         });
+
+        // REALTIME: escuta mudanças na tabela agendamentos
+        const channel = supabase
+          .channel('realtime-agendamentos')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, () => {
+            fetchAgendamentos(session.user.id);
+          })
+          .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
       }
     });
 

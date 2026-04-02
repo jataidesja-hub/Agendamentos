@@ -44,6 +44,16 @@ export default function ListaTarefas() {
             if (data?.email_notificacao) setUserEmail(data.email_notificacao);
             else setUserEmail(session.user.email || null);
           });
+
+        // REALTIME: escuta mudanças na tabela planos_acao
+        const channel = supabase
+          .channel('realtime-planos')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'planos_acao' }, () => {
+            fetchPlanos(session.user.id);
+          })
+          .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
       }
     });
   }, []);
