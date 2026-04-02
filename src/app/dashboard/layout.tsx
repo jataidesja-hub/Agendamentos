@@ -14,7 +14,7 @@ export default function DashboardLayout({
       <div className="absolute top-[-10%] left-[-5%] w-96 h-96 bg-[#0b7336]/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-5%] w-96 h-96 bg-[#298d4a]/10 rounded-full blur-3xl pointer-events-none" />
       {/* Background Brasil Map */}
-      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden" style={{ opacity: 0.08 }}>
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden" style={{ opacity: 0.15 }}>
         <img src="/bg-brasil-new.png" alt="" className="w-full h-full object-cover select-none" draggable={false} />
       </div>
       {/* Overlay to ensure readability */}
@@ -35,7 +35,7 @@ export default function DashboardLayout({
               />
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-6 mt-2">
             <button className="relative p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
               <BellIcon className="h-6 w-6" />
@@ -52,7 +52,7 @@ export default function DashboardLayout({
             </div>
           </div>
         </header>
-        
+
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 pt-4 pb-28 md:pb-8">
           <div className="max-w-7xl mx-auto h-full">
             {children}
