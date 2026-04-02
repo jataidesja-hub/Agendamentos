@@ -12,6 +12,7 @@ interface PlanoAcao {
   descricao: string;
   prazo: string;
   horaOpcional?: string;
+  prioridade: "Baixa" | "Média" | "Alta";
   status: "Pendente" | "Concluído";
   user_id?: string;
 }
@@ -27,6 +28,7 @@ export default function ListaTarefas() {
   const [descricao, setDescricao] = useState("");
   const [prazo, setPrazo] = useState("");
   const [horaOpcional, setHoraOpcional] = useState("");
+  const [prioridade, setPrioridade] = useState<"Baixa" | "Média" | "Alta">("Média");
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
@@ -104,6 +106,7 @@ export default function ListaTarefas() {
   const abrirModalNovo = () => {
     setEditingId(null);
     setNome(""); setDescricao(""); setPrazo(""); setHoraOpcional("");
+    setPrioridade("Média");
     setIsModalOpen(true);
   };
 
@@ -113,6 +116,7 @@ export default function ListaTarefas() {
     setDescricao(plano.descricao);
     setPrazo(plano.prazo);
     setHoraOpcional(plano.horaOpcional || "");
+    setPrioridade(plano.prioridade || "Média");
     setIsModalOpen(true);
   };
 
@@ -123,7 +127,7 @@ export default function ListaTarefas() {
     if (editingId) {
       const { error } = await supabase
         .from("planos_acao")
-        .update({ nome, descricao, prazo, horaOpcional })
+        .update({ nome, descricao, prazo, horaOpcional, prioridade })
         .eq("id", editingId);
       
       if (error) {
@@ -136,7 +140,7 @@ export default function ListaTarefas() {
     } else {
       const { error } = await supabase
         .from("planos_acao")
-        .insert([{ nome, descricao, prazo, horaOpcional, status: "Pendente", user_id: user.id }]);
+        .insert([{ nome, descricao, prazo, horaOpcional, prioridade, status: "Pendente", user_id: user.id }]);
       
       if (error) {
         toast.error("Erro ao criar plano: " + error.message);
@@ -204,9 +208,14 @@ export default function ListaTarefas() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {planos.map((plano) => {
                const estaAtrasado = plano.status === 'Pendente' && new Date(plano.prazo) < new Date();
-               return (
-                <div key={plano.id} className="group bg-white/70 dark:bg-gray-800/70 backdrop-blur-lg rounded-3xl p-6 border border-white/50 dark:border-gray-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(11,115,54,0.1)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between">
-                  <div className={`absolute left-0 top-0 w-1.5 h-full ${plano.status === 'Concluído' ? 'bg-[#0b7336]' : estaAtrasado ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+                return (
+                 <div key={plano.id} className="group bg-white/70 dark:bg-gray-800/70 backdrop-blur-lg rounded-3xl p-6 border border-white/50 dark:border-gray-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(11,115,54,0.1)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between">
+                   <div className={`absolute left-0 top-0 w-1.5 h-full ${
+                     plano.status === 'Concluído' ? 'bg-[#0b7336]' : 
+                     plano.prioridade === 'Alta' ? 'bg-red-500' :
+                     plano.prioridade === 'Média' ? 'bg-amber-500' :
+                     'bg-emerald-500'
+                   }`}></div>
                   
                   <div>
                     <div className="flex justify-between items-start mb-2 pl-2">
@@ -228,6 +237,18 @@ export default function ListaTarefas() {
                     <p className={`pl-2 text-sm mb-6 ${plano.status === 'Concluído' ? 'text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
                       {plano.descricao}
                     </p>
+                    <div className="pl-2 flex space-x-2 mb-4">
+                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                        plano.prioridade === 'Alta' ? 'bg-red-50 text-red-600 border-red-100' :
+                        plano.prioridade === 'Média' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                        'bg-emerald-50 text-emerald-600 border-emerald-100'
+                      }`}>
+                        {plano.prioridade}
+                      </span>
+                      {estaAtrasado && (
+                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-red-500 text-white">Atrasado</span>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="pl-2 pt-4 border-t border-gray-100 dark:border-gray-700/50 flex items-center">
@@ -296,6 +317,18 @@ export default function ListaTarefas() {
                     className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Nível de Prioridade</label>
+                <select
+                  value={prioridade} onChange={(e) => setPrioridade(e.target.value as "Baixa" | "Média" | "Alta")}
+                  className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium appearance-none"
+                >
+                  <option value="Baixa">🟢 Baixa (Rotina/Normal)</option>
+                  <option value="Média">🟡 Média (Atenção)</option>
+                  <option value="Alta">🔴 Alta (Crítico/Urgente)</option>
+                </select>
               </div>
 
               <div className="pt-4">

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS planos_acao (
   descricao TEXT,
   prazo DATE NOT NULL,
   "horaOpcional" TEXT,
+  prioridade TEXT DEFAULT 'Média',
   status TEXT DEFAULT 'Pendente',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
