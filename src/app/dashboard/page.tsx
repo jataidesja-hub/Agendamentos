@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon, UserIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon, UserIcon, PencilIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 import { User } from "@supabase/supabase-js";
 
 interface Agendamento {
   id: string;
-  descricao: string;
   data: string;
+  horaOpcional?: string;
   prioridade: "Baixa" | "Média" | "Alta";
   status: "Pendente" | "Em Andamento" | "Concluído" | "Cancelado";
   alerta: boolean;
@@ -18,10 +18,12 @@ export default function Dashboard() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
 
   const [descricao, setDescricao] = useState("");
   const [dataAgendamento, setDataAgendamento] = useState("");
+  const [horaAgendamento, setHoraAgendamento] = useState("");
   const [prioridade, setPrioridade] = useState<"Baixa" | "Média" | "Alta">("Média");
   const [alerta, setAlerta] = useState(false);
 
@@ -63,29 +65,58 @@ export default function Dashboard() {
     setLoading(false);
   };
 
-  const criarAgendamento = async (e: React.FormEvent) => {
+  const abrirModalNovo = () => {
+    setEditingId(null);
+    setDescricao(""); setDataAgendamento(""); setHoraAgendamento(""); 
+    setPrioridade("Média"); setAlerta(false);
+    setIsModalOpen(true);
+  };
+
+  const abrirModalEditar = (item: Agendamento) => {
+    setEditingId(item.id);
+    setDescricao(item.descricao);
+    setDataAgendamento(item.data.split("T")[0]); // extrai YYYY-MM-DD
+    setHoraAgendamento(item.horaOpcional || "");
+    setPrioridade(item.prioridade);
+    setAlerta(item.alerta);
+    setIsModalOpen(true);
+  };
+
+  const salvarAgendamento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     
-    const dateISO = new Date(dataAgendamento).toISOString();
+    // Armazena a data em ISO no banco para consistência
+    const dateISO = new Date(dataAgendamento + "T00:00:00").toISOString();
 
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .insert([
-        { descricao, data: dateISO, prioridade, alerta, status: "Pendente", user_id: user.id }
-      ])
-      .select();
+    const payload = {
+      descricao,
+      data: dateISO,
+      horaOpcional: horaAgendamento,
+      prioridade,
+      alerta,
+      status: "Pendente",
+      user_id: user.id
+    };
 
-    if (error) {
-      alert("Erro ao salvar! Certifique-se de ter criado a coluna 'user_id' (uuid) na sua tabela 'agendamentos' no Supabase: " + error.message);
-      console.error(error);
-      return;
-    }
-
-    if (data) {
-      setAgendamentos([...agendamentos, data[0]]);
-      setIsModalOpen(false);
-      setDescricao(""); setDataAgendamento(""); setPrioridade("Média"); setAlerta(false);
+    if (editingId) {
+      const { error } = await supabase.from("agendamentos").update(payload).eq("id", editingId);
+      if (error) {
+        alert("Erro ao atualizar: " + error.message);
+      } else {
+        alert("Atualizado! E-mail de notificação de alteração enviado pela equipe (Simulado).");
+        fetchAgendamentos(user.id);
+        setIsModalOpen(false);
+      }
+    } else {
+      const { data, error } = await supabase.from("agendamentos").insert([payload]).select();
+      if (error) {
+        alert("Erro ao salvar! Certifique-se de ter criado a coluna 'user_id' e 'horaOpcional': " + error.message);
+      } else if (data) {
+        alert("Criado com sucesso! Um e-mail de notificação foi enviado (Simulado).");
+        setAgendamentos([...agendamentos, data[0]]);
+        setIsModalOpen(false);
+      }
     }
   };
 
@@ -126,7 +157,7 @@ export default function Dashboard() {
           <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Você tem {agendamentos.length} agendamentos registrados no sistema.</p>
         </div>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={abrirModalNovo}
           className="group flex items-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-green-500/50 hover:-translate-y-0.5"
         >
           <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
@@ -155,15 +186,20 @@ export default function Dashboard() {
                   <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#0b7336] to-[#298d4a] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 
                   <div className="flex justify-between items-start mb-4">
-                    <span className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-xl border ${prioridadeColor(item.prioridade)}`}>
-                      {item.prioridade}
-                    </span>
-                    {item.alerta && (
-                      <span className="flex items-center text-red-500 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-xl text-xs font-bold">
-                        <BellIcon className="w-3.5 h-3.5 mr-1" />
-                        Alerta
+                    <div className="flex space-x-2 items-center">
+                      <span className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-xl border ${prioridadeColor(item.prioridade)}`}>
+                        {item.prioridade}
                       </span>
-                    )}
+                      {item.alerta && (
+                        <span className="flex items-center text-red-500 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-xl text-xs font-bold">
+                          <BellIcon className="w-3.5 h-3.5 mr-1" />
+                          Alerta
+                        </span>
+                      )}
+                    </div>
+                    <button onClick={() => abrirModalEditar(item)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors">
+                      <PencilIcon className="w-5 h-5" />
+                    </button>
                   </div>
 
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 leading-tight line-clamp-2 min-h-[3.5rem]">
@@ -172,7 +208,8 @@ export default function Dashboard() {
 
                   <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm font-medium mb-6 bg-gray-50 dark:bg-gray-900/50 px-3 py-2 rounded-xl w-max">
                     <ClockIcon className="w-4 h-4 mr-2 text-[#0b7336]" />
-                    {data.toLocaleDateString('pt-BR')} às {data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    {data.toLocaleDateString('pt-BR')} 
+                    {item.horaOpcional ? ` às ${item.horaOpcional}` : ""}
                   </div>
 
                   <div className="pt-4 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between">
@@ -200,12 +237,14 @@ export default function Dashboard() {
           <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
           <div className="relative bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl overflow-hidden w-full max-w-lg transform transition-all p-8">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-black text-gray-900 dark:text-white">Novo Agendamento</h3>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white">
+                {editingId ? "Editar Agendamento" : "Novo Agendamento"}
+              </h3>
               <button onClick={() => setIsModalOpen(false)} className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full transition-colors text-gray-500">
                 <XMarkIcon className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={criarAgendamento} className="space-y-5">
+            <form onSubmit={salvarAgendamento} className="space-y-5">
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Qual o serviço ou evento?</label>
                 <input
@@ -215,12 +254,21 @@ export default function Dashboard() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Quando ocorrerá?</label>
-                <input
-                  type="datetime-local" required value={dataAgendamento} onChange={(e) => setDataAgendamento(e.target.value)}
-                  className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
-                />
+              <div className="flex space-x-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Data Limite / Início</label>
+                  <input
+                    type="date" required value={dataAgendamento} onChange={(e) => setDataAgendamento(e.target.value)}
+                    className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Hora (Opcional)</label>
+                  <input
+                    type="time" value={horaAgendamento} onChange={(e) => setHoraAgendamento(e.target.value)}
+                    className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
+                  />
+                </div>
               </div>
 
               <div>
@@ -251,7 +299,7 @@ export default function Dashboard() {
 
               <div className="pt-4 flex space-x-4">
                 <button type="submit" className="flex-1 py-4 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all hover:shadow-green-500/50 hover:-translate-y-0.5">
-                  Salvar
+                  {editingId ? "Salvar Alterações" : "Criar e Notificar"}
                 </button>
               </div>
             </form>
