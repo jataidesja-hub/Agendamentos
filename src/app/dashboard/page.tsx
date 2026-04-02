@@ -7,11 +7,13 @@ import { User } from "@supabase/supabase-js";
 
 interface Agendamento {
   id: string;
+  descricao: string;
   data: string;
   horaOpcional?: string;
   prioridade: "Baixa" | "Média" | "Alta";
   status: "Pendente" | "Em Andamento" | "Concluído" | "Cancelado";
   alerta: boolean;
+  user_id: string;
 }
 
 export default function Dashboard() {
