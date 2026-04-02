@@ -1,22 +1,11 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 import { supabase } from '@/lib/supabase';
 import { MapPinIcon, PlusIcon, MapIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
-
-// Fix for default marker icons in Leaflet with Next.js/Webpack
-const DefaultIcon = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-
-L.Marker.prototype.options.icon = DefaultIcon;
 
 interface Projeto {
   id: string;
@@ -57,6 +46,17 @@ export default function MapaProjetos() {
   const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
+    // Leaflet side effects inside useEffect
+    import('leaflet').then((L) => {
+      const DefaultIcon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+      });
+      L.Marker.prototype.options.icon = DefaultIcon;
+    });
+    
     fetchProjetos();
   }, []);
 
@@ -89,11 +89,11 @@ export default function MapaProjetos() {
         return;
       }
 
-      // 2. Prepare JSON details (try to parse if it looks like JSON, otherwise save as object)
+      // 2. Prepare JSON details
       let detalhesObj = {};
       try {
         detalhesObj = novoDetalhes ? JSON.parse(novoDetalhes) : {};
-      } catch (e) {
+      } catch {
         detalhesObj = { observacao: novoDetalhes };
       }
 
@@ -154,7 +154,6 @@ export default function MapaProjetos() {
         </button>
       </div>
 
-      {/* Form de Adicionar (Opcional - Condicional) */}
       {showAddForm && (
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl p-6 border border-green-500/20 shadow-xl animate-in slide-in-from-top-4 duration-300">
           <form onSubmit={handleAddProject} className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -206,12 +205,12 @@ export default function MapaProjetos() {
       {/* Container do Mapa */}
       <div className="relative h-[600px] w-full rounded-3xl overflow-hidden shadow-2xl border border-white/20">
         <MapContainer 
-          center={[-15.7801, -47.9292]} // Brasília (Centro do Brasil)
+          center={[-15.7801, -47.9292]} // Brasília
           zoom={4} 
           style={{ 
             height: '100%', 
             width: '100%',
-            filter: 'hue-rotate(120deg) brightness(0.6) saturate(1.2) invert(1) hue-rotate(180deg)' // Dark Green Effect
+            filter: 'hue-rotate(120deg) brightness(0.6) saturate(1.2) invert(1) hue-rotate(180deg)'
           }}
           className="z-0"
         >
@@ -222,7 +221,7 @@ export default function MapaProjetos() {
           
           {projetos.map((p) => (
             <Marker key={p.id} position={[p.latitude, p.longitude]}>
-              <Popup className="custom-popup">
+              <Popup>
                 <div className="p-2 min-w-[200px]">
                   <h4 className="text-[#0b7336] font-black text-lg border-b pb-1 mb-2">{p.nome}</h4>
                   <p className="text-xs text-gray-600 flex items-center gap-1 mb-3">
@@ -248,25 +247,10 @@ export default function MapaProjetos() {
           ))}
         </MapContainer>
         
-        {/* Overlay para facilitar interação se o filtro for muito forte */}
         <div className="absolute bottom-4 right-4 z-[1000] bg-white/90 backdrop-blur rounded-lg px-3 py-1 text-[10px] font-bold text-green-800 shadow-md">
           CYMI - MONITORAMENTO GEOGRÁFICO
         </div>
       </div>
-      
-      <style jsx global>{`
-        .custom-popup .leaflet-popup-content-wrapper {
-          border-radius: 16px;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-          padding: 0;
-        }
-        .custom-popup .leaflet-popup-content {
-          margin: 0;
-        }
-        .leaflet-container {
-          background: #020617 !important;
-        }
-      `}</style>
     </div>
   );
 }

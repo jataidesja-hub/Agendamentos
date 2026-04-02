@@ -1,10 +1,5 @@
 import { ChartBarSquareIcon } from "@heroicons/react/24/outline";
-import dynamic from 'next/dynamic';
-
-const MapaProjetos = dynamic(() => import("./MapaProjetos"), { 
-  ssr: false,
-  loading: () => <div className="h-[600px] w-full animate-pulse bg-gray-100 rounded-3xl" />
-});
+import MapaRelatorio from "./MapaRelatorio";
 
 export default function Relatorios() {
   return (
@@ -31,7 +26,7 @@ export default function Relatorios() {
 
       {/* Mapa Interativo */}
       <div className="flex-1 min-h-[600px]">
-        <MapaProjetos />
+        <MapaRelatorio />
       </div>
     </div>
   );
