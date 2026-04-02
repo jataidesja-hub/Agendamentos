@@ -164,7 +164,7 @@ export default function MapaProjetos() {
                 value={novoNome}
                 onChange={(e) => setNovoNome(e.target.value)}
                 placeholder="Ex: Torre Alfa" 
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
+                className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -175,7 +175,7 @@ export default function MapaProjetos() {
                   value={novoEndereco}
                   onChange={(e) => setNovoEndereco(e.target.value)}
                   placeholder="Rua, Número, Cidade, Estado" 
-                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
+                  className="w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
                 />
                 <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
               </div>
@@ -187,7 +187,7 @@ export default function MapaProjetos() {
                   value={novoDetalhes}
                   onChange={(e) => setNovoDetalhes(e.target.value)}
                   placeholder='{"tensão": "220V"}' 
-                  className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
+                  className="flex-1 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
                 />
                 <button 
                   disabled={isAdding}
