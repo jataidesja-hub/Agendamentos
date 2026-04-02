@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PlusIcon, XMarkIcon, CheckCircleIcon, CalendarIcon, PencilIcon, ClockIcon } from "@heroicons/react/24/outline";
+import { supabase } from "@/lib/supabase";
 
 interface PlanoAcao {
   id: string;
@@ -29,6 +30,50 @@ export default function ListaTarefas() {
   const [descricao, setDescricao] = useState("");
   const [prazo, setPrazo] = useState("");
   const [horaOpcional, setHoraOpcional] = useState("");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        // Busca o email configurado no perfil
+        supabase
+          .from("perfis")
+          .select("email_notificacao")
+          .eq("user_id", session.user.id)
+          .single()
+          .then(({ data }) => {
+            if (data?.email_notificacao) setUserEmail(data.email_notificacao);
+            else setUserEmail(session.user.email || null);
+          });
+      }
+    });
+  }, []);
+
+  const enviarNotificacaoEmail = async (nomePlano: string, acao: 'Criado' | 'Atualizado') => {
+    if (!userEmail) return;
+    
+    try {
+      await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: userEmail,
+          subject: `[CYMI] Plano de Ação ${acao}`,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333;">
+              <h2 style="color: #0b7336;">Plano de Ação ${acao}</h2>
+              <p>O plano de ação <strong>${nomePlano}</strong> foi ${acao.toLowerCase()} no sistema.</p>
+              <p><strong>Prazo:</strong> ${prazo.split('-').reverse().join('/')} ${horaOpcional ? `às ${horaOpcional}` : ''}</p>
+              <br/>
+              <p>Acesse o painel do CYMI O&M para mais detalhes.</p>
+            </div>
+          `
+        })
+      });
+    } catch(e) {
+      console.error("Erro ao enviar email", e);
+    }
+  };
 
   const abrirModalNovo = () => {
     setEditingId(null);
@@ -49,7 +94,8 @@ export default function ListaTarefas() {
     e.preventDefault();
     if (editingId) {
       setPlanos(planos.map(p => p.id === editingId ? { ...p, nome, descricao, prazo, horaOpcional } : p));
-      alert("Sucesso! E-mail de notificação enviado sobre a atualização (Simulado).");
+      enviarNotificacaoEmail(nome, "Atualizado");
+      alert("Sucesso! O Plano de Ação foi atualizado e um e-mail real foi enviado.");
     } else {
       const novoPlano: PlanoAcao = {
         id: Date.now().toString(),
@@ -60,7 +106,8 @@ export default function ListaTarefas() {
         status: "Pendente"
       };
       setPlanos([...planos, novoPlano]);
-      alert("Plano criado! E-mail de notificação enviado para sua conta (Simulado).");
+      enviarNotificacaoEmail(nome, "Criado");
+      alert("Plano criado! Verifique sua caixa de e-mail (foi enviado um e-mail real).");
     }
     setIsModalOpen(false);
   };

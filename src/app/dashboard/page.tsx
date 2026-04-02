@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [horaAgendamento, setHoraAgendamento] = useState("");
   const [prioridade, setPrioridade] = useState<"Baixa" | "Média" | "Alta">("Média");
   const [alerta, setAlerta] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -36,6 +37,12 @@ export default function Dashboard() {
       } else {
         setUser(session.user);
         fetchAgendamentos(session.user.id);
+        
+        // Busca email
+        supabase.from("perfis").select("email_notificacao").eq("user_id", session.user.id).single().then(({ data }) => {
+          if (data?.email_notificacao) setUserEmail(data.email_notificacao);
+          else setUserEmail(session.user.email || null);
+        });
       }
     });
 
@@ -84,6 +91,31 @@ export default function Dashboard() {
     setIsModalOpen(true);
   };
 
+  const enviarNotificacaoEmail = async (nomeAgendamento: string, acao: 'Criado' | 'Atualizado') => {
+    if (!userEmail) return;
+    try {
+      await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: userEmail,
+          subject: `[CYMI] Agendamento ${acao}`,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333;">
+              <h2 style="color: #0b7336;">Agendamento ${acao}</h2>
+              <p>O agendamento <strong>${nomeAgendamento}</strong> foi ${acao.toLowerCase()}.</p>
+              <p><strong>Data Limite:</strong> ${dataAgendamento.split('-').reverse().join('/')} ${horaAgendamento ? `às ${horaAgendamento}` : ''}</p>
+              <p><strong>Prioridade:</strong> ${prioridade}</p>
+              <p>Acesse o painel do CYMI O&M para mais detalhes.</p>
+            </div>
+          `
+        })
+      });
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
   const salvarAgendamento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -106,7 +138,8 @@ export default function Dashboard() {
       if (error) {
         alert("Erro ao atualizar: " + error.message);
       } else {
-        alert("Atualizado! E-mail de notificação de alteração enviado pela equipe (Simulado).");
+        enviarNotificacaoEmail(descricao, "Atualizado");
+        alert("Atualizado com sucesso! E-mail de notificação (real) enviado.");
         fetchAgendamentos(user.id);
         setIsModalOpen(false);
       }
@@ -115,7 +148,8 @@ export default function Dashboard() {
       if (error) {
         alert("Erro ao salvar! Certifique-se de ter criado a coluna 'user_id' e 'horaOpcional': " + error.message);
       } else if (data) {
-        alert("Criado com sucesso! Um e-mail de notificação foi enviado (Simulado).");
+        enviarNotificacaoEmail(descricao, "Criado");
+        alert("Criado com sucesso! E-mail de notificação (real) enviado.");
         setAgendamentos([...agendamentos, data[0]]);
         setIsModalOpen(false);
       }
