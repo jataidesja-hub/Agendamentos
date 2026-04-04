@@ -39,7 +39,7 @@ export default function UsuariosPage() {
       if (error) {
         // Ignora o erro se a tabela não existir ainda no banco, cria MOCK
         console.warn('Tabela perfis_acesso talvez não exista', error);
-        setUsuarios([{ id: '1', email: 'logistica@cymi.com.br', telas_acesso: ['agenda', 'tarefas', 'relatorios', 'configuracoes', 'perfis', 'veiculos', 'projetos'] }]);
+        setUsuarios([]);
       } else {
         setUsuarios(data || []);
       }
@@ -145,7 +145,7 @@ export default function UsuariosPage() {
               <input 
                 type="email" required
                 value={email} onChange={e => setEmail(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none text-gray-900 dark:text-white"
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -153,7 +153,7 @@ export default function UsuariosPage() {
               <input 
                 type="password" required={!editId}
                 value={senha} onChange={e => setSenha(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none text-gray-900 dark:text-white"
               />
             </div>
           </div>

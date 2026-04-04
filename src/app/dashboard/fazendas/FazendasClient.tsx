@@ -54,7 +54,7 @@ export default function FazendasClient() {
       ]);
 
       setProjetos(projRes.data || []);
-      setVeiculosLista(veicRes.data || [{ placa: 'VEIC-TESTE', modelo: 'Teste' }]);
+      setVeiculosLista(veicRes.data || []);
     } catch {
       toast.error('Erro ao carregar os dados');
     } finally {
@@ -160,7 +160,7 @@ export default function FazendasClient() {
               <input 
                 required placeholder={`Ex: ${activeTab === 'fazenda' ? 'Fazenda Boa Vista' : 'Projeto Torres X'}`}
                 value={nome} onChange={e => setNome(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none text-gray-900 dark:text-white"
               />
             </div>
 
@@ -168,7 +168,7 @@ export default function FazendasClient() {
               <label className="text-xs font-bold text-gray-400 uppercase">Status</label>
               <select 
                 value={status} onChange={e => setStatus(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none appearance-none"
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none appearance-none text-gray-900 dark:text-white"
               >
                 <option value="Ativo">Ativo</option>
                 <option value="Inativo">Inativo</option>
@@ -180,7 +180,7 @@ export default function FazendasClient() {
               <label className="text-xs font-bold text-gray-400 uppercase">Veículo Vinculado</label>
               <select 
                 value={veiculoVinculado} onChange={e => setVeiculoVinculado(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none appearance-none"
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none appearance-none text-gray-900 dark:text-white"
               >
                 <option value="">-- Nenhum veículo selecionado --</option>
                 {veiculosLista.map(v => (

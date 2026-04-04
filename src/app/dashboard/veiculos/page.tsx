@@ -23,7 +23,7 @@ export default function VeiculosPage() {
       const { data, error } = await supabase.from('veiculos_frota').select('*');
       if (error) {
         console.warn('Tabela veiculos_frota talvez não exista', error);
-        setVeiculos([{ id: '1', placa: 'ABC-1234', modelo: 'Hilux CD 4x4' }]);
+        setVeiculos([]);
       } else {
         setVeiculos(data || []);
       }
@@ -79,7 +79,7 @@ export default function VeiculosPage() {
               <input 
                 required placeholder="EX: ABC-1234"
                 value={placa} onChange={e => setPlaca(e.target.value.toUpperCase())}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase"
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase text-gray-900 dark:text-white"
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -87,7 +87,7 @@ export default function VeiculosPage() {
               <input 
                 required placeholder="EX: Toyota Hilux 4x4"
                 value={modelo} onChange={e => setModelo(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
               />
             </div>
           </div>

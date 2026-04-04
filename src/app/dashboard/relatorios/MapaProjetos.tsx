@@ -202,7 +202,7 @@ export default function MapaProjetos() {
                 value={novoNome}
                 onChange={(e) => setNovoNome(e.target.value)}
                 placeholder="Ex: Torre Juazeiro-BA" 
-                className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
+                className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none text-gray-900 dark:text-white"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -215,7 +215,7 @@ export default function MapaProjetos() {
                     if (coordsManuais) setCoordsManuais(null); 
                   }}
                   placeholder={coordsManuais ? "Coordenadas capturadas!" : "Busca por texto..."} 
-                  className={`w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border ${coordsManuais ? 'border-green-500 ring-2 ring-green-500/20' : 'border-gray-200 dark:border-gray-700'} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none transition-all`}
+                  className={`w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border ${coordsManuais ? 'border-green-500 ring-2 ring-green-500/20' : 'border-gray-200 dark:border-gray-700'} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none transition-all text-gray-900 dark:text-white`}
                 />
                 <MagnifyingGlassIcon className={`w-4 h-4 absolute left-3 top-3 ${coordsManuais ? 'text-green-500' : 'text-gray-400'}`} />
               </div>
@@ -227,7 +227,7 @@ export default function MapaProjetos() {
                   value={novoDetalhes}
                   onChange={(e) => setNovoDetalhes(e.target.value)}
                   placeholder='{"tensão": "220V"}' 
-                  className="flex-1 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none"
+                  className="flex-1 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none text-gray-900 dark:text-white"
                 />
                 <button 
                   disabled={isAdding}
@@ -252,8 +252,7 @@ export default function MapaProjetos() {
           maxBoundsViscosity={1.0}
           style={{ 
             height: '100%', 
-            width: '100%',
-            filter: 'hue-rotate(120deg) brightness(0.6) saturate(1.2) invert(1) hue-rotate(180deg)'
+            width: '100%'
           }}
           className="z-0"
         >
