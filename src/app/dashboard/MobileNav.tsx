@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, KeyIcon } from "@heroicons/react/24/outline";
+import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, KeyIcon, UserGroupIcon, TruckIcon, MapIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -25,6 +25,9 @@ export default function MobileNav() {
 
   if (userEmail === "logistica@cymi.com.br") {
     navigation.splice(2, 0, { name: "Chaves", href: "/dashboard/chaves", icon: KeyIcon });
+    navigation.push({ name: "Perfis", href: "/dashboard/usuarios", icon: UserGroupIcon });
+    navigation.push({ name: "Veículos", href: "/dashboard/veiculos", icon: TruckIcon });
+    navigation.push({ name: "Projetos", href: "/dashboard/fazendas", icon: MapIcon });
   }
 
   return (
