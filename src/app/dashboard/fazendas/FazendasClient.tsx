@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { MapIcon, PlusIcon, CursorArrowRaysIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { MapIcon, PlusIcon, CursorArrowRaysIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import toast from 'react-hot-toast';
@@ -26,7 +26,7 @@ export default function ProjetosClient() {
   // Form states
   const [nome, setNome] = useState('');
   const [status, setStatus] = useState('Ativo');
-  const [veiculoVinculado, setVeiculoVinculado] = useState('');
+  const [veiculosSelecionados, setVeiculosSelecionados] = useState<string[]>([]);
   const [coordsManuais, setCoordsManuais] = useState<{lat: number, lon: number} | null>(null);
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export default function ProjetosClient() {
       const detalhes = {
         tipo: 'projeto',
         status: status,
-        veiculo: veiculoVinculado
+        veiculos: veiculosSelecionados
       };
 
       const { data: { user } } = await supabase.auth.getUser();
@@ -104,11 +104,24 @@ export default function ProjetosClient() {
     }
   };
 
+  const addVeiculo = (placa: string) => {
+    if (!placa) return;
+    if (veiculosSelecionados.includes(placa)) {
+      toast.error('Veículo já adicionado');
+      return;
+    }
+    setVeiculosSelecionados([...veiculosSelecionados, placa]);
+  };
+
+  const removeVeiculo = (placa: string) => {
+    setVeiculosSelecionados(veiculosSelecionados.filter(v => v !== placa));
+  };
+
   const handleEdit = (p: any) => {
     setEditId(p.id);
     setNome(p.nome);
     setStatus(p.detalhes_json?.status || 'Ativo');
-    setVeiculoVinculado(p.detalhes_json?.veiculo || '');
+    setVeiculosSelecionados(p.detalhes_json?.veiculos || []);
     setCoordsManuais({ lat: p.latitude, lon: p.longitude });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -130,7 +143,7 @@ export default function ProjetosClient() {
     setEditId(null);
     setNome('');
     setStatus('Ativo');
-    setVeiculoVinculado('');
+    setVeiculosSelecionados([]);
     setCoordsManuais(null);
   };
 
@@ -190,16 +203,33 @@ export default function ProjetosClient() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-400 uppercase">Veículo Vinculado</label>
-              <select 
-                value={veiculoVinculado} onChange={e => setVeiculoVinculado(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none appearance-none text-gray-900 dark:text-white"
-              >
-                <option value="">-- Nenhum veículo selecionado --</option>
-                {veiculosLista.map(v => (
-                  <option key={v.placa} value={v.placa}>{v.placa} - {v.modelo}</option>
+              <label className="text-xs font-bold text-gray-400 uppercase">Adicionar Veículos</label>
+              <div className="flex gap-2">
+                <select 
+                  onChange={e => addVeiculo(e.target.value)}
+                  className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none appearance-none text-gray-900 dark:text-white"
+                >
+                  <option value="">-- Selecione para adicionar --</option>
+                  {veiculosLista.map(v => (
+                    <option key={v.placa} value={v.placa}>{v.placa} - {v.modelo}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Chips de Veículos Selecionados */}
+              <div className="flex flex-wrap gap-2 mt-2">
+                {veiculosSelecionados.map(v => (
+                  <div key={v} className="bg-green-50 dark:bg-green-900/30 text-[#0b7336] dark:text-green-400 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 border border-green-200 dark:border-green-800">
+                    {v}
+                    <button type="button" onClick={() => removeVeiculo(v)} className="hover:text-red-500 transition-colors">
+                      <XMarkIcon className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 ))}
-              </select>
+                {veiculosSelecionados.length === 0 && (
+                  <span className="text-[10px] text-gray-400 font-bold uppercase italic">Nenhum veículo vinculado</span>
+                )}
+              </div>
             </div>
 
             <button type="submit" className="mt-4 bg-[#0b7336] text-white px-8 py-3 rounded-xl font-bold hover:bg-[#298d4a] transition-all shadow-lg active:scale-95 text-center">
@@ -247,11 +277,21 @@ export default function ProjetosClient() {
             <p className="text-xs font-medium text-gray-500 bg-gray-50 dark:bg-gray-900 rounded-lg p-2 mb-4 leading-relaxed line-clamp-2">
               {item.endereco}
             </p>
-            <div className="border-t border-gray-100 dark:border-gray-700 pt-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-400 font-bold uppercase">Veículo: <span className="text-gray-700 dark:text-gray-200 ml-1">{item.detalhes_json?.veiculo || 'Nenhum'}</span></p>
+            <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
+              <div className="mb-3">
+                <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Veículos Vinculados:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(item.detalhes_json?.veiculos || []).map((v: string) => (
+                    <span key={v} className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-md text-[9px] font-black tracking-tighter border border-gray-200 dark:border-gray-600">
+                      {v}
+                    </span>
+                  ))}
+                  {(!item.detalhes_json?.veiculos || item.detalhes_json.veiculos.length === 0) && (
+                    <span className="text-[10px] text-gray-400 italic">Nenhum</span>
+                  )}
+                </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex justify-end gap-2">
                 <button onClick={() => handleEdit(item)} className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-white dark:hover:bg-gray-600 rounded-lg transition-all text-gray-600 dark:text-gray-300 shadow-sm">
                   <PencilIcon className="w-4 h-4" />
                 </button>

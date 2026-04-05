@@ -280,12 +280,17 @@ export default function MapaProjetos() {
                   
                   <div className="bg-green-50/50 p-3 rounded-xl border border-green-100">
                     <span className="text-[10px] font-black text-[#0b7336]/60 uppercase tracking-widest block mb-2">Detalhes Operacionais</span>
-                    {Object.entries(p.detalhes_json || {}).map(([key, value]) => (
-                      <div key={key} className="flex justify-between text-xs py-1.5 border-b border-green-100/50 last:border-0">
-                        <span className="font-bold text-gray-500 capitalize">{key}:</span>
-                        <span className="text-gray-900 font-medium">{String(value)}</span>
-                      </div>
-                    ))}
+                    <div className="flex justify-between text-xs py-1.5 border-b border-green-100/50">
+                      <span className="font-bold text-gray-500">Status:</span>
+                      <span className="text-gray-900 font-medium">{p.detalhes_json?.status || 'Ativo'}</span>
+                    </div>
+                    <div className="mt-2 text-[10px] text-gray-400 font-bold uppercase mb-1">Veículos:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(p.detalhes_json?.veiculos || []).map((v: string) => (
+                        <span key={v} className="bg-white px-1.5 py-0.5 rounded border border-green-200 text-[9px] font-bold text-gray-700">{v}</span>
+                      ))}
+                      {(!p.detalhes_json?.veiculos || p.detalhes_json.veiculos.length === 0) && <span className="text-[9px] text-gray-400">Nenhum</span>}
+                    </div>
                   </div>
                 </div>
               </Popup>
