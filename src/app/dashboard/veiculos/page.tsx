@@ -54,6 +54,35 @@ export default function VeiculosPage() {
     }
   };
 
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('veiculos_frota')
+        .update({ status: newStatus })
+        .eq('id', id);
+      
+      if (!error) {
+        toast.success('Status atualizado!');
+        fetchVeiculos();
+      }
+    } catch (error) {
+      toast.error('Erro ao atualizar status');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este veículo da frota?')) return;
+    try {
+      const { error } = await supabase.from('veiculos_frota').delete().eq('id', id);
+      if (!error) {
+        toast.success('Veículo removido!');
+        fetchVeiculos();
+      }
+    } catch {
+      toast.error('Erro ao excluir veículo');
+    }
+  };
+
   if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse font-bold">Carregando veículos...</div>;
 
   return (
@@ -117,29 +146,49 @@ export default function VeiculosPage() {
         </form>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
         {veiculos.map(v => (
-          <div key={v.id} className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md border border-gray-100 dark:border-gray-700/50 rounded-2xl p-6 shadow-lg flex items-center justify-between group hover:border-blue-500/50 transition-all">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">{v.modelo}</p>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter ${
-                  v.status === 'Ativo' ? 'bg-green-100 text-green-700' : 
-                  v.status === 'Em Manutenção' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                }`}>
-                  {v.status || 'Ativo'}
-                </span>
+          <div key={v.id} className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border border-white/50 dark:border-gray-700/50 rounded-[2rem] p-7 shadow-[0_10px_40px_rgb(0,0,0,0.06)] flex flex-col justify-between group transition-all duration-300 hover:shadow-blue-500/10">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">{v.modelo}</p>
+                <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-widest leading-none">{v.placa}</h3>
               </div>
-              <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-widest">{v.placa}</h3>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => handleDelete(v.id)}
+                  className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+                  title="Excluir Veículo"
+                >
+                  <TrashIcon className="w-5 h-5" />
+                </button>
+                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+                  <TruckIcon className="w-6 h-6 text-white" />
+                </div>
+              </div>
             </div>
-            <div className="w-12 h-12 bg-blue-50 dark:bg-blue-500/10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110">
-              <TruckIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-tighter ml-1">Status Operacional</label>
+              <select 
+                value={v.status || 'Ativo'} 
+                onChange={(e) => handleUpdateStatus(v.id, e.target.value)}
+                className={`w-full px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest border-0 focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer ${
+                  v.status === 'Ativo' ? 'bg-green-100 text-green-700' : 
+                  v.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                }`}
+              >
+                <option value="Ativo" className="bg-white">✅ Ativo / Em Serviço</option>
+                <option value="Em Manutenção" className="bg-white">🛠 Em Manutenção</option>
+                <option value="Fora de Serviço" className="bg-white">🚫 Fora de Serviço</option>
+              </select>
             </div>
           </div>
         ))}
         {veiculos.length === 0 && (
-          <div className="col-span-full py-20 text-center text-gray-400 font-bold italic border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-3xl">
-            Nenhum veículo cadastrado na frota.
+          <div className="col-span-full py-24 text-center border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-[3rem] bg-gray-50/50 dark:bg-gray-900/30">
+            <TruckIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500 font-bold italic">Nenhum veículo cadastrado na frota.</p>
           </div>
         )}
       </div>
