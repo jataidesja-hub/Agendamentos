@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { MapIcon, PlusIcon, CursorArrowRaysIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { MapIcon, PlusIcon, CursorArrowRaysIcon, PencilIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import toast from 'react-hot-toast';
@@ -28,6 +28,8 @@ export default function ProjetosClient() {
   const [status, setStatus] = useState('Ativo');
   const [veiculosSelecionados, setVeiculosSelecionados] = useState<string[]>([]);
   const [coordsManuais, setCoordsManuais] = useState<{lat: number, lon: number} | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -58,6 +60,29 @@ export default function ProjetosClient() {
       toast.error('Erro ao carregar os dados');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!searchTerm) return;
+    setIsSearching(true);
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchTerm)}&limit=1`);
+      const data = await response.json();
+      if (data && data.length > 0) {
+        setCoordsManuais({
+          lat: parseFloat(data[0].lat),
+          lon: parseFloat(data[0].lon)
+        });
+        toast.success('Localizado!');
+      } else {
+        toast.error('Local não encontrado');
+      }
+    } catch {
+      toast.error('Erro na pesquisa');
+    } finally {
+      setIsSearching(false);
     }
   }
 
@@ -145,6 +170,7 @@ export default function ProjetosClient() {
     setStatus('Ativo');
     setVeiculosSelecionados([]);
     setCoordsManuais(null);
+    setSearchTerm('');
   };
 
   if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse font-bold">Carregando dados...</div>;
@@ -206,6 +232,7 @@ export default function ProjetosClient() {
               <label className="text-xs font-bold text-gray-400 uppercase">Adicionar Veículos</label>
               <div className="flex gap-2">
                 <select 
+                   value=""
                   onChange={e => addVeiculo(e.target.value)}
                   className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none appearance-none text-gray-900 dark:text-white"
                 >
@@ -237,21 +264,49 @@ export default function ProjetosClient() {
             </button>
           </div>
 
-          <div className="flex flex-col gap-2 h-[400px]">
-            <div className="flex items-center gap-2 mb-2 text-[#0b7336] px-2">
-              <CursorArrowRaysIcon className="w-5 h-5 animate-pulse" />
-              <p className="text-sm font-bold tracking-tight">
-                {coordsManuais 
-                  ? "Local definido! Clique em outra área para mudar." 
-                  : "Clique no mapa para marcar o local do projeto."}
-              </p>
+          <div className="flex flex-col gap-4 h-[450px]">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between px-2">
+                <div className="flex items-center gap-2 text-[#0b7336]">
+                  <CursorArrowRaysIcon className="w-5 h-5 animate-pulse" />
+                  <p className="text-sm font-bold tracking-tight">
+                    {coordsManuais 
+                      ? "Local definido! Arraste ou clique para mudar." 
+                      : "Clique no mapa para marcar ou pesquise abaixo."}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="relative px-1">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <MagnifyingGlassIcon className={`absolute left-3 top-3 w-4 h-4 text-gray-400`} />
+                    <input 
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSearch(e as any)}
+                      placeholder="Pesquisar endereço no mapa..."
+                      className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl pl-9 pr-4 py-3 text-xs focus:ring-2 focus:ring-[#0b7336] outline-none text-gray-900 dark:text-white shadow-inner"
+                    />
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={handleSearch}
+                    disabled={isSearching}
+                    className="bg-[#0b7336] text-white px-6 rounded-xl text-xs font-bold hover:bg-[#298d4a] transition-all disabled:opacity-50 shadow-md"
+                  >
+                    {isSearching ? '...' : 'Buscar'}
+                  </button>
+                </div>
+              </div>
             </div>
             
-            <div className="flex-1 rounded-2xl overflow-hidden border-2 border-dashed border-[#0b7336]/30">
+            <div className="flex-1 rounded-2xl overflow-hidden border-2 border-dashed border-[#0b7336]/30 shadow-inner bg-gray-50">
               <MapContainer 
                 center={coordsManuais ? [coordsManuais.lat, coordsManuais.lon] : [-15.78, -47.93]} 
-                zoom={coordsManuais ? 8 : 4} 
+                zoom={coordsManuais ? 12 : 4} 
                 className="w-full h-full z-0"
+                key={coordsManuais ? `${coordsManuais.lat}-${coordsManuais.lon}` : 'initial'}
               >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapEvents onMapClick={(lat, lon) => setCoordsManuais({ lat, lon })} />
