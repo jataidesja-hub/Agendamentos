@@ -10,15 +10,17 @@ interface ChecklistItem {
   texto: string;
   concluido: boolean;
   status: "Pendente" | "Andamento" | "Concluido";
+  prioridade: "Baixa" | "Média" | "Alta";
+  prazo?: string;
 }
 
 interface PlanoAcao {
   id: string;
   nome: string;
   descricao: string;
-  prazo: string;
+  prazo?: string;
   horaOpcional?: string;
-  prioridade: "Baixa" | "Média" | "Alta";
+  prioridade?: "Baixa" | "Média" | "Alta";
   status: "Pendente" | "Concluído";
   checklist?: ChecklistItem[];
   user_id?: string;
@@ -38,6 +40,8 @@ export default function ListaTarefas() {
   const [prioridade, setPrioridade] = useState<"Baixa" | "Média" | "Alta">("Média");
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [novoItemTexto, setNovoItemTexto] = useState("");
+  const [novoItemPrioridade, setNovoItemPrioridade] = useState<"Baixa" | "Média" | "Alta">("Média");
+  const [novoItemPrazo, setNovoItemPrazo] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
@@ -128,11 +132,12 @@ export default function ListaTarefas() {
       if (i.checklist && i.checklist.length > 0) {
         bodyText += `\nLISTA DE TAREFAS:\n`;
         i.checklist.forEach(c => {
-          bodyText += `[${c.status === 'Concluido' ? 'X' : c.status === 'Andamento' ? '/' : ' '}] ${c.texto}\n`;
+          bodyText += `[${c.status === 'Concluido' ? 'X' : c.status === 'Andamento' ? '/' : ' '}] ${c.texto}`;
+          if (c.prazo) bodyText += ` (Prazo: ${new Date(c.prazo + "T00:00:00").toLocaleDateString('pt-BR')})`;
+          bodyText += ` - Urgência: ${c.prioridade}\n`;
         });
       }
-      bodyText += `\nPRAZO: ${new Date(i.prazo + "T00:00:00").toLocaleDateString('pt-BR')} ${i.horaOpcional || ''}\n`;
-      bodyText += `URGÊNCIA: ${i.prioridade}\n`;
+      if (i.prazo) bodyText += `\nPRAZO GERAL: ${new Date(i.prazo + "T00:00:00").toLocaleDateString('pt-BR')} ${i.horaOpcional || ''}\n`;
     });
     bodyText += `\n-----------------------------------\n`;
     bodyText += `Relatório gerado automaticamente pelo Sistema CYMI O&M.`;
@@ -146,6 +151,9 @@ export default function ListaTarefas() {
     setNome(""); setDescricao(""); setPrazo(""); setHoraOpcional("");
     setPrioridade("Média");
     setChecklist([]);
+    setNovoItemTexto("");
+    setNovoItemPrioridade("Média");
+    setNovoItemPrazo("");
     setIsModalOpen(true);
   };
 
@@ -153,17 +161,29 @@ export default function ListaTarefas() {
     setEditingId(plano.id);
     setNome(plano.nome);
     setDescricao(plano.descricao);
-    setPrazo(plano.prazo);
+    setPrazo(plano.prazo || "");
     setHoraOpcional(plano.horaOpcional || "");
     setPrioridade(plano.prioridade || "Média");
     setChecklist(plano.checklist || []);
+    setNovoItemTexto("");
+    setNovoItemPrioridade("Média");
+    setNovoItemPrazo("");
     setIsModalOpen(true);
   };
 
   const adicionarItem = () => {
     if (!novoItemTexto.trim()) return;
-    setChecklist([...checklist, { texto: novoItemTexto.trim(), concluido: false, status: "Pendente" }]);
+    const item: ChecklistItem = { 
+      texto: novoItemTexto.trim(), 
+      concluido: false, 
+      status: "Pendente",
+      prioridade: novoItemPrioridade,
+      prazo: novoItemPrazo || undefined
+    };
+    setChecklist([...checklist, item]);
     setNovoItemTexto("");
+    setNovoItemPrioridade("Média");
+    setNovoItemPrazo("");
   };
 
   const removerItem = (index: number) => {
@@ -458,50 +478,88 @@ export default function ListaTarefas() {
 
               <div className="pt-2">
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Lista de Tarefas / Checklist</label>
-                <div className="flex space-x-2 mb-4">
+                
+                <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-3 mb-4">
                   <input
                     type="text"
                     value={novoItemTexto}
                     onChange={(e) => setNovoItemTexto(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), adicionarItem())}
-                    className="flex-1 px-4 py-3 border-0 bg-gray-50 dark:bg-gray-900 rounded-xl focus:ring-2 focus:ring-[#0b7336] text-sm text-gray-900 dark:text-white"
-                    placeholder="Nova tarefa..."
+                    className="w-full px-4 py-3 border-0 bg-white dark:bg-gray-800 rounded-xl focus:ring-2 focus:ring-[#0b7336] text-sm text-gray-900 dark:text-white"
+                    placeholder="O que precisa ser feito?"
                   />
-                  <button
-                    type="button"
-                    onClick={adicionarItem}
-                    className="px-4 py-3 bg-[#0b7336] text-white rounded-xl font-bold text-sm shadow-md"
-                  >
-                    Adicionar
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="date"
+                      value={novoItemPrazo}
+                      onChange={(e) => setNovoItemPrazo(e.target.value)}
+                      className="flex-1 min-w-[140px] px-3 py-2 border-0 bg-white dark:bg-gray-800 rounded-xl focus:ring-2 focus:ring-[#0b7336] text-xs text-gray-900 dark:text-white"
+                    />
+                    <select
+                      value={novoItemPrioridade}
+                      onChange={(e) => setNovoItemPrioridade(e.target.value as any)}
+                      className="flex-1 min-w-[140px] px-3 py-2 border-0 bg-white dark:bg-gray-800 rounded-xl focus:ring-2 focus:ring-[#0b7336] text-xs text-gray-900 dark:text-white"
+                    >
+                      <option value="Baixa">🟢 Baixa</option>
+                      <option value="Média">🟡 Média</option>
+                      <option value="Alta">🔴 Alta</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={adicionarItem}
+                      className="px-4 py-2 bg-[#0b7336] text-white rounded-xl font-bold text-xs shadow-md transition-transform active:scale-95"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-2 max-h-[200px] overflow-y-auto no-scrollbar">
+                <div className="space-y-2 max-h-[250px] overflow-y-auto no-scrollbar pr-2">
                   {checklist.map((item, idx) => (
-                    <div key={idx} className="flex items-center bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
-                      <select
-                        value={item.status}
-                        onChange={(e) => alternarCheckItem(idx, e.target.value as any)}
-                        className="bg-transparent text-[10px] font-black uppercase text-[#0b7336] border-none focus:ring-0 p-0 mr-3 w-max"
-                      >
-                        <option value="Pendente">⏳ Pendente</option>
-                        <option value="Andamento">🚀 Andamento</option>
-                        <option value="Concluido">✅ Concluído</option>
-                      </select>
-                      <span className={`text-sm flex-1 ${item.status === 'Concluido' ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                        {item.texto}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removerItem(idx)}
-                        className="p-1 text-gray-400 hover:text-red-500 rounded-lg"
-                      >
-                        <XMarkIcon className="w-5 h-5" />
-                      </button>
+                    <div key={idx} className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative group">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center">
+                          <select
+                            value={item.status}
+                            onChange={(e) => alternarCheckItem(idx, e.target.value as any)}
+                            className="bg-transparent text-[9px] font-black uppercase text-[#0b7336] border-none focus:ring-0 p-0 mr-2"
+                          >
+                            <option value="Pendente">⏳</option>
+                            <option value="Andamento">🚀</option>
+                            <option value="Concluido">✅</option>
+                          </select>
+                          <span className={`text-sm font-semibold ${item.status === 'Concluido' ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                            {item.texto}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removerItem(idx)}
+                          className="p-1 text-gray-300 hover:text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <XMarkIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                          item.prioridade === 'Alta' ? 'bg-red-50 text-red-600 border-red-100' :
+                          item.prioridade === 'Média' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                          'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        }`}>
+                          {item.prioridade}
+                        </span>
+                        {item.prazo && (
+                          <span className="text-[8px] font-bold text-gray-400 flex items-center bg-gray-50 dark:bg-gray-900 px-2 py-0.5 rounded-full">
+                            <CalendarIcon className="w-2.5 h-2.5 mr-1" />
+                            {new Date(item.prazo + "T00:00:00").toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                   {checklist.length === 0 && (
-                    <p className="text-center text-xs text-gray-400 py-2">Nenhuma tarefa adicionada.</p>
+                    <div className="text-center py-6 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl">
+                      <p className="text-xs text-gray-400">Nenhuma tarefa para esta nota.</p>
+                    </div>
                   )}
                 </div>
               </div>
