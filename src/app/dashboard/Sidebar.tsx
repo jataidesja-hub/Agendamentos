@@ -9,26 +9,45 @@ import { useEffect, useState } from "react";
 export default function Sidebar() {
   const pathname = usePathname();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [permissões, setPermissões] = useState<string[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setUserEmail(session.user.email || null);
+      if (session) {
+        const email = session.user.email || "";
+        setUserEmail(email);
+        
+        // Busca permissões na tabela perfis_acesso
+        supabase
+          .from('perfis_acesso')
+          .select('telas_acesso')
+          .eq('email', email)
+          .single()
+          .then(({ data }) => {
+            if (data?.telas_acesso) {
+              setPermissões(data.telas_acesso);
+            } else if (email === "logistica@cymi.com.br") {
+              // Admin padrão tem tudo
+              setPermissões(['agenda', 'alertas', 'relatorios', 'configuracoes', 'chaves', 'perfis', 'veiculos', 'projetos']);
+            }
+          });
+      }
     });
   }, []);
 
-  const navigation = [
-    { name: "Agendamentos", href: "/dashboard", icon: CalendarIcon },
-    { name: "Alertas", href: "/dashboard/alertas", icon: BellAlertIcon },
-    { name: "Relatórios", href: "/dashboard/relatorios", icon: ChartBarIcon },
-    { name: "Configurações", href: "/dashboard/configuracoes", icon: Cog6ToothIcon },
+  const allNavigation = [
+    { id: 'agenda', name: "Agendamentos", href: "/dashboard", icon: CalendarIcon },
+    { id: 'alertas', name: "Alertas", href: "/dashboard/alertas", icon: BellAlertIcon },
+    { id: 'relatorios', name: "Relatórios", href: "/dashboard/relatorios", icon: ChartBarIcon },
+    { id: 'configuracoes', name: "Configurações", href: "/dashboard/configuracoes", icon: Cog6ToothIcon },
+    { id: 'chaves', name: "Controle de Chaves", href: "/dashboard/chaves", icon: KeyIcon },
+    { id: 'perfis', name: "Perfis", href: "/dashboard/usuarios", icon: UserGroupIcon },
+    { id: 'veiculos', name: "Veículos", href: "/dashboard/veiculos", icon: TruckIcon },
+    { id: 'projetos', name: "Projetos/Fazendas", href: "/dashboard/fazendas", icon: MapIcon },
   ];
 
-  if (userEmail === "logistica@cymi.com.br") {
-    navigation.splice(4, 0, { name: "Controle de Chaves", href: "/dashboard/chaves", icon: KeyIcon });
-    navigation.push({ name: "Perfis", href: "/dashboard/usuarios", icon: UserGroupIcon });
-    navigation.push({ name: "Veículos", href: "/dashboard/veiculos", icon: TruckIcon });
-    navigation.push({ name: "Projetos/Fazendas", href: "/dashboard/fazendas", icon: MapIcon });
-  }
+  // Filtra navegação com base nas permissões do banco
+  const navigation = allNavigation.filter(item => permissões.includes(item.id));
 
   return (
     <div className="w-72 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-r border-white/40 dark:border-gray-800/40 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex flex-col hidden md:flex transition-all duration-300 z-10 relative">

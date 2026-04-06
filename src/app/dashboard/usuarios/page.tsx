@@ -18,7 +18,6 @@ export default function UsuariosPage() {
 
   const telasDisponiveis = [
     { id: 'agenda', nome: 'Agenda/Agendamentos' },
-    { id: 'tarefas', nome: 'Lista de Tarefas' },
     { id: 'alertas', nome: 'Alertas' },
     { id: 'relatorios', nome: 'Relatórios/Mapa' },
     { id: 'configuracoes', nome: 'Configurações' },
