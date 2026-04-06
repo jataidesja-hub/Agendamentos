@@ -54,45 +54,63 @@ export default function AbastecimentosPage() {
 
     setLoading(true);
     try {
-      // 1. Converte o link de compartilhamento para link direto
-      // Ex: https://1drv.ms/x/s!AnvX...
-      const base64Url = btoa(oneDriveUrl).replace(/=/g, '').replace(/\//g, '_').replace(/\+/g, '-');
+      const cleanUrl = oneDriveUrl.trim();
+      
+      // Converte o link de compartilhamento para link direto
+      let base64Url = "";
+      try {
+        const bytes = new TextEncoder().encode(cleanUrl);
+        const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+        const encoded = btoa(binString);
+        base64Url = encoded.replace(/=/g, '').replace(/\//g, '_').replace(/\+/g, '-');
+      } catch (e) {
+        throw new Error("O link fornecido é inválido. Certifique-se de copiar o link completo do compartilhamento.");
+      }
+
       const downloadUrl = `https://api.onedrive.com/v1.0/shares/u!${base64Url}/root/content`;
 
       const response = await fetch(downloadUrl);
-      if (!response.ok) throw new Error("Não foi possível acessar a planilha. Verifique se o link é público (Qualquer pessoa com o link pode visualizar).");
+      
+      if (!response.ok) {
+        if (response.status === 403 || response.status === 401) {
+          throw new Error("Acesso negado. Verifique se o link está configurado como 'Qualquer pessoa com o link pode exibir'.");
+        }
+        throw new Error(`Erro ao acessar planilha (${response.status}).`);
+      }
 
       const arrayBuffer = await response.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       
-      // Converte para JSON
-      // Esperamos colunas: PLACA, TIPO COMBUSTIVEL, LITROS, VL/LITRO, VALOR EMISSAO, CODIGO ESTABELECIMENTO, NOME ESTABELECIMENTO
       const rawData = XLSX.utils.sheet_to_json(worksheet) as any[];
 
+      // Mapeamento EXATO baseado na imagem (PLACA, TIPO COMBUSTIVEL, LITROS, VL/LITRO, VALOR EMISSAO, etc)
       const formattedData: Abastecimento[] = rawData.map((row: any) => ({
-        placa: row["PLAC"] || row["PLACA"] || "",
-        tipo_combustivel: row["TIPO COMBUSTIVEI"] || row["TIPO COMBUSTIVEL"] || "",
-        litros: Number(row["LITRO"] || row["LITROS"] || 0),
-        valor_litro: Number(row["VL/LITR"] || row["VL/LITRO"] || 0),
-        valor_total: Number(row["VALOR EMISSAO"] || row["VALOR TOTAL"] || 0),
+        placa: String(row["PLACA"] || "").trim(),
+        tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || "").trim(),
+        litros: Number(row["LITROS"] || 0),
+        valor_litro: Number(row["VL/LITRO"] || 0),
+        valor_total: Number(row["VALOR EMISSAO"] || 0),
         codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
         nome_estabelecimento: String(row["NOME ESTABELECIMENTO"] || "")
-      }));
+      })).filter(item => item.placa !== "" && item.placa !== "null");
+
+      if (formattedData.length === 0) {
+        throw new Error("Nenhum dado encontrado. Verifique se os cabeçalhos são: PLACA, LITROS, TIPO COMBUSTIVEL, etc.");
+      }
 
       setData(formattedData);
       const now = new Date().toLocaleString("pt-BR");
       setLastUpdate(now);
 
-      // Salva no cache
       localStorage.setItem("onedrive_abastecimentos_cache", JSON.stringify(formattedData));
       localStorage.setItem("onedrive_abastecimentos_last_update", now);
 
       toast.success("Dados atualizados com sucesso!");
     } catch (error: any) {
       console.error(error);
-      toast.error(error.message || "Erro ao buscar dados do OneDrive.");
+      toast.error(error.message || "Erro ao buscar do OneDrive.");
     } finally {
       setLoading(false);
     }
