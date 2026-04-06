@@ -26,6 +26,7 @@ export default function UsuariosPage() {
     { id: 'perfis', nome: 'Perfis (Admin)' },
     { id: 'veiculos', nome: 'Veículos' },
     { id: 'projetos', nome: 'Projetos/Fazendas' },
+    { id: 'abastecimentos', nome: 'Abastecimentos' },
   ];
 
   useEffect(() => {
