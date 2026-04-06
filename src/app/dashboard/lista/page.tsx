@@ -6,6 +6,12 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "react-hot-toast";
 import { User } from "@supabase/supabase-js";
 
+interface ChecklistItem {
+  texto: string;
+  concluido: boolean;
+  status: "Pendente" | "Andamento" | "Concluido";
+}
+
 interface PlanoAcao {
   id: string;
   nome: string;
@@ -14,6 +20,7 @@ interface PlanoAcao {
   horaOpcional?: string;
   prioridade: "Baixa" | "Média" | "Alta";
   status: "Pendente" | "Concluído";
+  checklist?: ChecklistItem[];
   user_id?: string;
 }
 
@@ -29,6 +36,8 @@ export default function ListaTarefas() {
   const [prazo, setPrazo] = useState("");
   const [horaOpcional, setHoraOpcional] = useState("");
   const [prioridade, setPrioridade] = useState<"Baixa" | "Média" | "Alta">("Média");
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [novoItemTexto, setNovoItemTexto] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,12 +95,11 @@ export default function ListaTarefas() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: userEmail,
-          subject: `[CYMI] Plano de Ação ${acao}`,
+          subject: `[CYMI] Anotação ${acao}: ${nomePlano}`,
           html: `
             <div style="font-family: sans-serif; padding: 20px; color: #333;">
-              <h2 style="color: #0b7336;">Plano de Ação ${acao}</h2>
-              <p>O plano de ação <strong>${nomePlano}</strong> foi ${acao.toLowerCase()} no sistema.</p>
-              <p><strong>Prazo:</strong> ${prazo.split('-').reverse().join('/')} ${horaOpcional ? `às ${horaOpcional}` : ''}</p>
+              <h2 style="color: #0b7336;">Anotação ${acao}</h2>
+              <p>Uma nota de reunião foi ${acao.toLowerCase()} no sistema.</p>
               <br/>
               <p>Acesse o painel do CYMI O&M para mais detalhes.</p>
             </div>
@@ -110,16 +118,21 @@ export default function ListaTarefas() {
       return;
     }
 
-    const subject = encodeURIComponent(`${item ? '👉 Detalhes da Tarefa' : '📋 Planos de Ação'} - CYMI`);
+    const subject = encodeURIComponent(`${item ? '👉 Detalhes da Nota' : '📋 Notas & Tarefas'} - CYMI`);
     
-    let bodyText = `Olá,\n\nSegue os detalhes solicitados do sistema CYMI:\n\n`;
+    let bodyText = `Olá,\n\nSegue os detalhes solicitados do sistema CYMI (Notas & Tarefas):\n\n`;
     itens.forEach(i => {
       bodyText += `-----------------------------------\n`;
-      bodyText += `TAREFA: ${i.nome}\n`;
-      bodyText += `DESCRIÇÃO: ${i.descricao}\n`;
-      bodyText += `PRAZO: ${new Date(i.prazo + "T00:00:00").toLocaleDateString('pt-BR')} ${i.horaOpcional || ''}\n`;
-      bodyText += `PRIORIDADE: ${i.prioridade}\n`;
-      bodyText += `STATUS: ${i.status}\n`;
+      bodyText += `ASSUNTO: ${i.nome}\n`;
+      bodyText += `DECISÕES: ${i.descricao}\n`;
+      if (i.checklist && i.checklist.length > 0) {
+        bodyText += `\nLISTA DE TAREFAS:\n`;
+        i.checklist.forEach(c => {
+          bodyText += `[${c.status === 'Concluido' ? 'X' : c.status === 'Andamento' ? '/' : ' '}] ${c.texto}\n`;
+        });
+      }
+      bodyText += `\nPRAZO: ${new Date(i.prazo + "T00:00:00").toLocaleDateString('pt-BR')} ${i.horaOpcional || ''}\n`;
+      bodyText += `URGÊNCIA: ${i.prioridade}\n`;
     });
     bodyText += `\n-----------------------------------\n`;
     bodyText += `Relatório gerado automaticamente pelo Sistema CYMI O&M.`;
@@ -132,6 +145,7 @@ export default function ListaTarefas() {
     setEditingId(null);
     setNome(""); setDescricao(""); setPrazo(""); setHoraOpcional("");
     setPrioridade("Média");
+    setChecklist([]);
     setIsModalOpen(true);
   };
 
@@ -142,36 +156,84 @@ export default function ListaTarefas() {
     setPrazo(plano.prazo);
     setHoraOpcional(plano.horaOpcional || "");
     setPrioridade(plano.prioridade || "Média");
+    setChecklist(plano.checklist || []);
     setIsModalOpen(true);
+  };
+
+  const adicionarItem = () => {
+    if (!novoItemTexto.trim()) return;
+    setChecklist([...checklist, { texto: novoItemTexto.trim(), concluido: false, status: "Pendente" }]);
+    setNovoItemTexto("");
+  };
+
+  const removerItem = (index: number) => {
+    setChecklist(checklist.filter((_, i) => i !== index));
+  };
+
+  const alternarCheckItem = (index: number, novoStatus?: "Pendente" | "Andamento" | "Concluido") => {
+    const list = [...checklist];
+    if (novoStatus) {
+      list[index].status = novoStatus;
+      list[index].concluido = novoStatus === "Concluido";
+    } else {
+       // Toggle simples
+       const s = list[index].status;
+       if (s === "Pendente") list[index].status = "Andamento";
+       else if (s === "Andamento") { list[index].status = "Concluido"; list[index].concluido = true; }
+       else { list[index].status = "Pendente"; list[index].concluido = false; }
+    }
+    setChecklist(list);
+  };
+
+  const alternarCheckItemCard = async (planoId: string, itemIdx: number) => {
+     const plano = planos.find(p => p.id === planoId);
+     if (!plano) return;
+
+     const list = [...(plano.checklist || [])];
+     const s = list[itemIdx].status;
+     if (s === "Pendente") list[itemIdx].status = "Andamento";
+     else if (s === "Andamento") { list[itemIdx].status = "Concluido"; list[itemIdx].concluido = true; }
+     else { list[itemIdx].status = "Pendente"; list[itemIdx].concluido = false; }
+
+     const { error } = await supabase
+       .from("planos_acao")
+       .update({ checklist: list })
+       .eq("id", planoId);
+     
+     if (!error && user) {
+       fetchPlanos(user.id);
+     }
   };
 
   const salvarPlano = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
+    const payload = { nome, descricao, prazo, horaOpcional, prioridade, checklist };
+
     if (editingId) {
       const { error } = await supabase
         .from("planos_acao")
-        .update({ nome, descricao, prazo, horaOpcional, prioridade })
+        .update(payload)
         .eq("id", editingId);
       
       if (error) {
         toast.error("Erro ao atualizar: " + error.message);
       } else {
         enviarNotificacaoEmail(nome, "Atualizado");
-        toast.success("Plano atualizado com sucesso!");
+        toast.success("Anotação atualizada!");
         fetchPlanos(user.id);
       }
     } else {
       const { error } = await supabase
         .from("planos_acao")
-        .insert([{ nome, descricao, prazo, horaOpcional, prioridade, status: "Pendente", user_id: user.id }]);
+        .insert([{ ...payload, status: "Pendente", user_id: user.id }]);
       
       if (error) {
-        toast.error("Erro ao criar plano: " + error.message);
+        toast.error("Erro ao criar: " + error.message);
       } else {
         enviarNotificacaoEmail(nome, "Criado");
-        toast.success("Plano criado e equipe notificada!");
+        toast.success("Anotação registrada!");
         fetchPlanos(user.id);
       }
     }
@@ -277,9 +339,41 @@ export default function ListaTarefas() {
                        </button>
                      </div>
                     </div>
-                    <p className={`pl-2 text-sm mb-6 ${plano.status === 'Concluído' ? 'text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
+                    <p className={`pl-2 text-sm mb-4 ${plano.status === 'Concluído' ? 'text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
                       {plano.descricao}
                     </p>
+
+                    {/* Lista de sub-tarefas no card */}
+                    {plano.checklist && plano.checklist.length > 0 && (
+                      <div className="pl-2 mb-6 space-y-2">
+                        {plano.checklist.map((item, idx) => (
+                          <div 
+                            key={idx} 
+                            onClick={() => alternarCheckItemCard(plano.id, idx)}
+                            className={`flex items-center p-2 rounded-xl border cursor-pointer transition-all ${
+                              item.status === 'Concluido' ? 'bg-green-50/50 border-green-100 text-gray-400' :
+                              item.status === 'Andamento' ? 'bg-blue-50/50 border-blue-100 text-blue-700' :
+                              'bg-gray-50/50 border-gray-100 text-gray-600'
+                            }`}
+                          >
+                            <div className={`w-5 h-5 rounded-md border-2 mr-3 flex items-center justify-center transition-all ${
+                              item.status === 'Concluido' ? 'bg-[#0b7336] border-[#0b7336]' :
+                              item.status === 'Andamento' ? 'bg-blue-500 border-blue-500' :
+                              'bg-white border-gray-300'
+                            }`}>
+                              {item.status === 'Concluido' && <CheckCircleIcon className="w-4 h-4 text-white" />}
+                              {item.status === 'Andamento' && <ClockIcon className="w-4 h-4 text-white" />}
+                            </div>
+                            <span className={`text-xs font-bold ${item.status === 'Concluido' ? 'line-through' : ''}`}>
+                              {item.texto}
+                            </span>
+                            <span className="ml-auto text-[8px] font-black uppercase tracking-widest opacity-60">
+                              {item.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="pl-2 flex space-x-2 mb-4">
                       <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
                         plano.prioridade === 'Alta' ? 'bg-red-50 text-red-600 border-red-100' :
@@ -359,6 +453,56 @@ export default function ListaTarefas() {
                      type="time" value={horaOpcional} onChange={(e) => setHoraOpcional(e.target.value)}
                      className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
                    />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Lista de Tarefas / Checklist</label>
+                <div className="flex space-x-2 mb-4">
+                  <input
+                    type="text"
+                    value={novoItemTexto}
+                    onChange={(e) => setNovoItemTexto(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), adicionarItem())}
+                    className="flex-1 px-4 py-3 border-0 bg-gray-50 dark:bg-gray-900 rounded-xl focus:ring-2 focus:ring-[#0b7336] text-sm text-gray-900 dark:text-white"
+                    placeholder="Nova tarefa..."
+                  />
+                  <button
+                    type="button"
+                    onClick={adicionarItem}
+                    className="px-4 py-3 bg-[#0b7336] text-white rounded-xl font-bold text-sm shadow-md"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-[200px] overflow-y-auto no-scrollbar">
+                  {checklist.map((item, idx) => (
+                    <div key={idx} className="flex items-center bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+                      <select
+                        value={item.status}
+                        onChange={(e) => alternarCheckItem(idx, e.target.value as any)}
+                        className="bg-transparent text-[10px] font-black uppercase text-[#0b7336] border-none focus:ring-0 p-0 mr-3 w-max"
+                      >
+                        <option value="Pendente">⏳ Pendente</option>
+                        <option value="Andamento">🚀 Andamento</option>
+                        <option value="Concluido">✅ Concluído</option>
+                      </select>
+                      <span className={`text-sm flex-1 ${item.status === 'Concluido' ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                        {item.texto}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removerItem(idx)}
+                        className="p-1 text-gray-400 hover:text-red-500 rounded-lg"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                  {checklist.length === 0 && (
+                    <p className="text-center text-xs text-gray-400 py-2">Nenhuma tarefa adicionada.</p>
+                  )}
                 </div>
               </div>
 
