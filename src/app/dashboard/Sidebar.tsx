@@ -37,6 +37,7 @@ export default function Sidebar() {
 
   const allNavigation = [
     { id: 'agenda', name: "Agendamentos", href: "/dashboard", icon: CalendarIcon },
+    { id: 'tarefas', name: "Lista de Tarefas", href: "/dashboard/lista", icon: QueueListIcon },
     { id: 'alertas', name: "Alertas", href: "/dashboard/alertas", icon: BellAlertIcon },
     { id: 'relatorios', name: "Relatórios", href: "/dashboard/relatorios", icon: ChartBarIcon },
     { id: 'configuracoes', name: "Configurações", href: "/dashboard/configuracoes", icon: Cog6ToothIcon },

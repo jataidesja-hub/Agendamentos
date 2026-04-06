@@ -207,8 +207,8 @@ export default function ListaTarefas() {
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Planos de Ação</h1>
-          <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Acompanhe tarefas e prazos da equipe CYMI.</p>
+          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Notas & Tarefas</h1>
+          <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Anote provisões e ações decididas em reuniões.</p>
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -225,7 +225,7 @@ export default function ListaTarefas() {
             className="group flex items-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-green-500/50 hover:-translate-y-0.5"
           >
             <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
-            Novo Plano
+            Nova Nota/Tarefa
           </button>
         </div>
       </div>
@@ -319,7 +319,7 @@ export default function ListaTarefas() {
           <div className="relative bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl overflow-hidden w-full max-w-lg transform transition-all p-8">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-black text-gray-900 dark:text-white">
-                {editingId ? "Editar/Prorrogar Plano" : "Novo Plano de Ação"}
+                {editingId ? "Editar Anotação" : "Nova Anotação de Reunião"}
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full transition-colors text-gray-500">
                 <XMarkIcon className="h-5 w-5" />
@@ -327,56 +327,56 @@ export default function ListaTarefas() {
             </div>
             <form onSubmit={salvarPlano} className="space-y-5">
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Nome do Plano</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Assunto / Pauta</label>
                 <input
                   type="text" required value={nome} onChange={(e) => setNome(e.target.value)}
                   className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
-                  placeholder="Título resumido do plano"
+                  placeholder="Ex: Reunião de Alinhamento Semanal"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Descrição / Escopo</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Decisões & Tarefas</label>
                 <textarea
                   required value={descricao} onChange={(e) => setDescricao(e.target.value)}
-                  rows={3}
+                  rows={4}
                   className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium resize-none"
-                  placeholder="Detalhamento claro das ações tomadas..."
+                  placeholder="Detalhamento das ações decididas, provisões e quem será o responsável..."
                 />
               </div>
 
               <div className="flex space-x-4">
                 <div className="flex-1">
-                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Data Limite</label>
-                  <input
-                    type="date" required value={prazo} onChange={(e) => setPrazo(e.target.value)}
-                    className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
-                  />
+                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Data de Entrega</label>
+                   <input
+                     type="date" required value={prazo} onChange={(e) => setPrazo(e.target.value)}
+                     className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
+                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Hora (Opcional)</label>
-                  <input
-                    type="time" value={horaOpcional} onChange={(e) => setHoraOpcional(e.target.value)}
-                    className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
-                  />
+                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Hora Final (Opcional)</label>
+                   <input
+                     type="time" value={horaOpcional} onChange={(e) => setHoraOpcional(e.target.value)}
+                     className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
+                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Nível de Prioridade</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Urgência</label>
                 <select
                   value={prioridade} onChange={(e) => setPrioridade(e.target.value as "Baixa" | "Média" | "Alta")}
                   className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium appearance-none"
                 >
-                  <option value="Baixa">🟢 Baixa (Rotina/Normal)</option>
-                  <option value="Média">🟡 Média (Atenção)</option>
+                  <option value="Baixa">🟢 Baixa (No prazo)</option>
+                  <option value="Média">🟡 Média (Importante)</option>
                   <option value="Alta">🔴 Alta (Crítico/Urgente)</option>
                 </select>
               </div>
 
               <div className="pt-4">
                 <button type="submit" className="w-full py-4 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all hover:-translate-y-0.5">
-                  {editingId ? "Salvar Alterações" : "Adicionar Plano"}
+                  {editingId ? "Salvar Alterações" : "Registrar Nota & Tarefas"}
                 </button>
               </div>
             </form>

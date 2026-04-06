@@ -36,6 +36,7 @@ export default function MobileNav() {
 
   const allNavigation = [
     { id: 'agenda', name: "Agenda", href: "/dashboard", icon: CalendarIcon },
+    { id: 'tarefas', name: "Tarefas", href: "/dashboard/lista", icon: QueueListIcon },
     { id: 'alertas', name: "Alertas", href: "/dashboard/alertas", icon: BellAlertIcon },
     { id: 'relatorios', name: "Painel", href: "/dashboard/relatorios", icon: ChartBarIcon },
     { id: 'chaves', name: "Chaves", href: "/dashboard/chaves", icon: KeyIcon },
