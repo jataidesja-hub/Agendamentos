@@ -27,7 +27,7 @@ export default function MobileNav() {
             if (data?.telas_acesso) {
               setPermissões(data.telas_acesso);
             } else if (email === "logistica@cymi.com.br") {
-              setPermissões(['agenda', 'alertas', 'relatorios', 'configuracoes', 'chaves', 'perfis', 'veiculos', 'projetos']);
+              setPermissões(['agenda', 'alertas', 'relatorios', 'configuracoes', 'chaves', 'perfis', 'veiculos', 'projetos', 'abastecimentos']);
             }
           });
       }
@@ -43,6 +43,7 @@ export default function MobileNav() {
     { id: 'perfis', name: "Perfis", href: "/dashboard/usuarios", icon: UserGroupIcon },
     { id: 'veiculos', name: "Veículos", href: "/dashboard/veiculos", icon: TruckIcon },
     { id: 'projetos', name: "Projetos", href: "/dashboard/fazendas", icon: MapIcon },
+    { id: 'abastecimentos', name: "Abastecimentos", href: "/dashboard/abastecimentos", icon: ChartBarIcon },
   ];
 
   const navigation = allNavigation.filter(item => permissões.includes(item.id));

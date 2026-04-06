@@ -28,7 +28,7 @@ export default function Sidebar() {
               setPermissões(data.telas_acesso);
             } else if (email === "logistica@cymi.com.br") {
               // Admin padrão tem tudo
-              setPermissões(['agenda', 'alertas', 'relatorios', 'configuracoes', 'chaves', 'perfis', 'veiculos', 'projetos']);
+              setPermissões(['agenda', 'alertas', 'relatorios', 'configuracoes', 'chaves', 'perfis', 'veiculos', 'projetos', 'abastecimentos']);
             }
           });
       }
@@ -45,6 +45,7 @@ export default function Sidebar() {
     { id: 'perfis', name: "Perfis", href: "/dashboard/usuarios", icon: UserGroupIcon },
     { id: 'veiculos', name: "Veículos", href: "/dashboard/veiculos", icon: TruckIcon },
     { id: 'projetos', name: "Projetos/Fazendas", href: "/dashboard/fazendas", icon: MapIcon },
+    { id: 'abastecimentos', name: "Abastecimentos", href: "/dashboard/abastecimentos", icon: ChartBarIcon },
   ];
 
   // Filtra navegação com base nas permissões do banco
