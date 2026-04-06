@@ -22,31 +22,38 @@ export default function DashboardLayout({
 
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden relative z-0">
-        <header className="h-24 flex justify-between items-center px-8 bg-transparent">
-          <div className="flex-1 flex items-center pr-4 mt-2">
-            <div className="relative w-full max-w-md">
+        <header className="h-20 md:h-24 flex justify-between items-center px-4 md:px-8 bg-transparent transition-all duration-300">
+          <div className="flex-1 flex items-center pr-2 md:pr-4 mt-2">
+            <div className="relative w-full max-w-[200px] md:max-w-md hidden sm:block">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
               </div>
               <input
                 type="text"
-                className="block w-full pl-11 pr-4 py-3 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border-0 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] shadow-sm transition-all duration-300"
-                placeholder="Pesquisar agendamentos..."
+                className="block w-full pl-11 pr-4 py-2.5 md:py-3 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border-0 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] shadow-sm transition-all duration-300 text-sm"
+                placeholder="Pesquisar..."
               />
+            </div>
+            {/* Mobile Logo Placeholder or Title */}
+            <div className="sm:hidden flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0b7336] to-[#298d4a] flex items-center justify-center shadow-lg">
+                <span className="text-white font-black text-xs">C</span>
+              </div>
+              <span className="font-black text-[#0b7336] text-sm tracking-tight">CYMI</span>
             </div>
           </div>
 
-          <div className="flex items-center space-x-6 mt-2">
+          <div className="flex items-center space-x-3 md:space-x-6 mt-2">
             <button className="relative p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
               <BellIcon className="h-6 w-6" />
               <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#f4f7f5] dark:ring-[#0a0a0a]" />
             </button>
-            <div className="flex items-center space-x-3 cursor-pointer hover:opacity-80 transition-opacity bg-white/50 dark:bg-gray-800/50 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-sm">
-              <div className="flex flex-col text-right">
-                <span className="text-sm font-bold text-gray-800 dark:text-white">Administrador</span>
-                <span className="text-xs font-medium text-gray-500">Equipe O&M</span>
+            <div className="flex items-center space-x-2 md:space-x-3 cursor-pointer hover:opacity-80 transition-opacity bg-white/50 dark:bg-gray-800/50 backdrop-blur-md px-3 md:px-4 py-2 md:py-2.5 rounded-2xl shadow-sm">
+              <div className="hidden md:flex flex-col text-right">
+                <span className="text-sm font-bold text-gray-800 dark:text-white">Admin</span>
+                <span className="text-xs font-medium text-gray-500">O&M</span>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0b7336] to-[#09602c] text-white flex items-center justify-center font-bold shadow-md">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-[#0b7336] to-[#09602c] text-white flex items-center justify-center font-bold shadow-md text-xs md:text-base">
                 AD
               </div>
             </div>

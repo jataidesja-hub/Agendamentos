@@ -32,22 +32,24 @@ export default function MobileNav() {
 
   return (
     <div className="md:hidden fixed bottom-6 left-4 right-4 z-50">
-      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-white/40 dark:border-gray-800/50 shadow-2xl rounded-[2rem] px-2 py-3">
-        <nav className="flex justify-around items-center">
+      <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-white/40 dark:border-gray-800/50 shadow-2xl rounded-[2rem] px-4 py-3">
+        <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth">
           {navigation.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex flex-col items-center justify-center w-16 h-14 rounded-2xl transition-all duration-300 ${
+                className={`flex flex-col items-center justify-center min-w-[64px] h-14 rounded-2xl transition-all duration-300 shrink-0 ${
                   isActive
-                    ? "text-[#0b7336] dark:text-green-400 bg-green-50/50 dark:bg-green-500/10 scale-110"
+                    ? "text-[#0b7336] dark:text-green-400 bg-green-50/50 dark:bg-green-500/10 scale-105 shadow-sm"
                     : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 }`}
               >
-                <item.icon className={`h-6 w-6 mb-1 ${isActive ? "stroke-2" : "stroke-1"}`} aria-hidden="true" />
-                <span className={`text-[10px] font-bold ${isActive ? "opacity-100" : "opacity-0"}`}>{item.name}</span>
+                <item.icon className={`h-6 w-6 ${isActive ? "stroke-2 mb-1" : "stroke-1"}`} aria-hidden="true" />
+                <span className={`text-[9px] font-black uppercase tracking-tighter transition-all duration-300 ${isActive ? "opacity-100 h-auto" : "opacity-0 h-0 overflow-hidden"}`}>
+                  {item.name}
+                </span>
               </Link>
             );
           })}
