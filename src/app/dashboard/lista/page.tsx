@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PlusIcon, XMarkIcon, CheckCircleIcon, CalendarIcon, PencilIcon, ClockIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, XMarkIcon, CheckCircleIcon, CalendarIcon, PencilIcon, ClockIcon, TrashIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 import { toast } from "react-hot-toast";
 import { User } from "@supabase/supabase-js";
@@ -103,6 +103,67 @@ export default function ListaTarefas() {
     }
   };
 
+  const enviarListaPorEmail = async () => {
+    if (!userEmail || planos.length === 0) {
+      toast.error("Nenhum plano para enviar ou e-mail não configurado.");
+      return;
+    }
+
+    const toastId = toast.loading("Preparando e-mail...");
+    
+    try {
+      const htmlLista = `
+        <div style="font-family: sans-serif; padding: 20px; color: #333;">
+          <h2 style="color: #0b7336; border-bottom: 2px solid #0b7336; padding-bottom: 10px; margin-bottom: 20px;">Relatório de Planos de Ação - CYMI O&M</h2>
+          <p>Olá, segue a lista atualizada de planos de ação do sistema.</p>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+              <tr style="background-color: #f8f9fa; text-align: left;">
+                <th style="padding: 12px; border: 1px solid #dee2e6;">Plano</th>
+                <th style="padding: 12px; border: 1px solid #dee2e6;">Prazo</th>
+                <th style="padding: 12px; border: 1px solid #dee2e6;">Prioridade</th>
+                <th style="padding: 12px; border: 1px solid #dee2e6;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${planos.map(p => `
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #dee2e6;">
+                    <strong>${p.nome}</strong><br/>
+                    <small style="color: #666;">${p.descricao}</small>
+                  </td>
+                  <td style="padding: 12px; border: 1px solid #dee2e6;">${new Date(p.prazo + "T00:00:00").toLocaleDateString('pt-BR')} ${p.horaOpcional || ''}</td>
+                  <td style="padding: 12px; border: 1px solid #dee2e6;">${p.prioridade}</td>
+                  <td style="padding: 12px; border: 1px solid #dee2e6;">${p.status}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <br/>
+          <p style="font-size: 11px; color: #999;">Este relatório foi gerado automaticamente pelo Sistema CYMI O&M.</p>
+        </div>
+      `;
+
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: userEmail,
+          subject: `📋 Relatório de Planos de Ação - ${new Date().toLocaleDateString('pt-BR')}`,
+          html: htmlLista
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Lista enviada com sucesso para seu e-mail!", { id: toastId });
+      } else {
+        throw new Error("Falha no envio");
+      }
+    } catch (e) {
+      toast.error("Erro ao enviar e-mail. Tente novamente.", { id: toastId });
+    }
+  };
+
   const abrirModalNovo = () => {
     setEditingId(null);
     setNome(""); setDescricao(""); setPrazo(""); setHoraOpcional("");
@@ -185,13 +246,24 @@ export default function ListaTarefas() {
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Planos de Ação</h1>
           <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Acompanhe tarefas e prazos da equipe CYMI.</p>
         </div>
-        <button 
-          onClick={abrirModalNovo}
-          className="group flex items-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-green-500/50 hover:-translate-y-0.5"
-        >
-          <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
-          Novo Plano
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={enviarListaPorEmail}
+            title="Enviar lista por e-mail"
+            className="flex items-center px-5 py-3.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-bold rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-300"
+          >
+            <EnvelopeIcon className="w-5 h-5 mr-2" />
+            Enviar p/ Email
+          </button>
+
+          <button 
+            onClick={abrirModalNovo}
+            className="group flex items-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-green-500/50 hover:-translate-y-0.5"
+          >
+            <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
+            Novo Plano
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-8">

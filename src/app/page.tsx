@@ -75,7 +75,7 @@ export default function Login() {
             {isLogin ? "Bem-vindo de volta" : "Criar nova conta"}
           </h2>
           <p className="text-center text-gray-500 font-medium mb-8">
-            {isLogin ? "Acesse seu painel de agendamentos" : "Registre-se para separar seus agendamentos"}
+            {isLogin ? "Acesse seu painel de gerenciamento" : "Registre-se no sistema CYMI Gerenciamentos"}
           </p>
 
           <form onSubmit={handleAuth} className="space-y-5">

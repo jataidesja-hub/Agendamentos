@@ -1,7 +1,7 @@
 {
-  "name": "CYMI O&M Sistema",
-  "short_name": "CYMI O&M",
-  "description": "Sistema de Agendamento Inteligente",
+  "name": "CYMI - Gerenciamentos",
+  "short_name": "CYMI",
+  "description": "Sistema Inteligente de Gerenciamento da CYMI O&M",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0a0a0a",
@@ -9,14 +9,16 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/favicon.ico",
+      "src": "/icon.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "/favicon.ico",
+      "src": "/icon.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

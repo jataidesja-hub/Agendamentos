@@ -38,7 +38,7 @@ export default function Sidebar() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0b7336] to-[#298d4a] shadow-lg shadow-green-500/30 flex items-center justify-center">
             <span className="text-white font-bold text-xl tracking-tighter">C</span>
           </div>
-          <h2 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-[#0b7336] to-[#298d4a] tracking-tight">CYMI O&M</h2>
+          <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-[#0b7336] to-[#298d4a] tracking-tighter">CYMI - Gerenciamentos</h2>
         </div>
       </div>
       

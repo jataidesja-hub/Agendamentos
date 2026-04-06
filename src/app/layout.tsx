@@ -14,13 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CYMI O&M",
-  description: "Sistema Inteligente de Agendamento da CYMI O&M",
+  title: "CYMI - Gerenciamentos",
+  description: "Sistema Inteligente de Gerenciamento da CYMI O&M",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "CYMI O&M",
+    title: "CYMI - Gerenciamentos",
   },
   formatDetection: {
     telephone: false,

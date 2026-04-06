@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon, UserIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, XMarkIcon, ClockIcon, FlagIcon, CalendarDaysIcon, BellIcon, UserIcon, PencilIcon, TrashIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 import { toast } from "react-hot-toast";
 import { User } from "@supabase/supabase-js";
@@ -100,6 +100,64 @@ export default function Dashboard() {
     setPrioridade(item.prioridade);
     setAlerta(item.alerta);
     setIsModalOpen(true);
+  };
+
+  const enviarListaPorEmail = async () => {
+    if (!userEmail || agendamentos.length === 0) {
+      toast.error("Nenhum agendamento para enviar ou e-mail não configurado.");
+      return;
+    }
+
+    const toastId = toast.loading("Enviando agenda por e-mail...");
+    
+    try {
+      const htmlLista = `
+        <div style="font-family: sans-serif; padding: 20px; color: #333;">
+          <h2 style="color: #0b7336; border-bottom: 2px solid #0b7336; padding-bottom: 10px; margin-bottom: 20px;">Agenda de Compromissos - CYMI O&M</h2>
+          <p>Olá, segue sua lista atualizada de agendamentos:</p>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+              <tr style="background-color: #f8f9fa; text-align: left;">
+                <th style="padding: 12px; border: 1px solid #dee2e6;">Descrição</th>
+                <th style="padding: 12px; border: 1px solid #dee2e6;">Data/Hora</th>
+                <th style="padding: 12px; border: 1px solid #dee2e6;">Prioridade</th>
+                <th style="padding: 12px; border: 1px solid #dee2e6;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${agendamentos.map(item => `
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #dee2e6;">${item.descricao}</td>
+                  <td style="padding: 12px; border: 1px solid #dee2e6;">${new Date(item.data).toLocaleDateString('pt-BR')} ${item.horaOpcional || ''}</td>
+                  <td style="padding: 12px; border: 1px solid #dee2e6;">${item.prioridade}</td>
+                  <td style="padding: 12px; border: 1px solid #dee2e6;">${item.status}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <br/>
+          <p style="font-size: 11px; color: #999;">Este relatório foi gerado automaticamente pelo Sistema CYMI O&M.</p>
+        </div>
+      `;
+
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: userEmail,
+          subject: `📅 Agenda CYMI - ${new Date().toLocaleDateString('pt-BR')}`,
+          html: htmlLista
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Agenda enviada com sucesso!", { id: toastId });
+      } else {
+        throw new Error("Falha no envio");
+      }
+    } catch (e) {
+      toast.error("Erro ao enviar e-mail.", { id: toastId });
+    }
   };
 
   const enviarNotificacaoEmail = async (nomeAgendamento: string, acao: 'Criado' | 'Atualizado') => {
@@ -254,13 +312,24 @@ END:VCALENDAR`;
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Visão Geral</h1>
           <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Você tem {agendamentos.length} agendamentos registrados no sistema.</p>
         </div>
-        <button
-          onClick={abrirModalNovo}
-          className="group flex items-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-green-500/50 hover:-translate-y-0.5"
-        >
-          <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
-          Novo Agendamento
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={enviarListaPorEmail}
+            title="Enviar lista por e-mail"
+            className="flex items-center px-5 py-3.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-bold rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-300"
+          >
+            <EnvelopeIcon className="w-5 h-5 mr-2" />
+            Enviar p/ Email
+          </button>
+
+          <button
+            onClick={abrirModalNovo}
+            className="group flex items-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-green-500/50 hover:-translate-y-0.5"
+          >
+            <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
+            Novo Agendamento
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-8">
