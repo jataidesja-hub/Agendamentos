@@ -103,9 +103,12 @@ export default function ListaTarefas() {
     }
   };
 
-  const enviarListaPorEmail = async () => {
-    if (!userEmail || planos.length === 0) {
-      toast.error("Nenhum plano para enviar ou e-mail não configurado.");
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailDestino, setEmailDestino] = useState("");
+
+  const enviarListaPorEmail = async (email: string) => {
+    if (!email || planos.length === 0) {
+      toast.error("Nenhum plano para enviar ou e-mail inválido.");
       return;
     }
 
@@ -148,14 +151,15 @@ export default function ListaTarefas() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: userEmail,
+          to: email,
           subject: `📋 Relatório de Planos de Ação - ${new Date().toLocaleDateString('pt-BR')}`,
           html: htmlLista
         })
       });
 
       if (res.ok) {
-        toast.success("Lista enviada com sucesso para seu e-mail!", { id: toastId });
+        toast.success("Lista enviada com sucesso!", { id: toastId });
+        setIsEmailModalOpen(false);
       } else {
         throw new Error("Falha no envio");
       }
@@ -248,7 +252,10 @@ export default function ListaTarefas() {
         </div>
         <div className="flex items-center gap-3">
           <button 
-            onClick={enviarListaPorEmail}
+            onClick={() => {
+              setEmailDestino(userEmail || "");
+              setIsEmailModalOpen(true);
+            }}
             title="Enviar lista por e-mail"
             className="flex items-center px-5 py-3.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-bold rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-300"
           >
@@ -409,6 +416,45 @@ export default function ListaTarefas() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Modal de E-mail Personalizado */}
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-0">
+          <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md transition-opacity" onClick={() => setIsEmailModalOpen(false)}></div>
+          <div className="relative bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl overflow-hidden w-full max-w-md transform transition-all p-8 border border-white/20">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white">Relatório de Tarefas</h3>
+              <button onClick={() => setIsEmailModalOpen(false)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium leading-relaxed">
+              Digite os e-mails de destino para receber a lista de tarefas atualizada (separe por vírgula para múltiplos destinos).
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">E-mails de Destino</label>
+                <div className="relative">
+                  <EnvelopeIcon className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={emailDestino}
+                    onChange={(e) => setEmailDestino(e.target.value)}
+                    placeholder="email@cymi.com, outro@cymi.com"
+                    className="w-full pl-12 pr-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
+                  />
+                </div>
+              </div>
+              <button 
+                onClick={() => enviarListaPorEmail(emailDestino)}
+                className="w-full py-4 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all hover:shadow-green-500/50 hover:-translate-y-0.5"
+              >
+                Enviar p/ Emails Agora
+              </button>
+            </div>
           </div>
         </div>
       )}
