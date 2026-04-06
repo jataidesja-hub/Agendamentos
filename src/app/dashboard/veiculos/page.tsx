@@ -9,6 +9,7 @@ export default function VeiculosPage() {
   const [veiculos, setVeiculos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [busca, setBusca] = useState('');
 
   // Form states
   const [placa, setPlaca] = useState('');
@@ -55,18 +56,25 @@ export default function VeiculosPage() {
   };
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
+    // Atualização otimista para feedback imediato
+    const originalVeiculos = [...veiculos];
+    setVeiculos(prev => prev.map(v => v.id === id ? { ...v, status: newStatus } : v));
+
     try {
       const { error } = await supabase
         .from('veiculos_frota')
         .update({ status: newStatus })
         .eq('id', id);
       
-      if (!error) {
-        toast.success('Status atualizado!');
-        fetchVeiculos();
+      if (error) {
+        setVeiculos(originalVeiculos);
+        toast.error('Erro ao salvar no banco: ' + error.message);
+      } else {
+        toast.success('Status atualizado com sucesso!');
       }
     } catch (error) {
-      toast.error('Erro ao atualizar status');
+      setVeiculos(originalVeiculos);
+      toast.error('Falha na conexão ao atualizar status');
     }
   };
 
@@ -87,7 +95,7 @@ export default function VeiculosPage() {
 
   return (
     <div className="p-4 md:p-8 w-full max-w-6xl mx-auto flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl shadow-lg">
             <TruckIcon className="w-6 h-6 text-white" />
@@ -98,12 +106,23 @@ export default function VeiculosPage() {
           </div>
         </div>
         
-        <button 
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg hover:scale-105 active:scale-95"
-        >
-          {showForm ? 'Cancelar' : <><PlusIcon className="w-5 h-5" /> Cadastrar Veículo</>}
-        </button>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="relative flex-1 md:w-64">
+            <input 
+              type="text" 
+              placeholder="Pesquisar placa..." 
+              value={busca}
+              onChange={(e) => setBusca(e.target.value.toUpperCase())}
+              className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          <button 
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg hover:scale-105 active:scale-95 whitespace-nowrap"
+          >
+            {showForm ? 'Cancelar' : <><PlusIcon className="w-5 h-5" /> Cadastrar Veiculo</>}
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -147,7 +166,9 @@ export default function VeiculosPage() {
       )}
 
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
-        {veiculos.map(v => (
+        {veiculos
+          .filter(v => v.placa.includes(busca) || v.modelo?.toLowerCase().includes(busca.toLowerCase()))
+          .map(v => (
           <div key={v.id} className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border border-white/50 dark:border-gray-700/50 rounded-[2rem] p-7 shadow-[0_10px_40px_rgb(0,0,0,0.06)] flex flex-col justify-between group transition-all duration-300 hover:shadow-blue-500/10">
             <div className="flex items-start justify-between mb-6">
               <div>
