@@ -43,6 +43,7 @@ export default function ListaTarefas() {
   const [novoItemPrioridade, setNovoItemPrioridade] = useState<"Baixa" | "Média" | "Alta">("Média");
   const [novoItemPrazo, setNovoItemPrazo] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -205,26 +206,6 @@ export default function ListaTarefas() {
     setChecklist(list);
   };
 
-  const alternarCheckItemCard = async (planoId: string, itemIdx: number) => {
-     const plano = planos.find(p => p.id === planoId);
-     if (!plano) return;
-
-     const list = [...(plano.checklist || [])];
-     const s = list[itemIdx].status;
-     if (s === "Pendente") list[itemIdx].status = "Andamento";
-     else if (s === "Andamento") { list[itemIdx].status = "Concluido"; list[itemIdx].concluido = true; }
-     else { list[itemIdx].status = "Pendente"; list[itemIdx].concluido = false; }
-
-     const { error } = await supabase
-       .from("planos_acao")
-       .update({ checklist: list })
-       .eq("id", planoId);
-     
-     if (!error && user) {
-       fetchPlanos(user.id);
-     }
-  };
-
   const salvarPlano = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -323,105 +304,163 @@ export default function ListaTarefas() {
              <p className="mt-2 text-gray-500">Crie seu primeiro plano de ação acima.</p>
            </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
             {planos.map((plano) => {
                const estaAtrasado = plano.status === 'Pendente' && plano.prazo && new Date(plano.prazo) < new Date();
-                return (
-                 <div key={plano.id} className="group bg-white/70 dark:bg-gray-800/70 backdrop-blur-lg rounded-3xl p-6 border border-white/50 dark:border-gray-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(11,115,54,0.1)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between">
-                   <div className={`absolute left-0 top-0 w-1.5 h-full ${
-                     plano.status === 'Concluído' ? 'bg-[#0b7336]' : 
-                     plano.prioridade === 'Alta' ? 'bg-red-500' :
-                     plano.prioridade === 'Média' ? 'bg-amber-500' :
-                     'bg-emerald-500'
-                   }`}></div>
-                  
-                  <div>
-                    <div className="flex justify-between items-start mb-2 pl-2">
-                       <h3 className={`text-xl font-bold leading-tight ${plano.status === 'Concluído' ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-white'}`}>
-                         {plano.nome}
-                       </h3>
-                     <div className="flex space-x-1">
-                       <button 
-                         onClick={() => abrirOutlook(plano)}
-                         className="p-1.5 rounded-full text-gray-400 hover:text-[#0b7336] hover:bg-green-50 transition-colors" 
-                         title="Enviar esta tarefa via Outlook"
-                       >
-                         <EnvelopeIcon className="w-5 h-5" />
-                       </button>
-                       <button onClick={() => abrirModalEditar(plano)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Editar">
-                         <PencilIcon className="w-6 h-6" />
-                       </button>
-                       <button onClick={() => alternarStatus(plano.id, plano.status)} className={`p-1.5 rounded-full transition-colors ${plano.status === 'Concluído' ? 'text-[#0b7336] bg-green-50' : 'text-gray-300 hover:text-green-500 hover:bg-green-50'}`} title="Concluir">
-                         <CheckCircleIcon className="w-8 h-8" />
-                       </button>
-                       <button onClick={() => excluirPlano(plano.id)} className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Excluir">
-                         <TrashIcon className="w-6 h-6" />
-                       </button>
-                     </div>
-                    </div>
-                    <p className={`pl-2 text-sm mb-4 ${plano.status === 'Concluído' ? 'text-gray-400' : 'text-gray-600 dark:text-gray-300'}`}>
-                      {plano.descricao}
-                    </p>
+               const isExpanded = expandedId === plano.id;
 
-                    {/* Lista de sub-tarefas no card */}
-                    {plano.checklist && plano.checklist.length > 0 && (
-                      <div className="pl-2 mb-6 space-y-2">
-                        {plano.checklist.map((item, idx) => (
-                          <div 
-                            key={idx} 
-                            onClick={() => alternarCheckItemCard(plano.id, idx)}
-                            className={`flex items-center p-2 rounded-xl border cursor-pointer transition-all ${
-                              item.status === 'Concluido' ? 'bg-green-50/50 border-green-100 text-gray-400' :
-                              item.status === 'Andamento' ? 'bg-blue-50/50 border-blue-100 text-blue-700' :
-                              'bg-gray-50/50 border-gray-100 text-gray-600'
-                            }`}
-                          >
-                            <div className={`w-5 h-5 rounded-md border-2 mr-3 flex items-center justify-center transition-all ${
-                              item.status === 'Concluido' ? 'bg-[#0b7336] border-[#0b7336]' :
-                              item.status === 'Andamento' ? 'bg-blue-500 border-blue-500' :
-                              'bg-white border-gray-300'
-                            }`}>
-                              {item.status === 'Concluido' && <CheckCircleIcon className="w-4 h-4 text-white" />}
-                              {item.status === 'Andamento' && <ClockIcon className="w-4 h-4 text-white" />}
-                            </div>
-                            <span className={`text-xs font-bold ${item.status === 'Concluido' ? 'line-through' : ''}`}>
-                              {item.texto}
-                            </span>
-                            <span className="ml-auto text-[8px] font-black uppercase tracking-widest opacity-60">
-                              {item.status}
-                            </span>
-                          </div>
-                        ))}
+                return (
+                  <div 
+                    key={plano.id} 
+                    className="group bg-white/80 dark:bg-gray-800/80 backdrop-blur-2xl rounded-3xl p-7 border border-white/50 dark:border-gray-700 shadow-[0_10px_40px_rgb(0,0,0,0.06)] hover:shadow-[0_10px_40px_rgb(11,115,54,0.15)] transition-all duration-500 relative overflow-hidden flex flex-col"
+                  >
+                    <div className={`absolute left-0 top-0 w-2 h-full ${
+                      plano.status === 'Concluído' ? 'bg-green-600' : 
+                      plano.prioridade === 'Alta' ? 'bg-red-600' :
+                      plano.prioridade === 'Média' ? 'bg-amber-600' :
+                      'bg-emerald-600'
+                    }`}></div>
+                   
+                   <div className="relative z-10">
+                     <div className="flex justify-between items-start mb-3 pl-2">
+                        <div 
+                          className="flex-1 cursor-pointer"
+                          onClick={() => setExpandedId(isExpanded ? null : plano.id)}
+                        >
+                          <h3 className={`text-2xl font-black leading-tight tracking-tight ${plano.status === 'Concluído' ? 'text-gray-500 line-through opacity-60' : 'text-gray-900 dark:text-white'}`}>
+                            {plano.nome}
+                          </h3>
+                        </div>
+                      <div className="flex space-x-1 items-center ml-4">
+                        <button 
+                          onClick={() => abrirOutlook(plano)}
+                          className="p-2 rounded-xl text-gray-500 hover:text-[#0b7336] hover:bg-green-50 dark:hover:bg-green-900/20 transition-all" 
+                          title="Enviar esta tarefa via Outlook"
+                        >
+                          <EnvelopeIcon className="w-6 h-6" />
+                        </button>
+                        <button onClick={() => abrirModalEditar(plano)} className="p-2 rounded-xl text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" title="Editar">
+                          <PencilIcon className="w-6 h-6" />
+                        </button>
+                        <button onClick={() => alternarStatus(plano.id, plano.status)} className={`p-1 rounded-xl transition-all ${plano.status === 'Concluído' ? 'text-[#0b7336] bg-green-50' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`} title="Concluir">
+                          <CheckCircleIcon className="w-9 h-9" />
+                        </button>
+                        <button onClick={() => excluirPlano(plano.id)} className="p-2 rounded-xl text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Excluir">
+                          <TrashIcon className="w-6 h-6" />
+                        </button>
                       </div>
-                    )}
-                    <div className="pl-2 flex space-x-2 mb-4">
-                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
-                        plano.prioridade === 'Alta' ? 'bg-red-50 text-red-600 border-red-100' :
-                        plano.prioridade === 'Média' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                        'bg-emerald-50 text-emerald-600 border-emerald-100'
-                      }`}>
-                        {plano.prioridade}
-                      </span>
-                      {estaAtrasado && (
-                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-red-500 text-white">Atrasado</span>
-                      )}
-                    </div>
+                     </div>
+
+                     <p 
+                       className={`pl-2 text-base font-medium mb-5 cursor-pointer line-clamp-2 ${plano.status === 'Concluído' ? 'text-gray-400' : 'text-gray-700 dark:text-gray-200'}`}
+                       onClick={() => setExpandedId(isExpanded ? null : plano.id)}
+                     >
+                       {plano.descricao}
+                     </p>
+
+                     {/* Informações de Prazo Iniciais */}
+                     <div className="pl-2 flex items-center space-x-2 mb-6 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : plano.id)}>
+                        <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider border ${
+                          plano.prioridade === 'Alta' ? 'bg-red-100 text-red-700 border-red-200' :
+                          plano.prioridade === 'Média' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                          'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        }`}>
+                          {plano.prioridade}
+                        </span>
+                        {estaAtrasado && (
+                          <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-red-600 text-white shadow-lg shadow-red-500/20 animate-pulse">Atrasado</span>
+                        )}
+                        {!isExpanded && plano.checklist && plano.checklist.length > 0 && (
+                          <span className="text-[11px] font-bold text-gray-500 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
+                            {plano.checklist.filter(c => c.status === 'Concluido').length}/{plano.checklist.length} tarefas
+                          </span>
+                        )}
+                        <div className={`ml-auto transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                          <PlusIcon className="w-5 h-5 text-gray-400" />
+                        </div>
+                     </div>
+
+                     {/* Lista de sub-tarefas - APENAS SE EXPANDIDO */}
+                     {isExpanded && (
+                       <div className="pl-2 mb-8 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                         {plano.checklist && plano.checklist.length > 0 ? (
+                           <>
+                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Lista de Tarefas Internas</h4>
+                             {plano.checklist.map((item, idx) => (
+                               <div 
+                                 key={idx} 
+                                 className={`flex flex-col sm:flex-row items-start sm:items-center p-4 rounded-2xl border transition-all ${
+                                   item.status === 'Concluido' ? 'bg-green-50/30 border-green-200 text-gray-500' :
+                                   item.status === 'Andamento' ? 'bg-blue-50/50 border-blue-200 text-gray-900 dark:text-white' :
+                                   'bg-gray-50/50 border-gray-200 text-gray-900 dark:text-white shadow-sm'
+                                 }`}
+                               >
+                                 <div className="flex items-center flex-1 w-full sm:w-auto">
+                                   <div className={`w-6 h-6 rounded-lg border-2 mr-4 flex items-center justify-center transition-all flex-shrink-0 ${
+                                     item.status === 'Concluido' ? 'bg-[#0b7336] border-[#0b7336]' :
+                                     item.status === 'Andamento' ? 'bg-blue-600 border-blue-600' :
+                                     'bg-white dark:bg-gray-800 border-gray-300'
+                                   }`}>
+                                     {item.status === 'Concluido' && <CheckCircleIcon className="w-4 h-4 text-white" />}
+                                     {item.status === 'Andamento' && <ClockIcon className="w-4 h-4 text-white" />}
+                                   </div>
+                                   <span className={`text-sm font-bold leading-tight ${item.status === 'Concluido' ? 'line-through opacity-70' : ''}`}>
+                                     {item.texto}
+                                   </span>
+                                 </div>
+
+                                 <div className="mt-4 sm:mt-0 ml-0 sm:ml-4 flex items-center justify-between w-full sm:w-auto gap-4">
+                                   {item.prazo && (
+                                     <span className="text-[10px] font-black text-gray-400 bg-white/50 dark:bg-gray-900/50 px-2.5 py-1 rounded-lg">
+                                       {new Date(item.prazo + "T00:00:00").toLocaleDateString('pt-BR')}
+                                     </span>
+                                   )}
+                                   <select 
+                                     value={item.status}
+                                     onChange={(e) => {
+                                       const novoStatus = e.target.value as any;
+                                       const list = [...(plano.checklist || [])];
+                                       list[idx].status = novoStatus;
+                                       list[idx].concluido = novoStatus === "Concluido";
+                                       supabase.from("planos_acao").update({ checklist: list }).eq("id", plano.id).then(() => {
+                                         if (user) fetchPlanos(user.id);
+                                       });
+                                     }}
+                                     className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border-0 focus:ring-2 focus:ring-[#0b7336] appearance-none cursor-pointer ${
+                                       item.status === 'Concluido' ? 'bg-green-100 text-green-700' :
+                                       item.status === 'Andamento' ? 'bg-blue-100 text-blue-700' :
+                                       'bg-gray-100 text-gray-700'
+                                     }`}
+                                   >
+                                     <option value="Pendente">PENDENTE</option>
+                                     <option value="Andamento">ANDAMENTO</option>
+                                     <option value="Concluido">CONCLUÍDO</option>
+                                   </select>
+                                 </div>
+                               </div>
+                             ))}
+                           </>
+                         ) : (
+                           <p className="text-sm font-medium text-gray-400 italic">Nenhuma sub-tarefa registrada.</p>
+                         )}
+                       </div>
+                     )}
+
+                     <div className="pl-2 pt-5 border-t border-gray-100 dark:border-gray-700 flex items-center">
+                       <span className={`flex items-center text-sm font-black px-4 py-2 rounded-2xl ${plano.status === 'Concluído' ? 'bg-gray-100 text-gray-400' : estaAtrasado ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                         <CalendarIcon className="w-4 h-4 mr-2" />
+                         Prazo: {plano.prazo ? new Date(plano.prazo + "T00:00:00").toLocaleDateString('pt-BR') : 'Sem prazo'}
+                       </span>
+                       {plano.horaOpcional && (
+                         <span className="ml-3 flex items-center text-sm font-black px-4 py-2 rounded-2xl bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                           <ClockIcon className="w-4 h-4 mr-2" />
+                           {plano.horaOpcional}
+                         </span>
+                       )}
+                     </div>
+                   </div>
                   </div>
-                  
-                  <div className="pl-2 pt-4 border-t border-gray-100 dark:border-gray-700/50 flex items-center">
-                    <span className={`flex items-center text-sm font-bold px-3 py-1.5 rounded-xl ${plano.status === 'Concluído' ? 'bg-gray-100 text-gray-400' : estaAtrasado ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
-                      <CalendarIcon className="w-4 h-4 mr-2" />
-                      Prazo: {plano.prazo ? new Date(plano.prazo + "T00:00:00").toLocaleDateString('pt-BR') : 'Sem prazo'}
-                    </span>
-                    {plano.horaOpcional && (
-                      <span className="ml-3 flex items-center text-sm font-bold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400">
-                        <ClockIcon className="w-4 h-4 mr-1.5" />
-                        {plano.horaOpcional}
-                      </span>
-                    )}
-                  </div>
-                </div>
-               );
+                 );
             })}
           </div>
         )}
