@@ -104,20 +104,24 @@ export default function Dashboard() {
 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailDestino, setEmailDestino] = useState("");
+  const [itemParaEnviar, setItemParaEnviar] = useState<Agendamento | null>(null);
 
-  const enviarListaPorEmail = async (email: string) => {
-    if (!email || agendamentos.length === 0) {
-      toast.error("Nenhum agendamento para enviar ou e-mail inválido.");
+  const enviarDadosPorEmail = async (email: string) => {
+    if (!email || (agendamentos.length === 0 && !itemParaEnviar)) {
+      toast.error("Nada para enviar ou e-mail inválido.");
       return;
     }
 
-    const toastId = toast.loading("Enviando agenda por e-mail...");
+    const toastId = toast.loading("Preparando e-mail...");
+    const itensParaEnviar = itemParaEnviar ? [itemParaEnviar] : agendamentos;
     
     try {
       const htmlLista = `
         <div style="font-family: sans-serif; padding: 20px; color: #333;">
-          <h2 style="color: #0b7336; border-bottom: 2px solid #0b7336; padding-bottom: 10px; margin-bottom: 20px;">Agenda de Compromissos - CYMI O&M</h2>
-          <p>Olá, segue sua lista atualizada de agendamentos:</p>
+          <h2 style="color: #0b7336; border-bottom: 2px solid #0b7336; padding-bottom: 10px; margin-bottom: 20px;">
+            ${itemParaEnviar ? 'Detalhes do Agendamento' : 'Agenda de Compromissos'} - CYMI
+          </h2>
+          <p>Olá, segue os detalhes do sistema:</p>
           <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
             <thead>
               <tr style="background-color: #f8f9fa; text-align: left;">
@@ -128,7 +132,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              ${agendamentos.map(item => `
+              ${itensParaEnviar.map(item => `
                 <tr>
                   <td style="padding: 12px; border: 1px solid #dee2e6;">${item.descricao}</td>
                   <td style="padding: 12px; border: 1px solid #dee2e6;">${new Date(item.data).toLocaleDateString('pt-BR')} ${item.horaOpcional || ''}</td>
@@ -148,19 +152,20 @@ export default function Dashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: email,
-          subject: `📅 Agenda CYMI - ${new Date().toLocaleDateString('pt-BR')}`,
+          subject: `${itemParaEnviar ? '📍 Detalhes Agendamento' : '📅 Agenda completa'} - ${itemParaEnviar?.descricao || 'CYMI'}`,
           html: htmlLista
         })
       });
 
       if (res.ok) {
-        toast.success("Agenda enviada com sucesso!", { id: toastId });
+        toast.success("E-mail enviado com sucesso!", { id: toastId });
         setIsEmailModalOpen(false);
+        setItemParaEnviar(null);
       } else {
         throw new Error("Falha no envio");
       }
     } catch (e) {
-      toast.error("Erro ao enviar e-mail.", { id: toastId });
+      toast.error("Erro ao enviar e-mail. Verifique os endereços.", { id: toastId });
     }
   };
 
@@ -372,6 +377,17 @@ END:VCALENDAR`;
                       )}
                     </div>
                     <div className="flex space-x-1">
+                      <button 
+                        onClick={() => {
+                          setItemParaEnviar(item);
+                          setEmailDestino(userEmail || "");
+                          setIsEmailModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-full text-gray-400 hover:text-[#0b7336] hover:bg-green-50 transition-colors" 
+                        title="Enviar este agendamento por e-mail"
+                      >
+                        <EnvelopeIcon className="w-5 h-5" />
+                      </button>
                       <button onClick={() => abrirModalEditar(item)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Editar">
                         <PencilIcon className="w-5 h-5" />
                       </button>
@@ -497,7 +513,7 @@ END:VCALENDAR`;
               </button>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium leading-relaxed">
-              Digite os e-mails de destino para receber o relatório da agenda (separe por vírgula para múltiplos destinos).
+              Digite os e-mails de destino. Use <strong>Enter</strong> ou vírgula para separar múltiplos endereços.
             </p>
             <div className="space-y-4">
               <div>
@@ -508,14 +524,29 @@ END:VCALENDAR`;
                     type="text"
                     autoFocus
                     value={emailDestino}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (emailDestino && !emailDestino.endsWith(',')) {
+                          setEmailDestino(emailDestino + ", ");
+                        }
+                      }
+                    }}
                     onChange={(e) => setEmailDestino(e.target.value)}
                     placeholder="email@cymi.com, outro@cymi.com"
                     className="w-full pl-12 pr-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
                   />
                 </div>
               </div>
+
+              <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30 mb-4">
+                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold leading-tight">
+                  ⚠️ NOTA: Na versão de testes, o serviço (Resend) pode restringir o envio apenas para e-mails autorizados da conta.
+                </p>
+              </div>
+
               <button 
-                onClick={() => enviarListaPorEmail(emailDestino)}
+                onClick={() => enviarDadosPorEmail(emailDestino)}
                 className="w-full py-4 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all hover:shadow-green-500/50 hover:-translate-y-0.5"
               >
                 Enviar por Email Agora

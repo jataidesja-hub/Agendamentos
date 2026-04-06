@@ -105,38 +105,40 @@ export default function ListaTarefas() {
 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailDestino, setEmailDestino] = useState("");
+  const [itemParaEnviar, setItemParaEnviar] = useState<PlanoAcao | null>(null);
 
-  const enviarListaPorEmail = async (email: string) => {
-    if (!email || planos.length === 0) {
-      toast.error("Nenhum plano para enviar ou e-mail inválido.");
+  const enviarDadosPorEmail = async (email: string) => {
+    if (!email || (planos.length === 0 && !itemParaEnviar)) {
+      toast.error("Nada para enviar ou e-mail inválido.");
       return;
     }
 
     const toastId = toast.loading("Preparando e-mail...");
+    const itensParaEnviar = itemParaEnviar ? [itemParaEnviar] : planos;
     
     try {
       const htmlLista = `
         <div style="font-family: sans-serif; padding: 20px; color: #333;">
-          <h2 style="color: #0b7336; border-bottom: 2px solid #0b7336; padding-bottom: 10px; margin-bottom: 20px;">Relatório de Planos de Ação - CYMI O&M</h2>
-          <p>Olá, segue a lista atualizada de planos de ação do sistema.</p>
+          <h2 style="color: #0b7336; border-bottom: 2px solid #0b7336; padding-bottom: 10px; margin-bottom: 20px;">
+            ${itemParaEnviar ? 'Detalhes da Tarefa' : 'Relatório de Planos de Ação'} - CYMI
+          </h2>
+          <p>Olá, segue os detalhes solicitados do sistema CYMI:</p>
           <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
             <thead>
               <tr style="background-color: #f8f9fa; text-align: left;">
-                <th style="padding: 12px; border: 1px solid #dee2e6;">Plano</th>
+                <th style="padding: 12px; border: 1px solid #dee2e6;">Tarefa</th>
                 <th style="padding: 12px; border: 1px solid #dee2e6;">Prazo</th>
-                <th style="padding: 12px; border: 1px solid #dee2e6;">Prioridade</th>
                 <th style="padding: 12px; border: 1px solid #dee2e6;">Status</th>
               </tr>
             </thead>
             <tbody>
-              ${planos.map(p => `
+              ${itensParaEnviar.map(p => `
                 <tr>
                   <td style="padding: 12px; border: 1px solid #dee2e6;">
                     <strong>${p.nome}</strong><br/>
                     <small style="color: #666;">${p.descricao}</small>
                   </td>
                   <td style="padding: 12px; border: 1px solid #dee2e6;">${new Date(p.prazo + "T00:00:00").toLocaleDateString('pt-BR')} ${p.horaOpcional || ''}</td>
-                  <td style="padding: 12px; border: 1px solid #dee2e6;">${p.prioridade}</td>
                   <td style="padding: 12px; border: 1px solid #dee2e6;">${p.status}</td>
                 </tr>
               `).join('')}
@@ -152,19 +154,20 @@ export default function ListaTarefas() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: email,
-          subject: `📋 Relatório de Planos de Ação - ${new Date().toLocaleDateString('pt-BR')}`,
+          subject: `${itemParaEnviar ? '👉 Tarefa:' : '📋 Planos de Ação:'} ${itemParaEnviar?.nome || 'CYMI'}`,
           html: htmlLista
         })
       });
 
       if (res.ok) {
-        toast.success("Lista enviada com sucesso!", { id: toastId });
+        toast.success("E-mail enviado com sucesso!", { id: toastId });
         setIsEmailModalOpen(false);
+        setItemParaEnviar(null);
       } else {
         throw new Error("Falha no envio");
       }
     } catch (e) {
-      toast.error("Erro ao enviar e-mail. Tente novamente.", { id: toastId });
+      toast.error("Erro ao enviar e-mail. Verifique os endereços.", { id: toastId });
     }
   };
 
@@ -302,6 +305,17 @@ export default function ListaTarefas() {
                          {plano.nome}
                        </h3>
                      <div className="flex space-x-1">
+                       <button 
+                         onClick={() => {
+                           setItemParaEnviar(plano);
+                           setEmailDestino(userEmail || "");
+                           setIsEmailModalOpen(true);
+                         }}
+                         className="p-1.5 rounded-full text-gray-400 hover:text-[#0b7336] hover:bg-green-50 transition-colors" 
+                         title="Enviar esta tarefa por e-mail"
+                       >
+                         <EnvelopeIcon className="w-5 h-5" />
+                       </button>
                        <button onClick={() => abrirModalEditar(plano)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Editar">
                          <PencilIcon className="w-6 h-6" />
                        </button>
@@ -431,7 +445,7 @@ export default function ListaTarefas() {
               </button>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium leading-relaxed">
-              Digite os e-mails de destino para receber a lista de tarefas atualizada (separe por vírgula para múltiplos destinos).
+              Digite os e-mails de destino. Use <strong>Enter</strong> ou vírgula para separar múltiplos endereços.
             </p>
             <div className="space-y-4">
               <div>
@@ -442,14 +456,29 @@ export default function ListaTarefas() {
                     type="text"
                     autoFocus
                     value={emailDestino}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (emailDestino && !emailDestino.endsWith(',')) {
+                          setEmailDestino(emailDestino + ", ");
+                        }
+                      }
+                    }}
                     onChange={(e) => setEmailDestino(e.target.value)}
                     placeholder="email@cymi.com, outro@cymi.com"
                     className="w-full pl-12 pr-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
                   />
                 </div>
               </div>
+
+              <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30 mb-4">
+                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold leading-tight">
+                  ⚠️ NOTA: Na versão de testes, o serviço (Resend) pode restringir o envio apenas para e-mails autorizados da conta.
+                </p>
+              </div>
+
               <button 
-                onClick={() => enviarListaPorEmail(emailDestino)}
+                onClick={() => enviarDadosPorEmail(emailDestino)}
                 className="w-full py-4 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all hover:shadow-green-500/50 hover:-translate-y-0.5"
               >
                 Enviar p/ Emails Agora
