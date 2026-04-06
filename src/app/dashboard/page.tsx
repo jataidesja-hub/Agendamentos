@@ -102,71 +102,28 @@ export default function Dashboard() {
     setIsModalOpen(true);
   };
 
-  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
-  const [emailDestino, setEmailDestino] = useState("");
-  const [itemParaEnviar, setItemParaEnviar] = useState<Agendamento | null>(null);
-
-  const enviarDadosPorEmail = async (email: string) => {
-    if (!email || (agendamentos.length === 0 && !itemParaEnviar)) {
-      toast.error("Nada para enviar ou e-mail inválido.");
+  const abrirOutlook = (item?: Agendamento) => {
+    const itens = item ? [item] : agendamentos;
+    if (itens.length === 0) {
+      toast.error("Nenhum dado para enviar.");
       return;
     }
 
-    const toastId = toast.loading("Preparando e-mail...");
-    const itensParaEnviar = itemParaEnviar ? [itemParaEnviar] : agendamentos;
+    const subject = encodeURIComponent(`${item ? '📍 Detalhes Agendamento' : '📅 Agenda de Compromissos'} - CYMI`);
     
-    try {
-      const htmlLista = `
-        <div style="font-family: sans-serif; padding: 20px; color: #333;">
-          <h2 style="color: #0b7336; border-bottom: 2px solid #0b7336; padding-bottom: 10px; margin-bottom: 20px;">
-            ${itemParaEnviar ? 'Detalhes do Agendamento' : 'Agenda de Compromissos'} - CYMI
-          </h2>
-          <p>Olá, segue os detalhes do sistema:</p>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-            <thead>
-              <tr style="background-color: #f8f9fa; text-align: left;">
-                <th style="padding: 12px; border: 1px solid #dee2e6;">Descrição</th>
-                <th style="padding: 12px; border: 1px solid #dee2e6;">Data/Hora</th>
-                <th style="padding: 12px; border: 1px solid #dee2e6;">Prioridade</th>
-                <th style="padding: 12px; border: 1px solid #dee2e6;">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itensParaEnviar.map(item => `
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #dee2e6;">${item.descricao}</td>
-                  <td style="padding: 12px; border: 1px solid #dee2e6;">${new Date(item.data).toLocaleDateString('pt-BR')} ${item.horaOpcional || ''}</td>
-                  <td style="padding: 12px; border: 1px solid #dee2e6;">${item.prioridade}</td>
-                  <td style="padding: 12px; border: 1px solid #dee2e6;">${item.status}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <br/>
-          <p style="font-size: 11px; color: #999;">Este relatório foi gerado automaticamente pelo Sistema CYMI O&M.</p>
-        </div>
-      `;
+    let bodyText = `Olá,\n\nSegue os detalhes do sistema CYMI:\n\n`;
+    itens.forEach(i => {
+      bodyText += `-----------------------------------\n`;
+      bodyText += `DESCRIÇÃO: ${i.descricao}\n`;
+      bodyText += `DATA: ${new Date(i.data).toLocaleDateString('pt-BR')} ${i.horaOpcional || ''}\n`;
+      bodyText += `PRIORIDADE: ${i.prioridade}\n`;
+      bodyText += `STATUS: ${i.status}\n`;
+    });
+    bodyText += `\n-----------------------------------\n`;
+    bodyText += `Relatório gerado automaticamente pelo Sistema CYMI O&M.`;
 
-      const res = await fetch("/api/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: email,
-          subject: `${itemParaEnviar ? '📍 Detalhes Agendamento' : '📅 Agenda completa'} - ${itemParaEnviar?.descricao || 'CYMI'}`,
-          html: htmlLista
-        })
-      });
-
-      if (res.ok) {
-        toast.success("E-mail enviado com sucesso!", { id: toastId });
-        setIsEmailModalOpen(false);
-        setItemParaEnviar(null);
-      } else {
-        throw new Error("Falha no envio");
-      }
-    } catch (e) {
-      toast.error("Erro ao enviar e-mail. Verifique os endereços.", { id: toastId });
-    }
+    const mailtoLink = `mailto:${userEmail || ''}?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
+    window.location.href = mailtoLink;
   };
 
   const enviarNotificacaoEmail = async (nomeAgendamento: string, acao: 'Criado' | 'Atualizado') => {
@@ -323,11 +280,8 @@ END:VCALENDAR`;
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => {
-              setEmailDestino(userEmail || "");
-              setIsEmailModalOpen(true);
-            }}
-            title="Enviar lista por e-mail"
+            onClick={() => abrirOutlook()}
+            title="Enviar lista p/ Outlook"
             className="flex items-center px-5 py-3.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-bold rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-300"
           >
             <EnvelopeIcon className="w-5 h-5 mr-2" />
@@ -378,13 +332,9 @@ END:VCALENDAR`;
                     </div>
                     <div className="flex space-x-1">
                       <button 
-                        onClick={() => {
-                          setItemParaEnviar(item);
-                          setEmailDestino(userEmail || "");
-                          setIsEmailModalOpen(true);
-                        }}
+                        onClick={() => abrirOutlook(item)}
                         className="p-1.5 rounded-full text-gray-400 hover:text-[#0b7336] hover:bg-green-50 transition-colors" 
-                        title="Enviar este agendamento por e-mail"
+                        title="Enviar este agendamento via Outlook"
                       >
                         <EnvelopeIcon className="w-5 h-5" />
                       </button>
@@ -498,60 +448,6 @@ END:VCALENDAR`;
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-      {/* Modal de E-mail Personalizado */}
-      {isEmailModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-0">
-          <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md transition-opacity" onClick={() => setIsEmailModalOpen(false)}></div>
-          <div className="relative bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl overflow-hidden w-full max-w-md transform transition-all p-8 border border-white/20">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-black text-gray-900 dark:text-white">Enviar Agenda</h3>
-              <button onClick={() => setIsEmailModalOpen(false)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500">
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium leading-relaxed">
-              Digite os e-mails de destino. Use <strong>Enter</strong> ou vírgula para separar múltiplos endereços.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">E-mails de Destino</label>
-                <div className="relative">
-                  <EnvelopeIcon className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    autoFocus
-                    value={emailDestino}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (emailDestino && !emailDestino.endsWith(',')) {
-                          setEmailDestino(emailDestino + ", ");
-                        }
-                      }
-                    }}
-                    onChange={(e) => setEmailDestino(e.target.value)}
-                    placeholder="email@cymi.com, outro@cymi.com"
-                    className="w-full pl-12 pr-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all font-medium"
-                  />
-                </div>
-              </div>
-
-              <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30 mb-4">
-                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold leading-tight">
-                  ⚠️ NOTA: Na versão de testes, o serviço (Resend) pode restringir o envio apenas para e-mails autorizados da conta.
-                </p>
-              </div>
-
-              <button 
-                onClick={() => enviarDadosPorEmail(emailDestino)}
-                className="w-full py-4 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all hover:shadow-green-500/50 hover:-translate-y-0.5"
-              >
-                Enviar por Email Agora
-              </button>
-            </div>
           </div>
         </div>
       )}
