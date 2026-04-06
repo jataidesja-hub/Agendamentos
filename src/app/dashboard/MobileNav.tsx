@@ -18,7 +18,6 @@ export default function MobileNav() {
 
   const navigation = [
     { name: "Agenda", href: "/dashboard", icon: CalendarIcon },
-    { name: "Tarefas", href: "/dashboard/lista", icon: QueueListIcon },
     { name: "Alertas", href: "/dashboard/alertas", icon: BellAlertIcon },
     { name: "Painel", href: "/dashboard/relatorios", icon: ChartBarIcon },
   ];

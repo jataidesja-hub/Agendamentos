@@ -18,7 +18,6 @@ export default function Sidebar() {
 
   const navigation = [
     { name: "Agendamentos", href: "/dashboard", icon: CalendarIcon },
-    { name: "Lista de Tarefas", href: "/dashboard/lista", icon: QueueListIcon },
     { name: "Alertas", href: "/dashboard/alertas", icon: BellAlertIcon },
     { name: "Relatórios", href: "/dashboard/relatorios", icon: ChartBarIcon },
     { name: "Configurações", href: "/dashboard/configuracoes", icon: Cog6ToothIcon },

@@ -9,6 +9,7 @@ import { User } from "@supabase/supabase-js";
 interface Agendamento {
   id: string;
   descricao: string;
+  observacoes?: string;
   data: string;
   horaOpcional?: string;
   prioridade: "Baixa" | "Média" | "Alta";
@@ -23,13 +24,14 @@ export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const [descricao, setDescricao] = useState("");
+  const [observacoes, setObservacoes] = useState("");
   const [dataAgendamento, setDataAgendamento] = useState("");
   const [horaAgendamento, setHoraAgendamento] = useState("");
   const [prioridade, setPrioridade] = useState<"Baixa" | "Média" | "Alta">("Média");
   const [alerta, setAlerta] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -87,14 +89,19 @@ export default function Dashboard() {
 
   const abrirModalNovo = () => {
     setEditingId(null);
-    setDescricao(""); setDataAgendamento(""); setHoraAgendamento(""); 
-    setPrioridade("Média"); setAlerta(false);
+    setDescricao(""); 
+    setObservacoes("");
+    setDataAgendamento(""); 
+    setHoraAgendamento(""); 
+    setPrioridade("Média"); 
+    setAlerta(false);
     setIsModalOpen(true);
   };
 
   const abrirModalEditar = (item: Agendamento) => {
     setEditingId(item.id);
     setDescricao(item.descricao);
+    setObservacoes(item.observacoes || "");
     setDataAgendamento(item.data.split("T")[0]); // extrai YYYY-MM-DD
     setHoraAgendamento(item.horaOpcional || "");
     setPrioridade(item.prioridade);
@@ -115,6 +122,7 @@ export default function Dashboard() {
     itens.forEach(i => {
       bodyText += `-----------------------------------\n`;
       bodyText += `DESCRIÇÃO: ${i.descricao}\n`;
+      if (i.observacoes) bodyText += `DETALHES: ${i.observacoes}\n`;
       bodyText += `DATA: ${new Date(i.data).toLocaleDateString('pt-BR')} ${i.horaOpcional || ''}\n`;
       bodyText += `PRIORIDADE: ${i.prioridade}\n`;
       bodyText += `STATUS: ${i.status}\n`;
@@ -198,6 +206,7 @@ END:VCALENDAR`;
 
     const payload = {
       descricao,
+      observacoes,
       data: dateISO,
       horaOpcional: horaAgendamento,
       prioridade,
@@ -347,9 +356,15 @@ END:VCALENDAR`;
                     </div>
                   </div>
 
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 leading-tight line-clamp-2 min-h-[3.5rem]">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1 leading-tight line-clamp-2">
                     {item.descricao}
                   </h3>
+                  
+                  {item.observacoes && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2 italic">
+                      {item.observacoes}
+                    </p>
+                  )}
 
                   <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm font-medium mb-6 bg-gray-50 dark:bg-gray-900/50 px-3 py-2 rounded-xl w-max">
                     <ClockIcon className="w-4 h-4 mr-2 text-[#0b7336]" />
@@ -396,6 +411,16 @@ END:VCALENDAR`;
                   type="text" required value={descricao} onChange={(e) => setDescricao(e.target.value)}
                   className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white placeholder-gray-400 transition-all font-medium"
                   placeholder="Ex: Manutenção da Subestação A"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Descrição Detalhada / Observações</label>
+                <textarea
+                  value={observacoes} onChange={(e) => setObservacoes(e.target.value)}
+                  rows={3}
+                  className="w-full px-5 py-4 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white placeholder-gray-400 transition-all font-medium resize-none"
+                  placeholder="Adicione detalhes importantes aqui..."
                 />
               </div>
 
