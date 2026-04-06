@@ -167,12 +167,51 @@ export default function AbastecimentosPage() {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
+          <label className="flex-1 md:flex-none flex items-center justify-center px-6 py-3.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-bold rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 transition-all duration-300 cursor-pointer">
+            <TableCellsIcon className="w-5 h-5 mr-2 text-blue-500" />
+            Importar Arquivo
+            <input 
+              type="file" 
+              accept=".xlsx, .xls" 
+              className="hidden" 
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setLoading(true);
+                try {
+                  const arrayBuffer = await file.arrayBuffer();
+                  const workbook = XLSX.read(arrayBuffer, { type: "array" });
+                  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                  const rawData = XLSX.utils.sheet_to_json(worksheet) as any[];
+                  
+                  const formattedData: Abastecimento[] = rawData.map((row: any) => ({
+                    placa: String(row["PLACA"] || "").trim(),
+                    tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || "").trim(),
+                    litros: Number(row["LITROS"] || 0),
+                    valor_litro: Number(row["VL/LITRO"] || 0),
+                    valor_total: Number(row["VALOR EMISSAO"] || 0),
+                    codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
+                    nome_estabelecimento: String(row["NOME ESTABELECIMENTO"] || "")
+                  })).filter(item => item.placa !== "" && item.placa !== "null");
+
+                  setData(formattedData);
+                  setLastUpdate(new Date().toLocaleString("pt-BR") + " (Manual)");
+                  toast.success("Arquivo importado com sucesso!");
+                } catch (err) {
+                  toast.error("Erro ao ler o arquivo selecionado.");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            />
+          </label>
+
           <button
             onClick={() => setIsConfigOpen(true)}
             className="p-3.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 transition-all duration-300"
-            title="Configurar Link"
+            title="Configurar Link OneDrive"
           >
-            <Cog6ToothIcon className="w-6 h-6" />
+            <CloudArrowDownIcon className="w-6 h-6 text-green-600" />
           </button>
           
           <button
@@ -181,7 +220,7 @@ export default function AbastecimentosPage() {
             className="flex-1 md:flex-none flex items-center justify-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 disabled:opacity-50"
           >
             <ArrowPathIcon className={`w-5 h-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? "Sincronizando..." : "Atualizar Planilha"}
+            {loading ? "Sincronizando..." : "Sincronizar OneDrive"}
           </button>
         </div>
       </div>
