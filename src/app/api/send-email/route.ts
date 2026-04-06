@@ -14,19 +14,31 @@ export async function POST(req: Request) {
 
     const emailList = to.split(',').map((e: string) => e.trim()).filter(Boolean);
 
-    const data = await resend.emails.send({
-      from: 'Sistema CYMI <onboarding@resend.dev>', // onboarding@resend.dev funciona na camada gratuita com e-mails verificados na conta
-      to: emailList,
-      subject: subject,
-      html: html,
-    });
+    // Na camada gratuita (onboarding), o Resend pode falhar ao enviar para múltiplos endereços em um único array
+    // Se houver mais de um, enviamos de forma individual para maximizar a entrega nos endereços verificados
+    const results = await Promise.all(
+      emailList.map(async (recipient: string) => {
+        return await resend.emails.send({
+          from: 'Sistema CYMI <onboarding@resend.dev>',
+          to: recipient,
+          subject: subject,
+          html: html,
+        });
+      })
+    );
 
-    if (data.error) {
-      console.error(data.error);
-      return NextResponse.json({ error: data.error.message }, { status: 400 });
+    // Verifica se houve erro em algum envio
+    const errors = results.filter(r => r.error);
+    if (errors.length === emailList.length) {
+      // Se TODOS derem erro
+      return NextResponse.json({ error: errors[0].error?.message || 'Todos os envios falharam' }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ 
+      success: true, 
+      sent: emailList.length - errors.length, 
+      total: emailList.length 
+    });
   } catch (error: any) {
     console.error('Erro ao enviar email:', error);
     return NextResponse.json({ error: 'Erro interno ao tentar enviar e-mail' }, { status: 500 });
