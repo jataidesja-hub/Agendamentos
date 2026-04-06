@@ -325,7 +325,7 @@ export default function ListaTarefas() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {planos.map((plano) => {
-               const estaAtrasado = plano.status === 'Pendente' && new Date(plano.prazo) < new Date();
+               const estaAtrasado = plano.status === 'Pendente' && plano.prazo && new Date(plano.prazo) < new Date();
                 return (
                  <div key={plano.id} className="group bg-white/70 dark:bg-gray-800/70 backdrop-blur-lg rounded-3xl p-6 border border-white/50 dark:border-gray-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(11,115,54,0.1)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between">
                    <div className={`absolute left-0 top-0 w-1.5 h-full ${
@@ -411,7 +411,7 @@ export default function ListaTarefas() {
                   <div className="pl-2 pt-4 border-t border-gray-100 dark:border-gray-700/50 flex items-center">
                     <span className={`flex items-center text-sm font-bold px-3 py-1.5 rounded-xl ${plano.status === 'Concluído' ? 'bg-gray-100 text-gray-400' : estaAtrasado ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
                       <CalendarIcon className="w-4 h-4 mr-2" />
-                      Prazo: {new Date(plano.prazo + "T00:00:00").toLocaleDateString('pt-BR')}
+                      Prazo: {plano.prazo ? new Date(plano.prazo + "T00:00:00").toLocaleDateString('pt-BR') : 'Sem prazo'}
                     </span>
                     {plano.horaOpcional && (
                       <span className="ml-3 flex items-center text-sm font-bold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400">
