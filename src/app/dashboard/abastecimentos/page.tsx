@@ -89,9 +89,8 @@ export default function AbastecimentosPage() {
             to += 1000;
           }
         }
-        if (allData.length > 50000) break;
       }
-      setData(allData as Abastecimento[]);
+      if (allData.length > 0) setData(allData as Abastecimento[]);
     } catch (err: any) {
       console.error("Erro ao carregar do Supabase:", err);
       toast.error("Erro ao carregar dados.");
@@ -101,23 +100,25 @@ export default function AbastecimentosPage() {
   };
 
   const saveToSupabase = async (items: Abastecimento[]) => {
-    const confirm = window.confirm(`Isso irá substituir os dados atuais por ${items.length} novos registros. Continuar?`);
+    const confirm = window.confirm(`Deseja salvar ${items.length} registros no banco de dados?`);
     if (!confirm) return;
 
     setLoading(true);
     try {
+      // Limpa dados antigos para evitar duplicidade
       await supabase.from('abastecimentos').delete().neq('placa', 'PLACEHOLDER');
+      
       const chunkSize = 500;
       for (let i = 0; i < items.length; i += chunkSize) {
         const chunk = items.slice(i, i + chunkSize);
         const { error } = await supabase.from('abastecimentos').insert(chunk);
         if (error) throw error;
       }
-      toast.success("Dados salvos e sincronizados!");
+      toast.success("Dados sincronizados com sucesso!");
       loadFromSupabase();
     } catch (err: any) {
-      console.error("Erro ao salvar no Supabase:", err);
-      toast.error("Erro ao salvar dados detalhados.");
+      console.error("Erro ao salvar:", err);
+      toast.error("Falha na sincronização.");
     } finally {
       setLoading(false);
     }
@@ -130,19 +131,19 @@ export default function AbastecimentosPage() {
       return date.toISOString().split('T')[0];
     }
     if (typeof val === 'string') {
-      const dateOnly = val.trim().split(' ')[0];
-      const parts = dateOnly.split(/[-/]/);
+      const datePart = val.trim().split(' ')[0];
+      const parts = datePart.split(/[-/]/);
       if (parts.length === 3) {
-         if (parts[0].length === 4) return dateOnly.substring(0, 10);
+         if (parts[0].length === 4) return datePart.substring(0, 10);
          const d = parts[0].padStart(2, '0');
-         const monthPart = parts[1];
+         const m = parts[1].padStart(2, '0');
          let y = parts[2];
          if (y.length === 2) y = "20" + y;
-         if (isNaN(Number(monthPart))) {
+         if (isNaN(Number(m))) {
              const monthsMap: any = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12', set: '09', out: '10', dez: '12' };
-             return `${y}-${monthsMap[monthPart.toLowerCase().substring(0, 3)] || '01'}-${d}`;
+             return `${y.substring(0,4)}-${monthsMap[m.toLowerCase().substring(0,3)] || '01'}-${d}`;
          }
-         return `${y}-${monthPart.padStart(2, '0')}-${d}`;
+         return `${y.substring(0,4)}-${m}-${d}`;
       }
     }
     return null;
@@ -161,53 +162,62 @@ export default function AbastecimentosPage() {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rawData: any[] = XLSX.utils.sheet_to_json(ws);
 
-        const formattedData: Abastecimento[] = rawData.map((row: any) => ({
-          codigo_transacao: String(row["CODIGO TRANSACAO"] || ""),
-          forma_pagamento: String(row["FORMA DE PAGAMENTO"] || ""),
-          codigo_cliente: String(row["CODIGO CLIENTE"] || ""),
-          nome_reduzido: String(row["NOME REDUZIDO"] || ""),
-          data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA TRANSACAC"] || row["DATA"] || "") || "",
-          placa: String(row["PLACA"] || "").trim(),
-          tipo_frota: String(row["TIPO FROTA"] || ""),
-          modelo_veiculo: String(row["MODELO VEICULO"] || ""),
-          projeto: String(row["PROJETOS"] || row["PROJETO"] || "SEM PROJETO").trim(),
-          ano_referencia: String(row["ANO"] || ""),
-          matricula: String(row["MATRICULA"] || ""),
-          nome_motorista: String(row["NOME MOTORISTA"] || ""),
-          servico: String(row["SERVICO"] || ""),
-          tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || ""),
-          litros: Number(String(row["LITROS"] || 0).replace(',', '.')),
-          valor_litro: Number(String(row["VL/LITRO"] || 0).replace(',', '.')),
-          hodometro_horimetro: Number(String(row["HODOMETRO OU HORIMETRO"] || 0).replace(',', '.')),
-          km_rodados_horas: Number(String(row["KM RODADOS OU HORAS TRABALHADAS"] || 0).replace(',', '.')),
-          km_litro_rendimento: Number(String(row["KM/LITRO OU LITROS/HORA"] || 0).replace(',', '.')),
-          valor_emissao: Number(String(row["VALOR EMISSAO"] || 0).replace(',', '.')),
-          codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
-          estrela_auto_posto: String(row["ESTRELA AUTO POSTO"] || ""),
-          estabelecimento: String(row["ESTABELECIMENTO"] || ""),
-          endereco: String(row["ENDERECO"] || ""),
-          bairro: String(row["BAIRRO"] || ""),
-          cidade: String(row["CIDADE"] || ""),
-          uf: String(row["UF"] || ""),
-          info_adicional_1: String(row["INFORMACAO ADIDIONAL 1"] || ""),
-          info_adicional_2: String(row["INFORMACAO ADIDIONAL 2"] || ""),
-          info_adicional_3: String(row["INFORMACAO ADIDIONAL 3"] || ""),
-          status_transacao: String(row["STATUS"] || ""),
-          info_adicional_5: String(row["INFORMACAO ADIDIONAL 5"] || ""),
-          forma_transacao: String(row["FORMA TRANSACAO"] || ""),
-          codigo_liberacao: String(row["CODIGO LIBERACAO RESTRICAO"] || ""),
-          serie_pos: String(row["SERIE POS"] || ""),
-          numero_cartao: String(row["NUMERO CARTAO"] || ""),
-          familia_veiculo: String(row["FAMILIA VEICULO"] || ""),
-          grupo_restricao: String(row["GRUPO RESTRICAO"] || ""),
-          codigo_emissora: String(row["CODIGO EMISSORA"] || ""),
-          responsavel: String(row["RESPONSAVEL"] || ""),
-          tipo_entrada_hodometro: String(row["TIPO ENTRADA HODOMETRO"] || "")
-        })).filter((item: Abastecimento) => item.placa !== "");
+        const formattedData: Abastecimento[] = rawData.map((row: any) => {
+          // Busca dinâmica para a coluna de Projeto (Coluna I na planilha do usuário)
+          const projKey = Object.keys(row).find(k => 
+             k.toUpperCase().includes("PROJETO") || 
+             k.toUpperCase().includes("PROJETOS") || 
+             k.toUpperCase().includes("FAZENDA")
+          );
+
+          return {
+            codigo_transacao: String(row["CODIGO TRANSACAO"] || ""),
+            forma_pagamento: String(row["FORMA DE PAGAMENTO"] || ""),
+            codigo_cliente: String(row["CODIGO CLIENTE"] || ""),
+            nome_reduzido: String(row["NOME REDUZIDO"] || ""),
+            data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA TRANSACAC"] || row["DATA"] || "") || "",
+            placa: String(row["PLACA"] || "").trim(),
+            tipo_frota: String(row["TIPO FROTA"] || ""),
+            modelo_veiculo: String(row["MODELO VEICULO"] || ""),
+            projeto: String(projKey ? row[projKey] : "SEM PROJETO").trim(),
+            ano_referencia: String(row["ANO"] || ""),
+            matricula: String(row["MATRICULA"] || ""),
+            nome_motorista: String(row["NOME MOTORISTA"] || ""),
+            servico: String(row["SERVICO"] || ""),
+            tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || ""),
+            litros: Number(String(row["LITROS"] || 0).replace(',', '.')),
+            valor_litro: Number(String(row["VL/LITRO"] || 0).replace(',', '.')),
+            hodometro_horimetro: Number(String(row["HODOMETRO OU HORIMETRO"] || 0).replace(',', '.')),
+            km_rodados_horas: Number(String(row["KM RODADOS OU HORAS TRABALHADAS"] || 0).replace(',', '.')),
+            km_litro_rendimento: Number(String(row["KM/LITRO OU LITROS/HORA"] || 0).replace(',', '.')),
+            valor_emissao: Number(String(row["VALOR EMISSAO"] || 0).replace(',', '.')),
+            codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
+            estrela_auto_posto: String(row["ESTRELA AUTO POSTO"] || ""),
+            estabelecimento: String(row["ESTABELECIMENTO"] || ""),
+            endereco: String(row["ENDERECO"] || ""),
+            bairro: String(row["BAIRRO"] || ""),
+            cidade: String(row["CIDADE"] || ""),
+            uf: String(row["UF"] || ""),
+            info_adicional_1: String(row["INFORMACAO ADIDIONAL 1"] || ""),
+            info_adicional_2: String(row["INFORMACAO ADIDIONAL 2"] || ""),
+            info_adicional_3: String(row["INFORMACAO ADIDIONAL 3"] || ""),
+            status_transacao: String(row["STATUS"] || ""),
+            info_adicional_5: String(row["INFORMACAO ADIDIONAL 5"] || ""),
+            forma_transacao: String(row["FORMA TRANSACAO"] || ""),
+            codigo_liberacao: String(row["CODIGO LIBERACAO RESTRICAO"] || ""),
+            serie_pos: String(row["SERIE POS"] || ""),
+            numero_cartao: String(row["NUMERO CARTAO"] || ""),
+            familia_veiculo: String(row["FAMILIA VEICULO"] || ""),
+            grupo_restricao: String(row["GRUPO RESTRICAO"] || ""),
+            codigo_emissora: String(row["CODIGO EMISSORA"] || ""),
+            responsavel: String(row["RESPONSAVEL"] || ""),
+            tipo_entrada_hodometro: String(row["TIPO ENTRADA HODOMETRO"] || "")
+          };
+        }).filter((item: Abastecimento) => item.placa !== "");
 
         await saveToSupabase(formattedData);
       } catch (err) {
-        toast.error("Erro ao ler colunas do arquivo.");
+        toast.error("Erro ao processar planilha.");
       } finally {
         setLoading(false);
       }
@@ -224,8 +234,8 @@ export default function AbastecimentosPage() {
   }, [data, searchTerm]);
 
   const stats = useMemo(() => {
-    const totalLiters = filteredData.reduce((acc: number, curr: Abastecimento) => acc + curr.litros, 0);
-    const totalValue = filteredData.reduce((acc: number, curr: Abastecimento) => acc + (curr.valor_emissao || 0), 0);
+    const totalLiters = filteredData.reduce((acc: number, curr: Abastecimento) => acc + (Number(curr.litros) || 0), 0);
+    const totalValue = filteredData.reduce((acc: number, curr: Abastecimento) => acc + (Number(curr.valor_emissao) || 0), 0);
     return {
       totalLiters: totalLiters.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
       totalValue: totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
@@ -239,7 +249,7 @@ export default function AbastecimentosPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-4">
         <div>
           <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">Base de Dados Frota</h1>
-          <p className="text-gray-500 font-medium text-sm mt-1">Gestão completa de {stats.count} registros em {stats.projectsCount} projetos.</p>
+          <p className="text-gray-500 font-medium text-sm mt-1">Sincronização completa de {stats.count} registros.</p>
         </div>
         <div className="flex gap-3">
           <label className="flex items-center px-6 py-3 bg-gray-900 text-white rounded-[1.5rem] font-bold text-sm cursor-pointer hover:bg-black transition-all shadow-xl">
@@ -255,7 +265,7 @@ export default function AbastecimentosPage() {
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Projetos</p>
             <p className="text-3xl font-black">{stats.projectsCount}</p>
          </div>
-         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm text-center">
+         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm text-center font-bold">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Registros</p>
             <p className="text-3xl font-black">{stats.count}</p>
          </div>
@@ -269,61 +279,75 @@ export default function AbastecimentosPage() {
          </div>
       </div>
 
-      <div className="flex-1 bg-white dark:bg-gray-800 rounded-[3rem] border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden flex flex-col mx-4">
-        <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
-           <div className="relative w-80">
-              <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Placa, Projeto ou Motorista..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white border-0 rounded-2xl text-sm shadow-sm"
-              />
+      <div className="flex-1 bg-white dark:bg-gray-800 rounded-[3rem] border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden flex flex-col mx-4 min-h-[400px]">
+        {loading && data.length === 0 ? (
+           <div className="flex-1 flex flex-col items-center justify-center animate-pulse">
+              <div className="w-12 h-12 border-4 border-[#0b7336] border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="font-black text-gray-400 text-xs uppercase tracking-widest">Carregando Base Supabase...</p>
            </div>
-        </div>
+        ) : (
+          <>
+            <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+               <div className="relative w-80">
+                  <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Placa, Projeto ou Motorista..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-white border-0 rounded-2xl text-sm shadow-sm"
+                  />
+               </div>
+            </div>
 
-        <div className="overflow-auto custom-scrollbar">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-gray-900 text-white z-10">
-              <tr className="uppercase font-black tracking-tighter">
-                <th className="px-6 py-4">Data</th>
-                <th className="px-6 py-4 text-center">Placa</th>
-                <th className="px-6 py-4">Projeto</th>
-                <th className="px-6 py-4">Motorista</th>
-                <th className="px-6 py-4 text-right">L / KM</th>
-                <th className="px-6 py-4 text-right">Valor</th>
-                <th className="px-6 py-4">Posto</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filteredData.slice(0, 500).map((item: Abastecimento, idx: number) => (
-                <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-gray-500">
-                    {item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className="bg-[#0b7336] text-white px-2 py-1 rounded-md font-black">
-                      {item.placa}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-black text-gray-800">{item.projeto}</td>
-                  <td className="px-6 py-4 font-medium text-gray-600 uppercase">{item.nome_motorista || '---'}</td>
-                  <td className="px-6 py-4 text-right tabular-nums">
-                    <div>{Number(item.litros || 0).toFixed(2)} L</div>
-                    <div className="text-[10px] text-gray-400">{Number(item.km_rodados_horas || 0)} KM</div>
-                  </td>
-                  <td className="px-6 py-4 text-right font-black text-gray-900 bg-green-50/30">
-                    {Number(item.valor_emissao || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </td>
-                  <td className="px-6 py-4 truncate max-w-[150px] uppercase font-bold text-gray-400">
-                    {item.estabelecimento}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            <div className="overflow-auto custom-scrollbar">
+              <table className="w-full text-left text-xs">
+                <thead className="sticky top-0 bg-gray-900 text-white z-10">
+                  <tr className="uppercase font-black tracking-tighter">
+                    <th className="px-6 py-4">Data</th>
+                    <th className="px-6 py-4 text-center">Placa</th>
+                    <th className="px-6 py-4">Projeto</th>
+                    <th className="px-6 py-4">Motorista</th>
+                    <th className="px-6 py-4 text-right">L / KM</th>
+                    <th className="px-6 py-4 text-right">Valor</th>
+                    <th className="px-6 py-4">Posto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredData.slice(0, 500).map((item: Abastecimento, idx: number) => (
+                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 font-bold text-gray-500">
+                        {item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="bg-[#0b7336] text-white px-2 py-1 rounded-md font-black">
+                          {item.placa}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-black text-gray-800 uppercase">{item.projeto}</td>
+                      <td className="px-6 py-4 font-medium text-gray-600 uppercase">{item.nome_motorista || '---'}</td>
+                      <td className="px-6 py-4 text-right tabular-nums">
+                        <div>{Number(item.litros || 0).toFixed(2)} L</div>
+                        <div className="text-[10px] text-gray-400">{Number(item.km_rodados_horas || 0)} KM</div>
+                      </td>
+                      <td className="px-6 py-4 text-right font-black text-gray-900 bg-green-50/30">
+                        {Number(item.valor_emissao || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                      <td className="px-6 py-4 truncate max-w-[150px] uppercase font-bold text-gray-400">
+                        {item.estabelecimento}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredData.length === 0 && (
+                     <tr>
+                        <td colSpan={7} className="py-20 text-center text-gray-400 font-bold italic">Nenhum registro encontrado.</td>
+                     </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

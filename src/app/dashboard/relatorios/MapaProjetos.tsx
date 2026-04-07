@@ -1,270 +1,219 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
-  FunnelIcon, 
-  ChartBarIcon, 
   ChevronDownIcon, 
-  ChevronRightIcon
+  ChevronUpIcon,
+  FunnelIcon,
+  TruckIcon
 } from '@heroicons/react/24/outline';
-import toast from 'react-hot-toast';
 
-interface Abastecimento {
-  id: string;
-  projeto: string;
-  placa: string;
-  data_transacao: any;
-  nome_motorista: string;
-  tipo_combustivel: string;
-  litros: number;
-  valor_litro: number;
-  valor_emissao: number;
-  estabelecimento: string;
-  modelo_veiculo: string;
-}
+const RelatorioProjetos = () => {
+    const [abastecimentos, setAbastecimentos] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedMonth, setSelectedMonth] = useState('');
+    const [expandedProject, setExpandedProject] = useState<string | null>(null);
+    const [expandedVehicle, setExpandedVehicle] = useState<string | null>(null);
 
-export default function RelatorioProjetos() {
-  const [abastecimentos, setAbastecimentos] = useState<Abastecimento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
-  const [expandedVehicles, setExpandedVehicles] = useState<Set<string>>(new Set());
+    useEffect(() => {
+      fetchDados();
+    }, []);
 
-  useEffect(() => {
-    fetchDados();
-  }, [selectedMonth]);
+    const fetchDados = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('abastecimentos')
+          .select('*')
+          .order('data_transacao', { ascending: false });
 
-  async function fetchDados() {
-    setLoading(true);
-    try {
-      // Busca dados de forma mais resiliente (sem filtro rígido de fuso no banco por enquanto)
-      const { data, error } = await supabase
-        .from('abastecimentos')
-        .select('*')
-        .order('data_transacao', { ascending: false });
+        if (error) throw error;
+        setAbastecimentos(data || []);
 
-      if (error) throw error;
-      setAbastecimentos(data || []);
-    } catch (error) {
-      console.error('Erro:', error);
-      toast.error('Erro ao carregar relatório');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const availableMonths = useMemo(() => {
-    const monthsSet = new Set<string>();
-    abastecimentos.forEach((a: any) => {
-      if (a.data_transacao) {
-        const m = String(a.data_transacao).slice(0, 7);
-        if (m.startsWith('20')) monthsSet.add(m);
+        // Define o mês mais recente disponível como padrão
+        if (data && data.length > 0) {
+          const latestMonth = String(data[0].data_transacao).slice(0, 7);
+          setSelectedMonth(latestMonth);
+        }
+      } catch (err) {
+        console.error("Erro nos relatórios:", err);
+      } finally {
+        setLoading(false);
       }
-    });
-    
-    if (monthsSet.size === 0) monthsSet.add(new Date().toISOString().slice(0, 7));
-    return Array.from(monthsSet).sort((a, b) => b.localeCompare(a));
-  }, [abastecimentos]);
+    };
 
-  const filteredByMonth = useMemo(() => {
-    return abastecimentos.filter((a: any) => {
-      if (!a.data_transacao) return false;
-      return String(a.data_transacao).startsWith(selectedMonth);
-    });
-  }, [abastecimentos, selectedMonth]);
+    const availableMonths = useMemo(() => {
+      const monthsSet = new Set<string>();
+      abastecimentos.forEach((a: any) => {
+        if (a.data_transacao) {
+          const dateStr = String(a.data_transacao);
+          if (dateStr.includes('-')) {
+             monthsSet.add(dateStr.slice(0, 7));
+          }
+        }
+      });
+      return Array.from(monthsSet).sort().reverse();
+    }, [abastecimentos]);
 
-  const projectsData = useMemo(() => {
-    const grouped: any = {};
+    const filteredByMonth = useMemo(() => {
+      return abastecimentos.filter((a: any) => {
+        if (!a.data_transacao || !selectedMonth) return false;
+        // Normaliza a data para comparação YYYY-MM
+        const itemMonth = String(a.data_transacao).slice(0, 7);
+        return itemMonth === selectedMonth;
+      });
+    }, [abastecimentos, selectedMonth]);
 
-    filteredByMonth.forEach((a: any) => {
-      const projName = a.projeto || "SEM PROJETO";
-      const placa = a.placa || "SEM PLACA";
-
-      if (!grouped[projName]) {
-        grouped[projName] = {
-          nome: projName,
-          totalGasto: 0,
-          totalLitros: 0,
-          veiculos: {}
-        };
-      }
-
-      grouped[projName].totalGasto += Number(a.valor_emissao || 0);
-      grouped[projName].totalLitros += Number(a.litros || 0);
-
-      if (!grouped[projName].veiculos[placa]) {
-        grouped[projName].veiculos[placa] = {
-          placa: placa,
-          modelo: a.modelo_veiculo,
-          totalGasto: 0,
-          totalLitros: 0,
-          abastecimentos: []
-        };
-      }
-
-      grouped[projName].veiculos[placa].totalGasto += Number(a.valor_emissao || 0);
-      grouped[projName].veiculos[placa].totalLitros += Number(a.litros || 0);
-      grouped[projName].veiculos[placa].abastecimentos.push(a);
-    });
-
-    return Object.values(grouped).sort((a: any, b: any) => b.totalGasto - a.totalGasto);
-  }, [filteredByMonth]);
-
-  const toggleProject = (name: string) => {
-    const newExpanded = new Set(expandedProjects);
-    if (newExpanded.has(name)) newExpanded.delete(name);
-    else newExpanded.add(name);
-    setExpandedProjects(newExpanded);
-  };
-
-  const toggleVehicle = (id: string) => {
-    const newExpanded = new Set(expandedVehicles);
-    if (newExpanded.has(id)) newExpanded.delete(id);
-    else newExpanded.add(id);
-    setExpandedVehicles(newExpanded);
-  };
-
-  return (
-    <div className="flex flex-col gap-6 w-full h-full p-4">
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-[#0b7336] rounded-2xl">
-            <ChartBarIcon className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h3 className="text-xl font-black text-gray-900 tracking-tight">Relatório por Projeto</h3>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Baseado nos dados da planilha</p>
-          </div>
-        </div>
+    const groupedData = useMemo(() => {
+      const groups: any = {};
+      filteredByMonth.forEach((a: any) => {
+        const projName = String(a.projeto || "SEM PROJETO").toUpperCase();
+        if (!groups[projName]) {
+          groups[projName] = { vehicles: {}, totalLiters: 0, totalValue: 0 };
+        }
         
-        <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-100">
-          <FunnelIcon className="w-4 h-4 text-gray-400" />
-          <select 
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="bg-transparent border-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer"
-          >
-            {availableMonths.map(m => (
-              <option key={m} value={m}>
-                {new Date(m + "-01T12:00:00").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+        const placa = a.placa || "N/A";
+        if (!groups[projName].vehicles[placa]) {
+          groups[projName].vehicles[placa] = { items: [], liters: 0, value: 0 };
+        }
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 grayscale opacity-50">
-          <div className="w-12 h-12 border-4 border-[#0b7336] border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-xs font-black uppercase tracking-widest text-[#0b7336]">Cruzando Dados Operacionais...</p>
+        groups[projName].vehicles[placa].items.push(a);
+        groups[projName].vehicles[placa].liters += (Number(a.litros) || 0);
+        groups[projName].vehicles[placa].value += (Number(a.valor_emissao) || 0);
+        
+        groups[projName].totalLiters += (Number(a.litros) || 0);
+        groups[projName].totalValue += (Number(a.valor_emissao) || 0);
+      });
+      return groups;
+    }, [filteredByMonth]);
+
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center p-20 animate-pulse bg-white/50 backdrop-blur-xl rounded-[3rem]">
+          <div className="w-10 h-10 border-4 border-[#0b7336] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-400 font-black text-[10px] uppercase tracking-widest">Processando Inteligência de Dados...</p>
         </div>
-      ) : (
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Cabeçalho de Filtro */}
+        <div className="bg-[#1a1c23] p-8 rounded-[3rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 border border-white/5">
+          <div>
+            <h2 className="text-2xl font-black text-white italic tracking-tighter">Relatório por Projeto</h2>
+            <p className="text-emerald-500 font-bold text-xs uppercase tracking-widest mt-1">Baseado nos dados da Planilha</p>
+          </div>
+
+          <div className="flex items-center px-6 py-4 bg-white/5 rounded-2xl border border-white/10 hover:border-[#0b7336] transition-all cursor-pointer">
+            <FunnelIcon className="w-4 h-4 text-emerald-500 mr-3" />
+            <select 
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-transparent text-white font-black text-sm outline-none uppercase tracking-widest"
+            >
+              {availableMonths.map(m => (
+                <option key={m} value={m} className="bg-[#1a1c23]">
+                  {new Date(m + "-02").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Lista de Projetos */}
         <div className="space-y-4">
-          {projectsData.length === 0 && (
-             <div className="text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-gray-100 italic text-gray-400">
-                Nenhum dado encontrado para o mês selecionado.
-             </div>
-          )}
+          {Object.keys(groupedData).length === 0 ? (
+            <div className="bg-white p-20 rounded-[3rem] text-center border-2 border-dashed border-gray-100">
+               <p className="text-gray-400 font-medium text-sm italic">Nenhum dado encontrado para o mês selecionado.</p>
+            </div>
+          ) : (
+            Object.keys(groupedData).sort().map(projName => (
+              <div key={projName} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden transition-all">
+                <button 
+                  onClick={() => setExpandedProject(expandedProject === projName ? null : projName)}
+                  className="w-full px-8 py-6 flex flex-col md:flex-row justify-between items-start md:items-center hover:bg-gray-50/50 transition-colors gap-4"
+                >
+                  <div className="flex items-center">
+                    <div className="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center mr-5 shadow-lg">
+                      <span className="text-white font-black text-xs">{projName.substring(0, 2)}</span>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs font-black text-[#0b7336] uppercase tracking-widest mb-0.5">Projeto</p>
+                      <h3 className="text-xl font-black text-gray-900 tracking-tight">{projName}</h3>
+                    </div>
+                  </div>
 
-          {projectsData.map((project: any) => (
-            <div key={project.nome} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden transition-all duration-300">
-              <div 
-                onClick={() => toggleProject(project.nome)}
-                className="p-6 flex items-center justify-between cursor-pointer hover:bg-gray-50 group"
-              >
-                <div className="flex items-center gap-5">
-                  <div className="flex items-center justify-center w-12 h-12 bg-green-50 rounded-2xl group-hover:scale-110 transition-transform">
-                    {expandedProjects.has(project.nome) ? <ChevronDownIcon className="w-5 h-5 text-[#0b7336]" /> : <ChevronRightIcon className="w-5 h-5 text-gray-300" />}
+                  <div className="flex gap-8 items-center">
+                    <div className="text-right">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Veículos</p>
+                       <p className="font-black text-gray-900">{Object.keys(groupedData[projName].vehicles).length}</p>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento</p>
+                       <p className="font-black text-emerald-600">{groupedData[projName].totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                    {expandedProject === projName ? <ChevronUpIcon className="w-5 h-5 text-gray-400" /> : <ChevronDownIcon className="w-5 h-5 text-gray-400" />}
                   </div>
-                  <div>
-                    <h4 className="text-lg font-black text-gray-900 leading-none">{project.nome}</h4>
-                    <p className="text-[10px] font-black text-gray-400 uppercase mt-1 tracking-widest">
-                      {Object.keys(project.veiculos).length} Veículos Ativos
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-10">
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Litros</p>
-                    <p className="text-sm font-black text-gray-900">{project.totalLitros.toFixed(2)} L</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Custo Total</p>
-                    <p className="text-sm font-black text-[#0b7336]">
-                      {project.totalGasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </p>
-                  </div>
-                </div>
-              </div>
+                </button>
 
-              {expandedProjects.has(project.nome) && (
-                <div className="px-6 pb-6 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                  <div className="h-px bg-gray-50 mb-4" />
-                  {Object.values(project.veiculos).map((veic: any) => {
-                    const vehicleKey = `${project.nome}-${veic.placa}`;
-                    return (
-                      <div key={vehicleKey} className="bg-gray-50/50 rounded-[2rem] border border-gray-100/50 overflow-hidden">
-                        <div 
-                          onClick={() => toggleVehicle(vehicleKey)}
-                          className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-gray-100/80 transition-colors"
+                {expandedProject === projName && (
+                  <div className="px-8 pb-8 space-y-3 bg-gray-50/30">
+                    <div className="h-px bg-gray-100 w-full mb-6" />
+                    {Object.keys(groupedData[projName].vehicles).map(placa => (
+                      <div key={placa} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <button 
+                          onClick={() => setExpandedVehicle(expandedVehicle === placa ? null : placa)}
+                          className="w-full px-6 py-4 flex justify-between items-center hover:bg-gray-50 transition-colors"
                         >
-                          <div className="flex items-center gap-4">
-                            <span className="bg-gray-900 text-white px-3 py-1 rounded-lg font-black text-xs tracking-tight">
-                              {veic.placa}
-                            </span>
-                            <span className="text-xs font-bold text-gray-500 uppercase">{veic.modelo || 'MODELO NÃO IDENTIFICADO'}</span>
+                          <div className="flex items-center">
+                            <TruckIcon className="w-4 h-4 text-gray-400 mr-3" />
+                            <span className="bg-gray-100 px-3 py-1 rounded-lg font-black text-gray-700 text-sm">{placa}</span>
+                            <span className="ml-4 text-xs font-bold text-gray-500 uppercase">{groupedData[projName].vehicles[placa].items.length} abastecimentos</span>
                           </div>
-                          <div className="flex items-center gap-8">
-                             <div className="text-[10px] font-black text-gray-400 uppercase">
-                                {veic.abastecimentos.length} Abast.
-                             </div>
-                             <div className="font-black text-sm text-gray-700">
-                                {veic.totalGasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                             </div>
-                             {expandedVehicles.has(vehicleKey) ? <ChevronDownIcon className="w-4 h-4 text-gray-400" /> : <ChevronRightIcon className="w-4 h-4 text-gray-400" />}
+                          <div className="flex items-center gap-6">
+                             <p className="text-sm font-black text-gray-800">{groupedData[projName].vehicles[placa].liters.toFixed(2)} L</p>
+                             {expandedVehicle === placa ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
                           </div>
-                        </div>
+                        </button>
 
-                        {expandedVehicles.has(vehicleKey) && (
-                          <div className="bg-white border-t border-gray-100 p-4 overflow-x-auto">
+                        {expandedVehicle === placa && (
+                          <div className="px-6 pb-4 overflow-x-auto">
                             <table className="w-full text-left text-[10px]">
-                               <thead>
-                                 <tr className="uppercase font-black text-gray-400 tracking-widest border-b border-gray-50">
-                                    <th className="py-2">Data</th>
-                                    <th className="py-2">Motorista</th>
-                                    <th className="py-2">Tipo</th>
-                                    <th className="py-2 text-right">Litros</th>
-                                    <th className="py-2 text-right">Vl/L</th>
-                                    <th className="py-2 text-right">Total</th>
-                                    <th className="py-2 px-4">Posto</th>
-                                 </tr>
-                               </thead>
-                               <tbody>
-                                 {veic.abastecimentos.map((ab: any, idx: number) => (
-                                   <tr key={idx} className="hover:bg-gray-50 border-b border-gray-50 last:border-0 font-medium whitespace-nowrap">
-                                      <td className="py-3">{ab.data_transacao ? new Date(ab.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}</td>
-                                      <td className="py-3 uppercase font-bold text-gray-600 truncate max-w-[100px]">{ab.nome_motorista || '---'}</td>
-                                      <td className="py-3 uppercase text-[#0b7336]">{ab.tipo_combustivel}</td>
-                                      <td className="py-3 text-right tabular-nums">{Number(ab.litros || 0).toFixed(2)} L</td>
-                                      <td className="py-3 text-right tabular-nums">{Number(ab.valor_litro || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                      <td className="py-3 text-right tabular-nums font-black">{Number(ab.valor_emissao || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                      <td className="py-3 px-4 uppercase text-gray-400 truncate max-w-[150px]">{ab.estabelecimento}</td>
-                                   </tr>
-                                 ))}
-                               </tbody>
+                              <thead>
+                                <tr className="text-gray-400 uppercase font-black tracking-widest border-b border-gray-100">
+                                  <th className="py-3">Data</th>
+                                  <th className="py-3">Motorista</th>
+                                  <th className="py-3">Tipo</th>
+                                  <th className="py-3 text-right">Lts</th>
+                                  <th className="py-3 text-right">Custo</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-50">
+                                {groupedData[projName].vehicles[placa].items.map((item: any, i: number) => (
+                                  <tr key={i}>
+                                    <td className="py-2.5 font-bold text-gray-500">{new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR')}</td>
+                                    <td className="py-2.5 font-black text-gray-800 uppercase">{item.nome_motorista || '---'}</td>
+                                    <td className="py-2.5 text-gray-400 uppercase font-bold">{item.tipo_combustivel}</td>
+                                    <td className="py-2.5 text-right font-black">{Number(item.litros).toFixed(2)}</td>
+                                    <td className="py-2.5 text-right font-black text-emerald-600">{Number(item.valor_emissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
                             </table>
                           </div>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
-      )}
-    </div>
-  );
-}
+      </div>
+    );
+};
+
+export default RelatorioProjetos;
