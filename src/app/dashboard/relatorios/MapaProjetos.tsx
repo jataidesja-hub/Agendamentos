@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { supabase } from '@/lib/supabase';
-import { MapPinIcon, MapIcon, CurrencyDollarIcon, FunnelIcon, ChartBarIcon, TableCellsIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { MapPinIcon, MapIcon, FunnelIcon, ChartBarIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 interface Projeto {
@@ -123,7 +123,7 @@ export default function MapaProjetos() {
       return isoDate.startsWith(selectedMonth);
     });
 
-    const totalGasto = projectAbast.reduce((acc, curr) => acc + curr.valor_total, 0);
+    const totalGasto = projectAbast.reduce((acc: number, curr: any) => acc + curr.valor_total, 0);
     const sortedByPrice = [...projectAbast].sort((a, b) => b.valor_litro - a.valor_litro);
     
     // GERAÇÃO DO RELATÓRIO CARRO POR CARRO
@@ -156,12 +156,12 @@ export default function MapaProjetos() {
         identificacao: frotaData?.identificacao || 'NÃO ENCONTRADO NA FROTA GERAL',
         status: frotaData?.status || 'N/A',
         data: Object.values(porPosto),
-        totalGasto: vAbast.reduce((acc, curr) => acc + curr.valor_total, 0),
-        totalLitros: vAbast.reduce((acc, curr) => acc + curr.litros, 0),
+        totalGasto: vAbast.reduce((acc: number, curr: any) => acc + curr.valor_total, 0),
+        totalLitros: vAbast.reduce((acc: number, curr: any) => acc + curr.litros, 0),
         totalAbast: vAbast.length,
         combustivelPredominante: vAbast[0]?.tipo_combustivel || '---'
       };
-    }).sort((a, b) => b.totalGasto - a.totalGasto);
+    }).sort((a: any, b: any) => b.totalGasto - a.totalGasto);
 
     return {
       vehicles: relatorioVeiculos,
@@ -211,7 +211,7 @@ export default function MapaProjetos() {
     </div>
   ), [projetos]);
 
-  if (loading && projects.length === 0) {
+  if (loading && projetos.length === 0) {
     return (
       <div className="h-[500px] w-full flex items-center justify-center bg-gray-100 rounded-3xl animate-pulse text-[#0b7336]">
         <MapIcon className="w-10 h-10 animate-bounce mr-2" />
