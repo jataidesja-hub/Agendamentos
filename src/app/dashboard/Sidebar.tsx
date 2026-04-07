@@ -44,7 +44,7 @@ export default function Sidebar() {
     { id: 'chaves', name: "Controle de Chaves", href: "/dashboard/chaves", icon: KeyIcon },
     { id: 'perfis', name: "Perfis", href: "/dashboard/usuarios", icon: UserGroupIcon },
     { id: 'veiculos', name: "Veículos", href: "/dashboard/veiculos", icon: TruckIcon },
-    { id: 'projetos', name: "Projetos/Fazendas", href: "/dashboard/fazendas", icon: MapIcon },
+    { id: 'projetos', name: "Projetos", href: "/dashboard/fazendas", icon: MapIcon },
     { id: 'abastecimentos', name: "Abastecimentos", href: "/dashboard/abastecimentos", icon: ChartBarIcon },
   ];
 

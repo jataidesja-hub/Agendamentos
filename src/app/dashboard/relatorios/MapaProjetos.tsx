@@ -5,13 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { 
   FunnelIcon, 
   ChartBarIcon, 
-  ArrowTrendingUpIcon, 
-  ArrowTrendingDownIcon, 
-  UserIcon,
-  TagIcon,
-  TruckIcon,
-  CalendarIcon,
-  ChevronDownIcon,
+  ChevronDownIcon, 
   ChevronRightIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
@@ -44,7 +38,6 @@ export default function RelatorioProjetos() {
   async function fetchDados() {
     setLoading(true);
     try {
-      // Busca todos os dados do mês selecionado
       const { data, error } = await supabase
         .from('abastecimentos')
         .select('*')
@@ -62,7 +55,6 @@ export default function RelatorioProjetos() {
     }
   }
 
-  // Gera lista de meses baseada no calendário (ou dados)
   const availableMonths = useMemo(() => {
     const months = [];
     const date = new Date();
@@ -73,11 +65,10 @@ export default function RelatorioProjetos() {
     return months;
   }, []);
 
-  // Agrupamento Hierárquico: Projeto > Veículo
   const projectsData = useMemo(() => {
     const grouped: any = {};
 
-    abastecimentos.forEach(a => {
+    abastecimentos.forEach((a: any) => {
       const projName = a.projeto || "SEM PROJETO";
       const placa = a.placa || "SEM PLACA";
 
@@ -127,7 +118,6 @@ export default function RelatorioProjetos() {
 
   return (
     <div className="flex flex-col gap-6 w-full h-full p-4">
-      {/* Header com Filtros */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-[#0b7336] rounded-2xl">
@@ -170,7 +160,6 @@ export default function RelatorioProjetos() {
 
           {projectsData.map((project: any) => (
             <div key={project.nome} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden transition-all duration-300">
-              {/* Header do Projeto */}
               <div 
                 onClick={() => toggleProject(project.nome)}
                 className="p-6 flex items-center justify-between cursor-pointer hover:bg-gray-50 group"
@@ -200,7 +189,6 @@ export default function RelatorioProjetos() {
                 </div>
               </div>
 
-              {/* Lista de Veículos (Expansível) */}
               {expandedProjects.has(project.nome) && (
                 <div className="px-6 pb-6 space-y-4 animate-in slide-in-from-top-2 duration-300">
                   <div className="h-px bg-gray-50 mb-4" />
@@ -229,7 +217,6 @@ export default function RelatorioProjetos() {
                           </div>
                         </div>
 
-                        {/* Detalhes do Veículo */}
                         {expandedVehicles.has(vehicleKey) && (
                           <div className="bg-white border-t border-gray-100 p-4">
                             <table className="w-full text-left text-[10px]">
