@@ -66,9 +66,15 @@ export default function AbastecimentosPage() {
   const loadFromSupabase = async () => {
     setLoading(true);
     try {
-      // 1. Busca frota ativa
-      const { data: frota } = await supabase.from('veiculos').select('placa').eq('status', 'Ativo');
-      if (frota) setVeiculosAtivos(new Set(frota.map(v => v.placa.trim().toUpperCase())));
+      // 1. Busca frota ativa na tabela correta
+      const { data: frota } = await supabase.from('veiculos_frota').select('placa').eq('status', 'Ativo');
+      
+      // Normalização: Remove espaços e hífens para garantir o match
+      const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+      
+      if (frota) {
+        setVeiculosAtivos(new Set(frota.map(v => normalize(v.placa))));
+      }
 
       // 2. Busca exaustiva de abastecimentos
       let allData: any[] = [];
@@ -187,13 +193,18 @@ export default function AbastecimentosPage() {
   };
 
   const filteredData = useMemo(() => {
+    // Função interna para normalizar placas na hora do filtro
+    const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+    
     return data.filter((item: Abastecimento) => {
-      const placa = item.placa.trim().toUpperCase();
+      const placaNormalizada = normalize(item.placa);
+      
       // FILTRO: Apenas veículos ativos na frota
-      if (!veiculosAtivos.has(placa)) return false;
+      // Se não houver nenhum veículo ativo cadastrado, não filtramos nada (opcional)
+      if (veiculosAtivos.size > 0 && !veiculosAtivos.has(placaNormalizada)) return false;
 
       const search = searchTerm.toLowerCase();
-      return placa.includes(search) ||
+      return item.placa.toLowerCase().includes(search) ||
              item.projeto.toLowerCase().includes(search) ||
              item.nome_motorista.toLowerCase().includes(search);
     });
