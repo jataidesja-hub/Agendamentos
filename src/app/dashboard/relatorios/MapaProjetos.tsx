@@ -14,7 +14,7 @@ interface Abastecimento {
   id: string;
   projeto: string;
   placa: string;
-  data_transacao: string;
+  data_transacao: any;
   nome_motorista: string;
   tipo_combustivel: string;
   litros: number;
@@ -38,11 +38,10 @@ export default function RelatorioProjetos() {
   async function fetchDados() {
     setLoading(true);
     try {
+      // Busca dados de forma mais resiliente (sem filtro rígido de fuso no banco por enquanto)
       const { data, error } = await supabase
         .from('abastecimentos')
         .select('*')
-        .gte('data_transacao', `${selectedMonth}-01`)
-        .lte('data_transacao', `${selectedMonth}-31`)
         .order('data_transacao', { ascending: false });
 
       if (error) throw error;
@@ -56,19 +55,29 @@ export default function RelatorioProjetos() {
   }
 
   const availableMonths = useMemo(() => {
-    const months = [];
-    const date = new Date();
-    for (let i = 0; i < 12; i++) {
-      months.push(date.toISOString().slice(0, 7));
-      date.setMonth(date.getMonth() - 1);
-    }
-    return months;
-  }, []);
+    const monthsSet = new Set<string>();
+    abastecimentos.forEach((a: any) => {
+      if (a.data_transacao) {
+        const m = String(a.data_transacao).slice(0, 7);
+        if (m.startsWith('20')) monthsSet.add(m);
+      }
+    });
+    
+    if (monthsSet.size === 0) monthsSet.add(new Date().toISOString().slice(0, 7));
+    return Array.from(monthsSet).sort((a, b) => b.localeCompare(a));
+  }, [abastecimentos]);
+
+  const filteredByMonth = useMemo(() => {
+    return abastecimentos.filter((a: any) => {
+      if (!a.data_transacao) return false;
+      return String(a.data_transacao).startsWith(selectedMonth);
+    });
+  }, [abastecimentos, selectedMonth]);
 
   const projectsData = useMemo(() => {
     const grouped: any = {};
 
-    abastecimentos.forEach((a: any) => {
+    filteredByMonth.forEach((a: any) => {
       const projName = a.projeto || "SEM PROJETO";
       const placa = a.placa || "SEM PLACA";
 
@@ -81,8 +90,8 @@ export default function RelatorioProjetos() {
         };
       }
 
-      grouped[projName].totalGasto += a.valor_emissao || 0;
-      grouped[projName].totalLitros += a.litros || 0;
+      grouped[projName].totalGasto += Number(a.valor_emissao || 0);
+      grouped[projName].totalLitros += Number(a.litros || 0);
 
       if (!grouped[projName].veiculos[placa]) {
         grouped[projName].veiculos[placa] = {
@@ -94,13 +103,13 @@ export default function RelatorioProjetos() {
         };
       }
 
-      grouped[projName].veiculos[placa].totalGasto += a.valor_emissao || 0;
-      grouped[projName].veiculos[placa].totalLitros += a.litros || 0;
+      grouped[projName].veiculos[placa].totalGasto += Number(a.valor_emissao || 0);
+      grouped[projName].veiculos[placa].totalLitros += Number(a.litros || 0);
       grouped[projName].veiculos[placa].abastecimentos.push(a);
     });
 
     return Object.values(grouped).sort((a: any, b: any) => b.totalGasto - a.totalGasto);
-  }, [abastecimentos]);
+  }, [filteredByMonth]);
 
   const toggleProject = (name: string) => {
     const newExpanded = new Set(expandedProjects);
@@ -218,7 +227,7 @@ export default function RelatorioProjetos() {
                         </div>
 
                         {expandedVehicles.has(vehicleKey) && (
-                          <div className="bg-white border-t border-gray-100 p-4">
+                          <div className="bg-white border-t border-gray-100 p-4 overflow-x-auto">
                             <table className="w-full text-left text-[10px]">
                                <thead>
                                  <tr className="uppercase font-black text-gray-400 tracking-widest border-b border-gray-50">
@@ -233,13 +242,13 @@ export default function RelatorioProjetos() {
                                </thead>
                                <tbody>
                                  {veic.abastecimentos.map((ab: any, idx: number) => (
-                                   <tr key={idx} className="hover:bg-gray-50 border-b border-gray-50 last:border-0 font-medium">
-                                      <td className="py-3">{new Date(ab.data_transacao + "T12:00:00").toLocaleDateString('pt-BR')}</td>
-                                      <td className="py-3 uppercase font-bold text-gray-600">{ab.nome_motorista || '---'}</td>
+                                   <tr key={idx} className="hover:bg-gray-50 border-b border-gray-50 last:border-0 font-medium whitespace-nowrap">
+                                      <td className="py-3">{ab.data_transacao ? new Date(ab.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}</td>
+                                      <td className="py-3 uppercase font-bold text-gray-600 truncate max-w-[100px]">{ab.nome_motorista || '---'}</td>
                                       <td className="py-3 uppercase text-[#0b7336]">{ab.tipo_combustivel}</td>
-                                      <td className="py-3 text-right tabular-nums">{ab.litros.toFixed(2)} L</td>
-                                      <td className="py-3 text-right tabular-nums">{ab.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                      <td className="py-3 text-right tabular-nums font-black">{ab.valor_emissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                      <td className="py-3 text-right tabular-nums">{Number(ab.litros || 0).toFixed(2)} L</td>
+                                      <td className="py-3 text-right tabular-nums">{Number(ab.valor_litro || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                      <td className="py-3 text-right tabular-nums font-black">{Number(ab.valor_emissao || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                       <td className="py-3 px-4 uppercase text-gray-400 truncate max-w-[150px]">{ab.estabelecimento}</td>
                                    </tr>
                                  ))}
