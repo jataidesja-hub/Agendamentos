@@ -64,6 +64,17 @@ export default function AbastecimentosPage() {
   }, []);
 
   const loadFromSupabase = async () => {
+    // Tenta carregar do cache para ser instantâneo
+    const cachedData = sessionStorage.getItem('cache_abastecimentos');
+    const cachedFrota = sessionStorage.getItem('cache_veiculos_ativos');
+
+    if (cachedData && cachedFrota) {
+      setData(JSON.parse(cachedData));
+      setVeiculosAtivos(new Set(JSON.parse(cachedFrota)));
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       // 1. Busca frota ativa na tabela correta
@@ -72,8 +83,11 @@ export default function AbastecimentosPage() {
       // Normalização: Remove espaços e hífens para garantir o match
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
       
+      let frotaNormalizada: string[] = [];
       if (frota) {
-        setVeiculosAtivos(new Set(frota.map(v => normalize(v.placa))));
+        const setAtivos = new Set<string>(frota.map(v => normalize(v.placa)));
+        setVeiculosAtivos(setAtivos);
+        frotaNormalizada = Array.from(setAtivos);
       }
 
       // 2. Busca exaustiva de abastecimentos
@@ -104,6 +118,11 @@ export default function AbastecimentosPage() {
         if (allData.length > 50000) break;
       }
       setData(allData as Abastecimento[]);
+      
+      // Salva no cache
+      sessionStorage.setItem('cache_abastecimentos', JSON.stringify(allData));
+      sessionStorage.setItem('cache_veiculos_ativos', JSON.stringify(frotaNormalizada));
+
     } catch (err: any) {
       console.error("Erro ao carregar dados complexos:", err);
       toast.error("Erro ao sincronizar histórico.");
@@ -117,6 +136,7 @@ export default function AbastecimentosPage() {
     if (!confirm) return;
     setLoading(true);
     try {
+      sessionStorage.removeItem('cache_abastecimentos'); // Limpa o cache ao subir nova planilha
       await supabase.from('abastecimentos').delete().neq('placa', 'PLACEHOLDER');
       const chunkSize = 500;
       for (let i = 0; i < items.length; i += chunkSize) {

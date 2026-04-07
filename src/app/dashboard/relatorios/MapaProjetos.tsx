@@ -22,19 +22,36 @@ const RelatorioProjetos = () => {
     }, []);
 
     const fetchDadosCompletos = async () => {
+      // Tenta carregar do cache primeiro (para ser instantâneo)
+      const cachedData = sessionStorage.getItem('cache_abastecimentos');
+      const cachedFrota = sessionStorage.getItem('cache_veiculos_ativos');
+      
+      if (cachedData && cachedFrota) {
+        setAbastecimentos(JSON.parse(cachedData));
+        setVeiculosAtivos(new Set(JSON.parse(cachedFrota)));
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
-        // 1. Busca todos os veículos ativos primeiro
+        // Normalização: Remove espaços e hífens para garantir o match
+        const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+
+        // 1. Busca todos os veículos ativos na tabela correta
         const { data: frota, error: errFrota } = await supabase
-          .from('veiculos')
+          .from('veiculos_frota')
           .select('placa')
           .eq('status', 'Ativo');
         
+        let frotaNormalizada: string[] = [];
         if (!errFrota && frota) {
-          setVeiculosAtivos(new Set(frota.map(v => v.placa.trim().toUpperCase())));
+          const setAtivos = new Set<string>(frota.map((v: any) => normalize(v.placa)));
+          setVeiculosAtivos(setAtivos);
+          frotaNormalizada = Array.from(setAtivos);
         }
 
-        // 2. Busca exaustiva de todos os abastecimentos (Pagination Bypass)
+        // 2. Busca exaustiva de todos os abastecimentos
         let allAbastecimentos: any[] = [];
         let hasMore = true;
         let from = 0;
@@ -60,13 +77,15 @@ const RelatorioProjetos = () => {
               to += 1000;
             }
           }
-          // Limite de segurança para 50k registros
           if (allAbastecimentos.length > 50000) break;
         }
 
         setAbastecimentos(allAbastecimentos);
+        
+        // Salva no cache para a próxima vez
+        sessionStorage.setItem('cache_abastecimentos', JSON.stringify(allAbastecimentos));
+        sessionStorage.setItem('cache_veiculos_ativos', JSON.stringify(frotaNormalizada));
 
-        // Define o mês mais recente disponível como padrão
         if (allAbastecimentos.length > 0) {
           const latestMonth = String(allAbastecimentos[0].data_transacao).slice(0, 7);
           setSelectedMonth(latestMonth);
@@ -93,6 +112,8 @@ const RelatorioProjetos = () => {
 
     // Aplica o filtro de Mês E o filtro de Veículos Ativos
     const filteredData = useMemo(() => {
+      const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+      
       return abastecimentos.filter((a: any) => {
         if (!a.data_transacao || !selectedMonth) return false;
         
@@ -100,8 +121,8 @@ const RelatorioProjetos = () => {
         const itemMonth = String(a.data_transacao).slice(0, 7);
         if (itemMonth !== selectedMonth) return false;
 
-        // NOVO: Filtro de Veículos Ativos
-        const placa = String(a.placa || "").trim().toUpperCase();
+        // NOVO: Filtro de Veículos Ativos (com normalização)
+        const placa = normalize(a.placa);
         return veiculosAtivos.has(placa);
       });
     }, [abastecimentos, selectedMonth, veiculosAtivos]);
