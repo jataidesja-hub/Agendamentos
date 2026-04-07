@@ -152,12 +152,12 @@ export default function AbastecimentosPage() {
       const formattedData: Abastecimento[] = rawData.map((row: any) => ({
         placa: String(row["PLACA"] || "").trim(),
         data_transacao: parseExcelDate(row["DATA TRANSACA"] || row["DATA TRANSACAO"] || row["DATA"]),
-        tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || "").trim(),
-        litros: Number(row["LITROS"] || 0),
-        valor_litro: Number(row["VL/LITRO"] || 0),
-        valor_total: Number(row["VALOR EMISSAO"] || row["VALOR TOTAL"] || 0),
-        codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
-        nome_estabelecimento: String(row["NOME ESTABELECIMENTO"] || "")
+        tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || row["COMBUSTIVEL"] || row["TIPO"] || "").trim(),
+        litros: Number(row["LITROS"] || row["QTDE"] || 0),
+        valor_litro: Number(row["VL/LITRO"] || row["PRECO"] || row["VALOR UNITARIO"] || 0),
+        valor_total: Number(row["VALOR EMISSAO"] || row["VALOR TOTAL"] || row["VALOR"] || 0),
+        codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || row["CODIGO"] || ""),
+        nome_estabelecimento: String(row["NOME ESTABELECIMENTO"] || row["POSTO"] || row["ESTABELECIMENTO"] || "")
       })).filter(item => item.placa !== "" && item.placa !== "null");
 
       if (formattedData.length === 0) {
@@ -246,12 +246,12 @@ export default function AbastecimentosPage() {
                   const formattedData: Abastecimento[] = rawData.map((row: any) => ({
                     placa: String(row["PLACA"] || "").trim(),
                     data_transacao: parseExcelDate(row["DATA TRANSACA"] || row["DATA TRANSACAO"] || row["DATA"]),
-                    tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || "").trim(),
-                    litros: Number(row["LITROS"] || 0),
-                    valor_litro: Number(row["VL/LITRO"] || 0),
-                    valor_total: Number(row["VALOR EMISSAO"] || row["VALOR TOTAL"] || 0),
-                    codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
-                    nome_estabelecimento: String(row["NOME ESTABELEVIMENTO"] || row["NOME ESTABELECIMENTO"] || "")
+                    tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || row["COMBUSTIVEL"] || row["TIPO"] || "").trim(),
+                    litros: Number(row["LITROS"] || row["QTDE"] || 0),
+                    valor_litro: Number(row["VL/LITRO"] || row["PRECO"] || row["VALOR UNITARIO"] || 0),
+                    valor_total: Number(row["VALOR EMISSAO"] || row["VALOR TOTAL"] || row["VALOR"] || 0),
+                    codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || row["CODIGO"] || ""),
+                    nome_estabelecimento: String(row["NOME ESTABELECIMENTO"] || row["POSTO"] || row["ESTABELECIMENTO"] || row["NOME ESTABELEVIMENTO"] || "")
                   })).filter(item => item.placa !== "" && item.placa !== "null");
 
                   setData(formattedData);

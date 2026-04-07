@@ -113,8 +113,33 @@ export default function MapaProjetos() {
       return acc;
     }, {});
 
+    // Agrupa por Veículo (NOVA FUNCIONALIDADE)
+    const veiculoConsumo = relevantVehicles.map((v: any) => {
+      const vAbast = projectAbast.filter(a => a.placa === v.placa);
+      const vTotal = vAbast.reduce((acc, curr) => acc + curr.valor_total, 0);
+      const vLitros = vAbast.reduce((acc, curr) => acc + curr.litros, 0);
+      const sortedPrices = [...vAbast].sort((a, b) => a.valor_litro - b.valor_litro);
+      
+      // Pega o tipo de combustível mais frequente
+      const fuelTypes = vAbast.reduce((acc: any, curr) => {
+        acc[curr.tipo_combustivel] = (acc[curr.tipo_combustivel] || 0) + 1;
+        return acc;
+      }, {});
+      const mainFuel = Object.entries(fuelTypes).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || '---';
+
+      return {
+        ...v,
+        totalAbast: vAbast.length,
+        totalGasto: vTotal,
+        totalLitros: vLitros,
+        maisBarato: sortedPrices[0]?.valor_litro || 0,
+        maisCaro: sortedPrices[sortedPrices.length - 1]?.valor_litro || 0,
+        combustivel: mainFuel
+      };
+    });
+
     return {
-      vehicles: relevantVehicles,
+      vehicles: veiculoConsumo,
       abast: projectAbast,
       totalGasto,
       maisCaro: sortedByPrice[0],
@@ -158,7 +183,7 @@ export default function MapaProjetos() {
       </div>
 
       {/* Map Section */}
-      <div className="relative h-[500px] w-full rounded-3xl overflow-hidden shadow-2xl border border-white/20">
+      <div id="map-section" className="relative h-[500px] w-full rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/20 bg-gray-100 dark:bg-gray-900">
         <MapContainer 
           center={[-15.78, -47.93]} 
           zoom={4} 
@@ -167,6 +192,7 @@ export default function MapaProjetos() {
           maxBoundsViscosity={1.0}
           style={{ height: '100%', width: '100%' }}
           className="z-0"
+          scrollWheelZoom={true}
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           {projetos.map((p) => (
@@ -202,70 +228,108 @@ export default function MapaProjetos() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Coluna 1: Frota */}
-            <div className="bg-white dark:bg-gray-800/60 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
-               <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center">
-                 <TableCellsIcon className="w-4 h-4 mr-2" /> Veículos Vinculados
-               </h5>
-               <div className="space-y-3">
-                 {analytics?.vehicles.map((v: any) => (
-                   <div key={v.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/40 rounded-2xl">
-                     <div>
-                       <span className="block font-black text-gray-900 dark:text-white text-sm">{v.placa}</span>
-                       <span className="text-[10px] font-bold text-gray-400 uppercase">{v.identificacao || 'Sem Identificação'}</span>
-                     </div>
-                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${
-                       v.status === 'Ativo' ? 'bg-green-100 text-green-700' : 
-                       v.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' : 
-                       'bg-gray-100 text-gray-700'
-                     }`}>
-                       {v.status || 'Ativo'}
-                     </span>
-                   </div>
-                 ))}
-                 {analytics?.vehicles.length === 0 && (
-                   <p className="text-sm font-medium text-gray-400 italic text-center py-4">Nenhum veículo vinculado a este projeto.</p>
-                 )}
-               </div>
-            </div>
-
-            {/* Coluna 2: Postos Top/Bottom */}
-            <div className="lg:col-span-2 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-[#0b7336] p-6 rounded-[2rem] shadow-lg shadow-green-500/20 text-white">
-                  <span className="text-[10px] font-black uppercase tracking-widest opacity-80 block mb-1">Total Gasto no Mês</span>
-                  <p className="text-3xl font-black">{analytics?.totalGasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+            {/* Coluna 1, 2 e 3: Agora um Grid mais amplo ou Tabela Unificada */}
+            <div className="lg:col-span-3 space-y-6">
+              {/* Cards de Resumo Rápido (Reduzidos) */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-[#0b7336] p-5 rounded-[2rem] shadow-lg shadow-green-500/20 text-white">
+                  <span className="text-[9px] font-black uppercase tracking-widest opacity-80 block mb-1">Total Gasto (Projeto)</span>
+                  <p className="text-2xl font-black">{analytics?.totalGasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800/60 p-6 rounded-[2rem] border border-red-100 dark:border-red-900/30">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ArrowTrendingUpIcon className="w-5 h-5 text-red-500" />
-                    <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Posto Mais Caro</span>
-                  </div>
-                  <p className="text-sm font-black text-gray-900 dark:text-white truncate">{analytics?.maisCaro?.nome_estabelecimento || '---'}</p>
-                  <p className="text-lg font-black text-red-600 mt-1">{analytics?.maisCaro?.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/L</p>
+                <div className="bg-white dark:bg-gray-800/60 p-5 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Total de Abastecimentos</span>
+                  <p className="text-2xl font-black text-gray-900 dark:text-white">{analytics?.abast.length}x</p>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800/60 p-6 rounded-[2rem] border border-green-100 dark:border-green-900/30">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ArrowTrendingDownIcon className="w-5 h-5 text-green-500" />
-                    <span className="text-[10px] font-black text-green-500 uppercase tracking-widest">Posto Mais Barato</span>
+                <div className="bg-white dark:bg-gray-800/60 p-5 rounded-[2rem] border border-red-100 dark:border-red-900/30">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ArrowTrendingUpIcon className="w-4 h-4 text-red-500" />
+                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">Mais Caro</span>
                   </div>
-                  <p className="text-sm font-black text-gray-900 dark:text-white truncate">{analytics?.maisBarato?.nome_estabelecimento || '---'}</p>
-                  <p className="text-lg font-black text-green-600 mt-1">{analytics?.maisBarato?.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/L</p>
+                  <p className="text-lg font-black text-red-600 leading-none">{analytics?.maisCaro?.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/L</p>
+                  <p className="text-[9px] font-bold text-gray-400 mt-1 truncate">{analytics?.maisCaro?.nome_estabelecimento}</p>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800/60 p-5 rounded-[2rem] border border-green-100 dark:border-green-900/30">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ArrowTrendingDownIcon className="w-4 h-4 text-green-500" />
+                    <span className="text-[9px] font-black text-green-500 uppercase tracking-widest">Mais Barato</span>
+                  </div>
+                  <p className="text-lg font-black text-green-600 leading-none">{analytics?.maisBarato?.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/L</p>
+                  <p className="text-[9px] font-bold text-gray-400 mt-1 truncate">{analytics?.maisBarato?.nome_estabelecimento}</p>
                 </div>
               </div>
 
-              {/* Tabela de Postos */}
+              {/* Tabela de Veículos (Um por linha) */}
               <div className="bg-white dark:bg-gray-800/60 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-50 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30">
-                  <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Detalhamento por Posto e Combustível</h5>
+                <div className="px-6 py-4 border-b border-gray-50 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 flex items-center justify-between">
+                  <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Consumo Detalhado por Veículo</h5>
+                  <span className="text-[10px] font-bold text-[#0b7336] bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded-lg">
+                    {analytics?.vehicles.length} Veículos Encontrados
+                  </span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                      <tr className="text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/30 dark:bg-gray-900/20">
+                        <th className="px-6 py-4">Veículo / Placa</th>
+                        <th className="px-6 py-4">Combustível</th>
+                        <th className="px-6 py-4 text-right">Abastecimentos</th>
+                        <th className="px-6 py-4 text-right">Mín/Máx L</th>
+                        <th className="px-6 py-4 text-right">Total Litros</th>
+                        <th className="px-6 py-4 text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+                      {analytics?.vehicles.map((v: any, idx: number) => (
+                        <tr key={idx} className="text-xs hover:bg-gray-50/50 dark:hover:bg-gray-900/30 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-gray-100 dark:bg-gray-900 p-2 rounded-xl font-black text-gray-900 dark:text-white tabular-nums">
+                                {v.placa}
+                              </div>
+                              <div>
+                                <div className="font-bold text-gray-900 dark:text-white uppercase truncate max-w-[150px]">{v.identificacao || 'N/A'}</div>
+                                <div className={`text-[8px] font-black uppercase ${
+                                  v.status === 'Ativo' || v.status === 'Disponível' ? 'text-green-500' : 'text-amber-500'
+                                }`}>
+                                  {v.status || 'Ativo'}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-black text-blue-600 dark:text-blue-400 uppercase">{v.combustivel}</span>
+                          </td>
+                          <td className="px-6 py-4 text-right font-bold text-gray-900 dark:text-white">{v.totalAbast}x</td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="text-[9px] font-bold text-green-600">{v.maisBarato > 0 ? v.maisBarato.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</div>
+                            <div className="text-[9px] font-bold text-red-600">{v.maisCaro > 0 ? v.maisCaro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---'}</div>
+                          </td>
+                          <td className="px-6 py-4 text-right font-bold text-gray-500">{v.totalLitros.toFixed(2)} L</td>
+                          <td className="px-6 py-4 text-right font-black text-[#0b7336]">{v.totalGasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        </tr>
+                      ))}
+                      {analytics?.vehicles.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center text-sm font-medium text-gray-400 italic">Nenhum veículo vinculado.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Tabela de Postos (Original, mas em destaque) */}
+              <div className="bg-white dark:bg-gray-800/60 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-50 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30">
+                  <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Consumo por Posto / Estabelecimento</h5>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/30 dark:bg-gray-900/20">
                         <th className="px-6 py-4">Estabelecimento</th>
                         <th className="px-6 py-4">Combustível</th>
                         <th className="px-6 py-4 text-right">Valor/Litro</th>
@@ -283,25 +347,19 @@ export default function MapaProjetos() {
                           <td className="px-6 py-4 text-right font-black text-[#0b7336]">{item.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                         </tr>
                       ))}
-                      {analytics?.porPosto.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="px-6 py-8 text-center text-sm font-medium text-gray-400 italic">Nenhum abastecimento registrado para este projeto no mês selecionado.</td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-50/50 dark:bg-gray-900/20 rounded-[3rem] border border-dashed border-gray-200 dark:border-gray-700">
-          <MapPinIcon className="w-12 h-12 text-gray-300 mb-4" />
-          <h4 className="text-xl font-bold text-gray-400">Selecione um projeto no mapa</h4>
-          <p className="text-sm text-gray-300">Para visualizar o relatório operacional completo</p>
-        </div>
-      )}
-    </div>
-  );
-}
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 bg-gray-50/50 dark:bg-gray-900/20 rounded-[3rem] border border-dashed border-gray-200 dark:border-gray-700">
+            <MapPinIcon className="w-12 h-12 text-gray-300 mb-4" />
+            <h4 className="text-xl font-bold text-gray-400">Selecione um projeto no mapa</h4>
+            <p className="text-sm text-gray-300">Para visualizar o relatório operacional completo</p>
+          </div>
+        )}
+      </div>
+    );
+  }
