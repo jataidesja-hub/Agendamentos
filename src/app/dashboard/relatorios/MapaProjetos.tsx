@@ -7,7 +7,6 @@ import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 
-// Carregamento dinâmico COMPLETO do MapContainer para evitar erros de SSR que fazem o mapa sumir
 const MapContainer = dynamic(
   () => import('react-leaflet').then((mod) => mod.MapContainer),
   { ssr: false }
@@ -58,7 +57,6 @@ export default function MapaProjetos() {
   const [projetoSelecionado, setProjetoSelecionado] = useState<Projeto | null>(null);
   const mapRef = useRef<any>(null);
 
-  // Configuração de Ícones Globais do Leaflet (apenas no cliente)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       import('leaflet').then((L) => {
@@ -85,18 +83,39 @@ export default function MapaProjetos() {
       setProjetos(projRes.data || []);
       setVeiculosFrota(veicRes.data || []);
 
-      // Busca até 10.000 registros para garantir que o "infinito" funcione
-      const { data: abastData, error: abastError } = await supabase
-        .from('abastecimentos')
-        .select('*')
-        .order('data_transacao', { ascending: false })
-        .range(0, 9999);
+      // FETCH RECURSIVO PARA BYPASSAR O LIMITE DE 1000 DO SUPABASE
+      let allAbast: any[] = [];
+      let from = 0;
+      let to = 999;
+      let hasMore = true;
 
-      if (abastError) throw abastError;
-      setAbastecimentos(abastData || []);
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('abastecimentos')
+          .select('*')
+          .order('data_transacao', { ascending: false })
+          .range(from, to);
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          hasMore = false;
+        } else {
+          allAbast = [...allAbast, ...data];
+          if (data.length < 1000) {
+            hasMore = false;
+          } else {
+            from += 1000;
+            to += 1000;
+          }
+        }
+        // Safety break para não entrar em loop infinito
+        if (allAbast.length > 20000) break;
+      }
+
+      setAbastecimentos(allAbast);
       
-      if (abastData && abastData.length > 0) {
-        const lastDate = abastData[0].data_transacao;
+      if (allAbast.length > 0) {
+        const lastDate = allAbast[0].data_transacao;
         if (lastDate && lastDate.includes('-')) {
            setSelectedMonth(lastDate.slice(0, 7));
         }
@@ -233,7 +252,6 @@ export default function MapaProjetos() {
         </div>
       </div>
 
-      {/* Container fixo para o Mapa */}
       <div className="w-full relative rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/20 bg-gray-100 dark:bg-gray-900 min-h-[500px]" style={{ height: '500px' }}>
         <MapContainer 
           center={[-10.6, -42.7]} 
