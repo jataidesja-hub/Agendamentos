@@ -185,34 +185,55 @@ export default function AbastecimentosPage() {
       try {
         const wb = XLSX.read(evt.target.result, { type: 'binary' });
         const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        
+        // Função auxiliar para buscar valores em colunas com nomes variados
+        const getV = (row: any, names: string[]) => {
+          for (const name of names) {
+            const found = Object.keys(row).find(k => k.toUpperCase().trim() === name.toUpperCase().trim());
+            if (found) return row[found];
+          }
+          return "";
+        };
+
         const formatted = rawData.map((row: any) => {
+          const placa = String(getV(row, ["PLACA"]) || "").trim();
           const projKey = Object.keys(row).find(k => k.toUpperCase().match(/PROJETOS?|FAZENDA/));
+          
           return {
-            codigo_transacao: String(row["CODIGO TRANSACAO"] || ""),
-            forma_pagamento: String(row["FORMA DE PAGAMENTO"] || ""),
-            codigo_cliente: String(row["CODIGO CLIENTE"] || ""),
-            nome_reduzido: String(row["NOME REDUZIDO"] || ""),
-            data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA TRANSACAC"] || row["DATA"] || "") || "",
-            placa: String(row["PLACA"] || "").trim(),
+            codigo_transacao: String(getV(row, ["CODIGO TRANSACAO", "TRANSACAO"]) || ""),
+            forma_pagamento: String(getV(row, ["FORMA DE PAGAMENTO", "FORMA PAGAMENTO"]) || ""),
+            codigo_cliente: String(getV(row, ["CODIGO CLIENTE", "CLIENTE"]) || ""),
+            nome_reduzido: String(getV(row, ["NOME REDUZIDO", "NOME"]) || ""),
+            data_transacao: parseExcelDate(getV(row, ["DATA TRANSACAO", "DATA", "DATA TRANSACAC"])) || "",
+            placa: placa,
             projeto: String(projKey ? row[projKey] : "SEM PROJETO").trim(),
-            tipo_frota: String(row["TIPO FROTA"] || row["TIPO DE FROTA"] || ""),
-            modelo_veiculo: String(row["MODELO VEICULO"] || row["MODELO DO VEICULO"] || ""),
-            tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || ""),
-            litros: Number(String(row["LITROS"] || 0).replace(',', '.')),
-            valor_litro: Number(String(row["VL/LITRO"] || 0).replace(',', '.')),
-            valor_emissao: Number(String(row["VALOR EMISSAO"] || 0).replace(',', '.')),
-            estabelecimento: String(row["ESTABELECIMENTO"] || ""),
-            nome_motorista: String(row["NOME MOTORISTA"] || ""),
-            cidade: String(row["CIDADE"] || ""),
-            matricula: String(row["MATRICULA"] || ""),
-            servico: String(row["SERVICO"] || ""),
-            hodometro_horimetro: Number(String(row["HODOMETRO OU HORIMETRO"] || 0).replace(',', '.')),
-            km_rodados_horas: Number(String(row["KM RODADOS OU HORAS TRABALHADAS"] || 0).replace(',', '.')),
-            km_litro_rendimento: Number(String(row["KM/LITRO OU LITROS/HORA"] || 0).replace(',', '.')),
+            tipo_frota: String(getV(row, ["TIPO FROTA", "TIPO DE FROTA"]) || ""),
+            modelo_veiculo: String(getV(row, ["MODELO VEICULO", "MODELO DO VEICULO", "MODELO"]) || ""),
+            tipo_combustivel: String(getV(row, ["TIPO COMBUSTIVEL", "COMBUSTIVEL"]) || ""),
+            litros: Number(String(getV(row, ["LITROS", "QTD"]) || 0).replace(',', '.')),
+            valor_litro: Number(String(getV(row, ["VL/LITRO", "VALOR LITRO", "PRECO UNITARIO"]) || 0).replace(',', '.')),
+            valor_emissao: Number(String(getV(row, ["VALOR EMISSAO", "TOTAL", "VALOR TOTAL"]) || 0).replace(',', '.')),
+            estabelecimento: String(getV(row, ["NOME ESTABELECIMENTO", "ESTABELECIMENTO", "POSTO"]) || ""),
+            estrela_auto_posto: String(getV(row, ["NOME ESTABELECIMENTO", "ESTABELECIMENTO"]) || ""),
+            nome_motorista: String(getV(row, ["NOME MOTORISTA", "MOTORISTA"]) || ""),
+            cidade: String(getV(row, ["CIDADE", "MUNICIPIO"]) || ""),
+            endereco: String(getV(row, ["ENDERECO", "LOGRADOURO"]) || ""),
+            bairro: String(getV(row, ["BAIRRO"]) || ""),
+            uf: String(getV(row, ["UF", "ESTADO"]) || ""),
+            matricula: String(getV(row, ["MATRICULA", "RE"]) || ""),
+            servico: String(getV(row, ["SERVICO"]) || ""),
+            hodometro_horimetro: Number(String(getV(row, ["HODOMETRO OU HORIMETRO", "KM TOTAL"]) || 0).replace(',', '.')),
+            km_rodados_horas: Number(String(getV(row, ["KM RODADOS OU HORAS TRABALHADAS", "KM PERCORRIDO"]) || 0).replace(',', '.')),
+            km_litro_rendimento: Number(String(getV(row, ["KM/LITRO OU LITROS/HORA", "CONSUMO"]) || 0).replace(',', '.')),
           } as any;
         }).filter(item => item.placa !== "");
+
+        console.log("Dados formatados para envio:", formatted.slice(0, 2));
         await saveToSupabase(formatted);
-      } catch (err) { toast.error("Erro no processamento."); } finally { setLoading(false); }
+      } catch (err) { 
+        console.error("Erro no processamento do arquivo:", err);
+        toast.error("Erro no processamento do arquivo. Verifique o console."); 
+      } finally { setLoading(false); }
     };
     reader.readAsBinaryString(file);
   };
