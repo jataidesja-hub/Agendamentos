@@ -50,7 +50,8 @@ export default function AbastecimentosPage() {
       const { data: dbData, error } = await supabase
         .from('abastecimentos')
         .select('*')
-        .order('data_transacao', { ascending: false });
+        .order('data_transacao', { ascending: false })
+        .range(0, 9999);
 
       if (error) throw error;
 

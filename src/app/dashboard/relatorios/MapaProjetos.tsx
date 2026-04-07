@@ -1,11 +1,29 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
 import { supabase } from '@/lib/supabase';
 import { MapPinIcon, MapIcon, FunnelIcon, ChartBarIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import dynamic from 'next/dynamic';
+import 'leaflet/dist/leaflet.css';
+
+// Carregamento dinâmico COMPLETO do MapContainer para evitar erros de SSR que fazem o mapa sumir
+const MapContainer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.MapContainer),
+  { ssr: false }
+);
+const TileLayer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.TileLayer),
+  { ssr: false }
+);
+const Marker = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Marker),
+  { ssr: false }
+);
+const Popup = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Popup),
+  { ssr: false }
+);
 
 interface Projeto {
   id: string;
@@ -40,6 +58,7 @@ export default function MapaProjetos() {
   const [projetoSelecionado, setProjetoSelecionado] = useState<Projeto | null>(null);
   const mapRef = useRef<any>(null);
 
+  // Configuração de Ícones Globais do Leaflet (apenas no cliente)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       import('leaflet').then((L) => {
@@ -56,19 +75,28 @@ export default function MapaProjetos() {
   }, []);
 
   async function fetchDados() {
+    setLoading(true);
     try {
-      const [projRes, veicRes, abastRes] = await Promise.all([
+      const [projRes, veicRes] = await Promise.all([
         supabase.from('projetos').select('*'),
-        supabase.from('frota_veiculos').select('*'),
-        supabase.from('abastecimentos').select('*').order('data_transacao', { ascending: false })
+        supabase.from('frota_veiculos').select('*')
       ]);
 
       setProjetos(projRes.data || []);
       setVeiculosFrota(veicRes.data || []);
-      setAbastecimentos(abastRes.data || []);
+
+      // Busca até 10.000 registros para garantir que o "infinito" funcione
+      const { data: abastData, error: abastError } = await supabase
+        .from('abastecimentos')
+        .select('*')
+        .order('data_transacao', { ascending: false })
+        .range(0, 9999);
+
+      if (abastError) throw abastError;
+      setAbastecimentos(abastData || []);
       
-      if (abastRes.data && abastRes.data.length > 0) {
-        const lastDate = abastRes.data[0].data_transacao;
+      if (abastData && abastData.length > 0) {
+        const lastDate = abastData[0].data_transacao;
         if (lastDate && lastDate.includes('-')) {
            setSelectedMonth(lastDate.slice(0, 7));
         }
@@ -172,43 +200,6 @@ export default function MapaProjetos() {
     };
   }, [projetoSelecionado, veiculosFrota, abastecimentos, selectedMonth]);
 
-  const RenderMap = useMemo(() => (
-    <div className="w-full relative rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/20 bg-gray-100 dark:bg-gray-900" style={{ height: '500px' }}>
-      <MapContainer 
-        center={[-10.6, -42.7]} 
-        zoom={5} 
-        minZoom={3}
-        maxBounds={BRAZIL_BOUNDS}
-        maxBoundsViscosity={1.0}
-        style={{ height: '500px', width: '100%' }}
-        className="z-0"
-        scrollWheelZoom={true}
-        ref={(m) => { if(m) mapRef.current = m; }}
-      >
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        {projetos.map((p) => (
-          <Marker 
-            key={p.id} 
-            position={[p.latitude, p.longitude]}
-            eventHandlers={{
-              click: () => {
-                setProjetoSelecionado(p);
-                setTimeout(() => {
-                  document.getElementById('project-report')?.scrollIntoView({ behavior: 'smooth' });
-                  mapRef.current?.invalidateSize();
-                }, 100);
-              }
-            }}
-          >
-            <Popup>
-              <div className="font-bold text-[#0b7336] text-center">{p.nome}</div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
-    </div>
-  ), [projetos]);
-
   if (loading && projetos.length === 0) {
     return (
       <div className="h-[500px] w-full flex items-center justify-center bg-gray-100 dark:bg-gray-900 rounded-3xl animate-pulse text-[#0b7336]">
@@ -242,7 +233,41 @@ export default function MapaProjetos() {
         </div>
       </div>
 
-      {RenderMap}
+      {/* Container fixo para o Mapa */}
+      <div className="w-full relative rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/20 bg-gray-100 dark:bg-gray-900 min-h-[500px]" style={{ height: '500px' }}>
+        <MapContainer 
+          center={[-10.6, -42.7]} 
+          zoom={5} 
+          minZoom={3}
+          maxBounds={BRAZIL_BOUNDS}
+          maxBoundsViscosity={1.0}
+          style={{ height: '100%', width: '100%' }}
+          className="z-0"
+          scrollWheelZoom={true}
+          ref={(m) => { if (m) mapRef.current = m; }}
+        >
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {projetos.map((p) => (
+            <Marker 
+              key={p.id} 
+              position={[p.latitude, p.longitude]}
+              eventHandlers={{
+                click: () => {
+                  setProjetoSelecionado(p);
+                  setTimeout(() => {
+                    document.getElementById('project-report')?.scrollIntoView({ behavior: 'smooth' });
+                    if (mapRef.current) mapRef.current.invalidateSize();
+                  }, 100);
+                }
+              }}
+            >
+              <Popup>
+                <div className="font-bold text-[#0b7336] text-center">{p.nome}</div>
+              </Popup>
+            </Marker>
+          ))}
+        </MapContainer>
+      </div>
 
       {projetoSelecionado ? (
         <div id="project-report" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
