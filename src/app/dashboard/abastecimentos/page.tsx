@@ -91,7 +91,7 @@ export default function AbastecimentosPage() {
         }
         if (allData.length > 50000) break;
       }
-      setData(allData);
+      setData(allData as Abastecimento[]);
     } catch (err: any) {
       console.error("Erro ao carregar do Supabase:", err);
       toast.error("Erro ao carregar dados.");
@@ -123,7 +123,7 @@ export default function AbastecimentosPage() {
     }
   };
 
-  const parseExcelDate = (val: any) => {
+  const parseExcelDate = (val: any): string | null => {
     if (!val) return null;
     if (typeof val === 'number') {
       const date = new Date((val - 25569) * 86400 * 1000);
@@ -155,19 +155,19 @@ export default function AbastecimentosPage() {
 
     setLoading(true);
     const reader = new FileReader();
-    reader.onload = async (evt) => {
+    reader.onload = async (evt: any) => {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rawData = XLSX.utils.sheet_to_json(ws) as any[];
+        const rawData: any[] = XLSX.utils.sheet_to_json(ws);
 
         const formattedData: Abastecimento[] = rawData.map((row: any) => ({
           codigo_transacao: String(row["CODIGO TRANSACAO"] || ""),
           forma_pagamento: String(row["FORMA DE PAGAMENTO"] || ""),
           codigo_cliente: String(row["CODIGO CLIENTE"] || ""),
           nome_reduzido: String(row["NOME REDUZIDO"] || ""),
-          data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA"] || ""),
+          data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA"] || "") || "",
           placa: String(row["PLACA"] || "").trim(),
           tipo_frota: String(row["TIPO FROTA"] || ""),
           modelo_veiculo: String(row["MODELO VEICULO"] || ""),
@@ -204,7 +204,7 @@ export default function AbastecimentosPage() {
           codigo_emissora: String(row["CODIGO EMISSORA"] || ""),
           responsavel: String(row["RESPONSAVEL"] || ""),
           tipo_entrada_hodometro: String(row["TIPO ENTRADA HODOMETRO"] || "")
-        })).filter(item => item.placa !== "");
+        })).filter((item: Abastecimento) => item.placa !== "");
 
         await saveToSupabase(formattedData);
       } catch (err) {
@@ -217,7 +217,7 @@ export default function AbastecimentosPage() {
   };
 
   const filteredData = useMemo(() => {
-    return data.filter((item: any) => 
+    return data.filter((item: Abastecimento) => 
       item.placa.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.projeto.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.nome_motorista.toLowerCase().includes(searchTerm.toLowerCase())
@@ -225,13 +225,13 @@ export default function AbastecimentosPage() {
   }, [data, searchTerm]);
 
   const stats = useMemo(() => {
-    const totalLiters = filteredData.reduce((acc: number, curr: any) => acc + curr.litros, 0);
-    const totalValue = filteredData.reduce((acc: number, curr: any) => acc + (curr.valor_emissao || 0), 0);
+    const totalLiters = filteredData.reduce((acc: number, curr: Abastecimento) => acc + curr.litros, 0);
+    const totalValue = filteredData.reduce((acc: number, curr: Abastecimento) => acc + (curr.valor_emissao || 0), 0);
     return {
       totalLiters: totalLiters.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
       totalValue: totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
       count: filteredData.length,
-      projectsCount: new Set(filteredData.map((d: any) => d.projeto)).size
+      projectsCount: new Set(filteredData.map((d: Abastecimento) => d.projeto)).size
     };
   }, [filteredData]);
 
@@ -298,7 +298,7 @@ export default function AbastecimentosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredData.slice(0, 500).map((item: any, idx: number) => (
+              {filteredData.slice(0, 500).map((item: Abastecimento, idx: number) => (
                 <tr key={idx} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 font-bold text-gray-500">
                     {item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}
