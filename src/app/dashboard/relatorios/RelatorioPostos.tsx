@@ -42,6 +42,7 @@ const RelatorioPostos = () => {
         return String(a.data_transacao).slice(0, 7) === selectedMonth;
       });
 
+      // Passo 1: Agrupar e somar valores
       filtered.forEach((a: any) => {
         const uf = String(a.uf || "UF").toUpperCase().trim();
         const city = String(a.cidade || "NÃO INFORMADA").toUpperCase().trim();
@@ -57,24 +58,30 @@ const RelatorioPostos = () => {
         }
 
         const fuelData = data[uf].cities[city].posts[post].fuels[fuel];
-        const currentPrice = (Number(a.valor_litro) || 0);
-        
-        fuelData.sumPrice += currentPrice;
+        fuelData.sumPrice += (Number(a.valor_litro) || 0);
         fuelData.count += 1;
         fuelData.value += (Number(a.valor_emissao) || 0);
-
-        // Preços min/max da cidade
-        const cityFuelPrices = data[uf].cities[city].fuelPrices;
-        if (!cityFuelPrices[fuel]) {
-          cityFuelPrices[fuel] = { min: currentPrice, max: currentPrice };
-        } else {
-          if (currentPrice > 0 && currentPrice < cityFuelPrices[fuel].min) cityFuelPrices[fuel].min = currentPrice;
-          if (currentPrice > cityFuelPrices[fuel].max) cityFuelPrices[fuel].max = currentPrice;
-        }
 
         data[uf].cities[city].posts[post].totalValue += (Number(a.valor_emissao) || 0);
         data[uf].cities[city].totalInvested += (Number(a.valor_emissao) || 0);
         data[uf].totalInvested += (Number(a.valor_emissao) || 0);
+      });
+
+      // Passo 2: Calcular min/max baseando-se nas MÉDIAS consolidadas por posto
+      Object.values(data).forEach((ufData: any) => {
+        Object.values(ufData.cities).forEach((cityData: any) => {
+          Object.values(cityData.posts).forEach((postData: any) => {
+            Object.entries(postData.fuels).forEach(([fuel, fuelData]: [string, any]) => {
+              const avg = fuelData.sumPrice / fuelData.count;
+              if (!cityData.fuelPrices[fuel]) {
+                cityData.fuelPrices[fuel] = { min: avg, max: avg };
+              } else {
+                if (avg > 0 && avg < cityData.fuelPrices[fuel].min) cityData.fuelPrices[fuel].min = avg;
+                if (avg > cityData.fuelPrices[fuel].max) cityData.fuelPrices[fuel].max = avg;
+              }
+            });
+          });
+        });
       });
 
       return data;
