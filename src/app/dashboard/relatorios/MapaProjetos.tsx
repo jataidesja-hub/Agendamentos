@@ -250,9 +250,10 @@ const RelatorioProjetos = () => {
                               <thead>
                                 <tr className="text-gray-400 uppercase font-black tracking-widest border-b border-gray-100">
                                   <th className="py-3">Data</th>
-                                  <th className="py-3">Motorista</th>
+                                  <th className="py-3">Posto / Cidade</th>
                                   <th className="py-3">Tipo</th>
-                                  <th className="py-3 text-right">Lts</th>
+                                  <th className="py-3 text-right">Valor/L</th>
+                                  <th className="py-3 text-right">Qtd (L)</th>
                                   <th className="py-3 text-right">Custo</th>
                                 </tr>
                               </thead>
@@ -260,10 +261,14 @@ const RelatorioProjetos = () => {
                                 {groupedData[projName].vehicles[placa].items.map((item: any, i: number) => (
                                   <tr key={i}>
                                     <td className="py-2.5 font-bold text-gray-500">{new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR')}</td>
-                                    <td className="py-2.5 font-black text-gray-800 uppercase">{item.nome_motorista || '---'}</td>
-                                    <td className="py-2.5 text-gray-400 uppercase font-bold">{item.tipo_combustivel}</td>
-                                    <td className="py-2.5 text-right font-black">{Number(item.litros).toFixed(2)}</td>
-                                    <td className="py-2.5 text-right font-black text-emerald-600">{Number(item.valor_emissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                    <td className="py-2.5 font-black text-gray-800 uppercase">
+                                      <div className="leading-tight">{item.estabelecimento || '---'}</div>
+                                      <div className="text-[8px] text-gray-400 font-normal">{item.cidade || '---'}</div>
+                                    </td>
+                                    <td className="py-2.5 text-gray-400 uppercase font-bold text-[9px]">{item.tipo_combustivel}</td>
+                                    <td className="py-2.5 text-right font-medium text-gray-500 tabular-nums">{Number(item.valor_litro).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                    <td className="py-2.5 text-right font-black tabular-nums">{Number(item.litros).toFixed(2)}</td>
+                                    <td className="py-2.5 text-right font-black text-emerald-600 tabular-nums">{Number(item.valor_emissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                   </tr>
                                 ))}
                               </tbody>

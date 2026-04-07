@@ -201,6 +201,7 @@ export default function AbastecimentosPage() {
             valor_emissao: Number(String(row["VALOR EMISSAO"] || 0).replace(',', '.')),
             estabelecimento: String(row["ESTABELECIMENTO"] || ""),
             nome_motorista: String(row["NOME MOTORISTA"] || ""),
+            cidade: String(row["CIDADE"] || ""),
             hodometro_horimetro: Number(String(row["HODOMETRO OU HORIMETRO"] || 0).replace(',', '.')),
             km_rodados_horas: Number(String(row["KM RODADOS OU HORAS TRABALHADAS"] || 0).replace(',', '.')),
             km_litro_rendimento: Number(String(row["KM/LITRO OU LITROS/HORA"] || 0).replace(',', '.')),
