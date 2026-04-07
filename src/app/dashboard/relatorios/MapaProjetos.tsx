@@ -6,7 +6,10 @@ import {
   ChevronDownIcon, 
   ChevronUpIcon,
   FunnelIcon,
-  TruckIcon
+  TruckIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  MinusIcon
 } from '@heroicons/react/24/outline';
 import { dataCache } from '@/lib/cache';
 
@@ -257,19 +260,56 @@ const RelatorioProjetos = () => {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-50">
-                                {groupedData[projName].vehicles[placa].items.map((item: any, i: number) => (
-                                  <tr key={i}>
-                                    <td className="py-2.5 font-bold text-gray-500">{new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR')}</td>
-                                    <td className="py-2.5 font-black text-gray-800 uppercase">
-                                      <div className="leading-tight">{item.estabelecimento || '---'}</div>
-                                      <div className="text-[8px] text-gray-400 font-normal">{item.cidade || '---'}</div>
-                                    </td>
-                                    <td className="py-2.5 text-gray-400 uppercase font-bold text-[9px]">{item.tipo_combustivel}</td>
-                                    <td className="py-2.5 text-right font-medium text-gray-500 tabular-nums">{Number(item.valor_litro).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                    <td className="py-2.5 text-right font-black tabular-nums">{Number(item.litros).toFixed(2)}</td>
-                                    <td className="py-2.5 text-right font-black text-emerald-600 tabular-nums">{Number(item.valor_emissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                  </tr>
-                                ))}
+                                {groupedData[projName].vehicles[placa].items.map((item: any, i: number, items: any[]) => {
+                                  // Busca o abastecimento anterior NO MESMO POSTO e MESMO COMBUSTÍVEL
+                                  const prevAtStation = items.slice(i + 1).find(prev => 
+                                    String(prev.estabelecimento).toUpperCase() === String(item.estabelecimento).toUpperCase() &&
+                                    String(prev.tipo_combustivel).toUpperCase() === String(item.tipo_combustivel).toUpperCase()
+                                  );
+
+                                  const currPrice = Number(item.valor_litro) || 0;
+                                  const prevPrice = prevAtStation ? (Number(prevAtStation.valor_litro) || 0) : null;
+                                  
+                                  let diffPercent = 0;
+                                  let status: 'up' | 'down' | 'same' | 'none' = 'none';
+
+                                  if (prevPrice && prevPrice > 0) {
+                                    const diff = currPrice - prevPrice;
+                                    diffPercent = (diff / prevPrice) * 100;
+                                    if (diff > 0.001) status = 'up';
+                                    else if (diff < -0.001) status = 'down';
+                                    else status = 'same';
+                                  }
+
+                                  return (
+                                    <tr key={i} className="group hover:bg-gray-50/50 transition-colors">
+                                      <td className="py-2.5 font-bold text-gray-500">{new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR')}</td>
+                                      <td className="py-2.5 font-black text-gray-800 uppercase">
+                                        <div className="leading-tight">{item.estabelecimento || '---'}</div>
+                                        <div className="text-[8px] text-gray-400 font-normal">{item.cidade || '---'}</div>
+                                      </td>
+                                      <td className="py-2.5 text-gray-400 uppercase font-bold text-[9px]">{item.tipo_combustivel}</td>
+                                      <td className="py-2.5 text-right tabular-nums">
+                                        <div className="flex flex-col items-end">
+                                          <span className="font-black text-gray-800">{currPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                          {status !== 'none' && (
+                                            <div className={`flex items-center text-[8px] font-black ${
+                                              status === 'up' ? 'text-red-600' : 
+                                              status === 'down' ? 'text-emerald-600' : 'text-gray-900'
+                                            }`} title={`Comparado ao último abastecimento neste posto (${prevAtStation.data_transacao})`}>
+                                              {status === 'up' && <ArrowUpIcon className="w-2 h-2 mr-0.5 stroke-[4px]" />}
+                                              {status === 'down' && <ArrowDownIcon className="w-2 h-2 mr-0.5 stroke-[4px]" />}
+                                              {status === 'same' && <MinusIcon className="w-2 h-2 mr-0.5 stroke-[4px]" />}
+                                              {Math.abs(diffPercent).toFixed(1)}%
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 text-right font-black tabular-nums">{Number(item.litros).toFixed(2)}</td>
+                                      <td className="py-2.5 text-right font-black text-emerald-600 tabular-nums">{Number(item.valor_emissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
