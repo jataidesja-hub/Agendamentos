@@ -11,21 +11,55 @@ import {
   ChartBarSquareIcon,
   HashtagIcon,
   CurrencyDollarIcon,
-  GlobeAltIcon
+  GlobeAltIcon,
+  DocumentArrowUpIcon
 } from "@heroicons/react/24/outline";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 
 interface Abastecimento {
-  placa: string;
+  codigo_transacao: string;
+  forma_pagamento: string;
+  codigo_cliente: string;
+  nome_reduzido: string;
   data_transacao: string;
+  placa: string;
+  tipo_frota: string;
+  modelo_veiculo: string;
+  projeto: string;
+  ano_referencia: string;
+  matricula: string;
+  nome_motorista: string;
+  servico: string;
   tipo_combustivel: string;
   litros: number;
   valor_litro: number;
-  valor_total: number;
+  hodometro_horimetro: number;
+  km_rodados_horas: number;
+  km_litro_rendimento: number;
+  valor_emissao: number;
   codigo_estabelecimento: string;
-  nome_estabelecimento: string;
+  estrela_auto_posto: string;
+  estabelecimento: string;
+  endereco: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  info_adicional_1: string;
+  info_adicional_2: string;
+  info_adicional_3: string;
+  status_transacao: string;
+  info_adicional_5: string;
+  forma_transacao: string;
+  codigo_liberacao: string;
+  serie_pos: string;
+  numero_cartao: string;
+  familia_veiculo: string;
+  grupo_restricao: string;
+  codigo_emissora: string;
+  responsavel: string;
+  tipo_entrada_hodometro: string;
 }
 
 export default function AbastecimentosPage() {
@@ -34,7 +68,6 @@ export default function AbastecimentosPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [oneDriveUrl, setOneDriveUrl] = useState("");
-  const [lastUpdate, setLastUpdate] = useState<string | null>(null);
 
   useEffect(() => {
     const savedUrl = localStorage.getItem("onedrive_abastecimentos_url");
@@ -45,7 +78,6 @@ export default function AbastecimentosPage() {
   const loadFromSupabase = async () => {
     setLoading(true);
     try {
-      // FETCH RECURSIVO PARA BYPASSAR O LIMITE DE 1000 DO SUPABASE
       let allData: any[] = [];
       let from = 0;
       let to = 999;
@@ -70,13 +102,10 @@ export default function AbastecimentosPage() {
             to += 1000;
           }
         }
-        if (allData.length > 30000) break; // Limite de segurança de 30k linhas
+        if (allData.length > 50000) break;
       }
 
-      if (allData.length > 0) {
-        setData(allData);
-        setLastUpdate("Sincronizado");
-      }
+      setData(allData);
     } catch (err: any) {
       console.error("Erro ao carregar do Supabase:", err);
       toast.error("Erro ao carregar dados.");
@@ -91,60 +120,53 @@ export default function AbastecimentosPage() {
 
     setLoading(true);
     try {
-      // Deleta por blocos se necessário, mas aqui deletamos tudo primeiro
+      // Limpeza total antes da nova importação
       await supabase.from('abastecimentos').delete().neq('placa', 'PLACEHOLDER');
 
-      // Inserção em lotes de 1000 para evitar erros de payload do Supabase
-      const chunkSize = 1000;
+      // Inserção em lotes de 500 para evitar limites de payload com 41 colunas
+      const chunkSize = 500;
       for (let i = 0; i < items.length; i += chunkSize) {
         const chunk = items.slice(i, i + chunkSize);
         const { error } = await supabase.from('abastecimentos').insert(chunk);
         if (error) throw error;
       }
 
-      toast.success("Dados salvos permanentemente no Supabase!");
-      loadFromSupabase(); // Recarrega tudo para garantir sincronia
+      toast.success("Dados salvos e sincronizados!");
+      loadFromSupabase();
     } catch (err: any) {
       console.error("Erro ao salvar no Supabase:", err);
-      toast.error("Erro ao salvar no servidor.");
+      toast.error("Erro ao salvar dados detalhados.");
     } finally {
       setLoading(false);
     }
   };
 
   const parseExcelDate = (val: any) => {
-    if (!val) return new Date().toISOString().split('T')[0];
+    if (!val) return null;
     if (typeof val === 'number') {
       const date = new Date((val - 25569) * 86400 * 1000);
       return date.toISOString().split('T')[0];
     }
     if (typeof val === 'string') {
       const cleanStr = val.trim();
-      const slashParts = cleanStr.split('/');
-      if (slashParts.length === 3) {
-        const d = slashParts[0].padStart(2, '0');
-        const m = slashParts[1].padStart(2, '0');
-        let y = slashParts[2];
-        if (y.length === 2) y = "20" + y;
-        return `${y}-${m}-${d}`;
+      const parts = cleanStr.split(/[-/]/);
+      if (parts.length === 3) {
+         // Tenta detectar se é DD/MM/YYYY ou YYYY-MM-DD
+         if (parts[0].length === 4) return cleanStr.substring(0, 10);
+         const d = parts[0].padStart(2, '0');
+         const m = parts[1].padStart(2, '0');
+         let y = parts[2];
+         if (y.length === 2) y = "20" + y;
+         // Se o meio for texto (Ex: Jan), converter
+         if (isNaN(Number(m))) {
+             const monthsMap: any = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12', set: '09', out: '10', dez: '12' };
+             const convertedM = monthsMap[m.toLowerCase().substring(0, 3)] || '01';
+             return `${y}-${convertedM}-${d}`;
+         }
+         return `${y}-${m}-${d}`;
       }
-      const dashParts = cleanStr.split('-');
-      if (dashParts.length === 3) {
-        const d = dashParts[0].padStart(2, '0');
-        const monthStr = dashParts[1].toLowerCase();
-        let y = dashParts[2];
-        if (y.length === 2) y = "20" + y;
-        const monthsMap: any = {
-          jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
-          jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
-          set: '09', out: '10', dez: '12'
-        };
-        const m = monthsMap[monthStr.substring(0, 3)] || '01';
-        return `${y}-${m}-${d}`;
-      }
-      if (/^\d{4}-\d{2}-\d{2}/.test(cleanStr)) return cleanStr.substring(0, 10);
     }
-    return String(val);
+    return null;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,21 +183,52 @@ export default function AbastecimentosPage() {
         const rawData = XLSX.utils.sheet_to_json(ws) as any[];
 
         const formattedData: Abastecimento[] = rawData.map((row: any) => ({
+          codigo_transacao: String(row["CODIGO TRANSACAO"] || ""),
+          forma_pagamento: String(row["FORMA DE PAGAMENTO"] || ""),
+          codigo_cliente: String(row["CODIGO CLIENTE"] || ""),
+          nome_reduzido: String(row["NOME REDUZIDO"] || ""),
+          data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA"] || ""),
           placa: String(row["PLACA"] || "").trim(),
-          data_transacao: parseExcelDate(row["DATA TRANSACA"] || row["DATA TRANSACAO"] || row["DATA"]),
-          tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || row["COMBUSTIVEL"] || row["TIPO"] || "").trim(),
-          litros: Number(row["LITROS"] || row["QTDE"] || 0),
-          valor_litro: Number(row["VL/LITRO"] || row["PRECO"] || row["VALOR UNITARIO"] || 0),
-          valor_total: Number(row["VALOR EMISSAO"] || row["VALOR TOTAL"] || row["VALOR"] || 0),
-          codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || row["CODIGO"] || ""),
-          nome_estabelecimento: String(row["NOME ESTABELECIMENTO"] || row["POSTO"] || row["ESTABELECIMENTO"] || "")
-        })).filter(item => item.placa !== "" && item.placa !== "null");
+          tipo_frota: String(row["TIPO FROTA"] || ""),
+          modelo_veiculo: String(row["MODELO VEICULO"] || ""),
+          projeto: String(row["PROJETOS"] || row["PROJETO"] || "SEM PROJETO").trim(),
+          ano_referencia: String(row["ANO"] || ""),
+          matricula: String(row["MATRICULA"] || ""),
+          nome_motorista: String(row["NOME MOTORISTA"] || ""),
+          servico: String(row["SERVICO"] || ""),
+          tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || ""),
+          litros: Number(row["LITROS"] || 0),
+          valor_litro: Number(row["VL/LITRO"] || 0),
+          hodometro_horimetro: Number(row["HODOMETRO OU HORIMETRO"] || 0),
+          km_rodados_horas: Number(row["KM RODADOS OU HORAS TRABALHADAS"] || 0),
+          km_litro_rendimento: Number(row["KM/LITRO OU LITROS/HORA"] || 0),
+          valor_emissao: Number(row["VALOR EMISSAO"] || 0),
+          codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
+          estrela_auto_posto: String(row["ESTRELA AUTO POSTO"] || ""),
+          estabelecimento: String(row["ESTABELECIMENTO"] || ""),
+          endereco: String(row["ENDERECO"] || ""),
+          bairro: String(row["BAIRRO"] || ""),
+          cidade: String(row["CIDADE"] || ""),
+          uf: String(row["UF"] || ""),
+          info_adicional_1: String(row["INFORMACAO ADIDIONAL 1"] || ""),
+          info_adicional_2: String(row["INFORMACAO ADIDIONAL 2"] || ""),
+          info_adicional_3: String(row["INFORMACAO ADIDIONAL 3"] || ""),
+          status_transacao: String(row["STATUS"] || ""),
+          info_adicional_5: String(row["INFORMACAO ADIDIONAL 5"] || ""),
+          forma_transacao: String(row["FORMA TRANSACAO"] || ""),
+          codigo_liberacao: String(row["CODIGO LIBERACAO RESTRICAO"] || ""),
+          serie_pos: String(row["SERIE POS"] || ""),
+          numero_cartao: String(row["NUMERO CARTAO"] || ""),
+          familia_veiculo: String(row["FAMILIA VEICULO"] || ""),
+          grupo_restricao: String(row["GRUPO RESTRICAO"] || ""),
+          codigo_emissora: String(row["CODIGO EMISSORA"] || ""),
+          responsavel: String(row["RESPONSAVEL"] || ""),
+          tipo_entrada_hodometro: String(row["TIPO ENTRADA HODOMETRO"] || "")
+        })).filter(item => item.placa !== "");
 
-        setData(formattedData);
         await saveToSupabase(formattedData);
-        toast.success("Arquivo importado e salvo!");
       } catch (err) {
-        toast.error("Erro ao ler arquivo Excel.");
+        toast.error("Erro ao ler colunas do arquivo.");
       } finally {
         setLoading(false);
       }
@@ -183,239 +236,128 @@ export default function AbastecimentosPage() {
     reader.readAsBinaryString(file);
   };
 
-  const fetchFromOneDrive = async () => {
-    if (!oneDriveUrl) {
-      toast.error("Configure o link do OneDrive!");
-      setIsConfigOpen(true);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const cleanUrl = oneDriveUrl.trim();
-      const bytes = new TextEncoder().encode(cleanUrl);
-      const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
-      const encoded = btoa(binString);
-      const base64Url = encoded.replace(/=/g, '').replace(/\//g, '_').replace(/\+/g, '-');
-
-      const downloadUrl = `https://api.onedrive.com/v1.0/shares/u!${base64Url}/root/content`;
-      const response = await fetch(downloadUrl);
-      if (!response.ok) throw new Error("Erro ao acessar OneDrive.");
-
-      const arrayBuffer = await response.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { type: "array" });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rawData = XLSX.utils.sheet_to_json(worksheet) as any[];
-
-      const formattedData: Abastecimento[] = rawData.map((row: any) => ({
-        placa: String(row["PLACA"] || "").trim(),
-        data_transacao: parseExcelDate(row["DATA TRANSACA"] || row["DATA TRANSACAO"] || row["DATA"]),
-        tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || row["COMBUSTIVEL"] || row["TIPO"] || "").trim(),
-        litros: Number(row["LITROS"] || row["QTDE"] || 0),
-        valor_litro: Number(row["VL/LITRO"] || row["PRECO"] || row["VALOR UNITARIO"] || 0),
-        valor_total: Number(row["VALOR EMISSAO"] || row["VALOR TOTAL"] || row["VALOR"] || 0),
-        codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || row["CODIGO"] || ""),
-        nome_estabelecimento: String(row["NOME ESTABELECIMENTO"] || row["POSTO"] || row["ESTABELECIMENTO"] || "")
-      })).filter(item => item.placa !== "" && item.placa !== "null");
-
-      setData(formattedData);
-      await saveToSupabase(formattedData);
-      toast.success("Sincronizado com sucesso!");
-    } catch (error: any) {
-      toast.error(error.message || "Erro no OneDrive.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const filteredData = useMemo(() => {
     return data.filter(item => 
       item.placa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.nome_estabelecimento.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.tipo_combustivel.toLowerCase().includes(searchTerm.toLowerCase())
+      item.projeto.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.nome_motorista.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [data, searchTerm]);
 
   const stats = useMemo(() => {
     const totalLiters = filteredData.reduce((acc, curr) => acc + curr.litros, 0);
-    const totalValue = filteredData.reduce((acc, curr) => acc + curr.valor_total, 0);
-    const avgPrice = totalLiters > 0 ? totalValue / totalLiters : 0;
-    
+    const totalValue = filteredData.reduce((acc, curr) => acc + (curr.valor_emissao || 0), 0);
     return {
       totalLiters: totalLiters.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
       totalValue: totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-      avgPrice: avgPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-      count: filteredData.length
+      count: filteredData.length,
+      projectsCount: new Set(filteredData.map(d => d.projeto)).size
     };
   }, [filteredData]);
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+    <div className="h-full flex flex-col pb-10">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-4">
         <div>
-          <div className="flex items-center space-x-3 mb-2">
-            <span className="flex items-center px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-xl text-xs font-bold uppercase tracking-wider">
-              <CloudArrowDownIcon className="w-4 h-4 mr-2" />
-              Sincronizado via OneDrive
-            </span>
-          </div>
-          <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">Abastecimentos</h1>
-          <p className="text-gray-500 font-medium text-sm mt-1">Monitoramento de consumo e gastos da frota armazenado permanentemente no Supabase.</p>
+          <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">Base de Dados Frota</h1>
+          <p className="text-gray-500 font-medium text-sm mt-1">Gestão completa de {stats.count} registros em {stats.projectsCount} projetos.</p>
         </div>
         
         <div className="flex gap-3">
-          <label className="flex items-center px-6 py-3 bg-gray-900 text-white rounded-[1.5rem] font-bold text-sm cursor-pointer hover:bg-black transition-all shadow-xl shadow-black/10">
-            <TableCellsIcon className="w-5 h-5 mr-2" />
-            Importar Arquivo
+          <label className="flex items-center px-6 py-3 bg-gray-900 text-white rounded-[1.5rem] font-bold text-sm cursor-pointer hover:bg-black transition-all shadow-xl">
+            <DocumentArrowUpIcon className="w-5 h-5 mr-2" />
+            Importar Planilha (A-AO)
             <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} />
           </label>
-          <button onClick={() => setIsConfigOpen(true)} className="p-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-            <GlobeAltIcon className="w-6 h-6 text-gray-400" />
-          </button>
-          <button 
-            onClick={fetchFromOneDrive}
-            disabled={loading}
-            className="flex items-center px-6 py-3 bg-[#0b7336] text-white rounded-[1.5rem] font-bold text-sm hover:bg-[#095d2c] transition-all shadow-xl shadow-green-500/20 disabled:opacity-50"
-          >
-            <ArrowPathIcon className={`w-5 h-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Sincronizar OneDrive
-          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        <div className="bg-white dark:bg-gray-800/60 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 w-fit rounded-2xl mb-4">
-            <ChartBarSquareIcon className="w-6 h-6 text-blue-500" />
-          </div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Registros</p>
-          <p className="text-3xl font-black text-gray-900 dark:text-white leading-none">{stats.count}</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800/60 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
-          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 w-fit rounded-2xl mb-4">
-            <HashtagIcon className="w-6 h-6 text-amber-500" />
-          </div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Litros</p>
-          <p className="text-3xl font-black text-gray-900 dark:text-white leading-none">{stats.totalLiters} L</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800/60 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
-          <div className="p-3 bg-green-50 dark:bg-green-900/20 w-fit rounded-2xl mb-4">
-            <CurrencyDollarIcon className="w-6 h-6 text-[#0b7336]" />
-          </div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Custo Total</p>
-          <p className="text-3xl font-black text-gray-900 dark:text-white leading-none">{stats.totalValue}</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800/60 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
-          <div className="p-3 bg-purple-50 dark:bg-purple-900/20 w-fit rounded-2xl mb-4">
-            <GlobeAltIcon className="w-6 h-6 text-purple-500" />
-          </div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Média P/ Litro</p>
-          <p className="text-3xl font-black text-gray-900 dark:text-white leading-none">{stats.avgPrice}</p>
-        </div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-4 mb-8">
+         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 underline decoration-[#0b7336] decoration-2 underline-offset-4 uppercase tracking-widest mb-2">Total de Projetos</p>
+            <p className="text-3xl font-black">{stats.projectsCount}</p>
+         </div>
+         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Abastecimentos</p>
+            <p className="text-3xl font-black">{stats.count}</p>
+         </div>
+         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm text-[#0b7336]">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Custo Acumulado</p>
+            <p className="text-3xl font-black">{stats.totalValue}</p>
+         </div>
+         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Total Litros</p>
+            <p className="text-3xl font-black">{stats.totalLiters} L</p>
+         </div>
       </div>
 
-      <div className="flex-1 bg-white dark:bg-gray-800/60 rounded-[3rem] border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden flex flex-col">
-        <div className="p-8 border-b border-gray-50 dark:border-gray-700 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/30 dark:bg-gray-900/30">
-          <div className="relative w-full md:w-96">
-            <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Pesquisar placa ou posto..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-6 py-4 bg-white dark:bg-gray-900 border-0 rounded-[1.5rem] text-sm focus:ring-2 focus:ring-[#0b7336]/20 transition-all font-medium"
-            />
-          </div>
-          <div className="flex items-center space-x-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-            <FunnelIcon className="w-4 h-4" />
-            <span>Exibindo {stats.count} resultados</span>
-          </div>
+      {/* Main Table */}
+      <div className="flex-1 bg-white dark:bg-gray-800 rounded-[3rem] border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden flex flex-col mx-4">
+        <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+           <div className="relative w-80">
+              <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input 
+                type="text" 
+                placeholder="Placa, Projeto ou Motorista..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-white border-0 rounded-2xl text-sm shadow-sm"
+              />
+           </div>
+           <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amostra dos Dados Sincronizados</span>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar">
-          <table className="w-full text-left">
-            <thead className="sticky top-0 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md z-10">
-              <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                <th className="px-8 py-6">Data</th>
-                <th className="px-6 py-6 font-center">Placa</th>
-                <th className="px-6 py-6">Combustível</th>
-                <th className="px-6 py-6 text-right">Litros</th>
-                <th className="px-6 py-6 text-right">Vl. Litro</th>
-                <th className="px-6 py-6 text-right">Total</th>
-                <th className="px-8 py-6">Estabelecimento</th>
+        <div className="overflow-auto custom-scrollbar">
+          <table className="w-full text-left text-xs">
+            <thead className="sticky top-0 bg-gray-900 text-white z-10">
+              <tr className="uppercase font-black tracking-tighter">
+                <th className="px-6 py-4">Data</th>
+                <th className="px-6 py-4 text-center">Placa</th>
+                <th className="px-6 py-4">Projeto</th>
+                <th className="px-6 py-4">Motorista</th>
+                <th className="px-6 py-4">Combustível</th>
+                <th className="px-6 py-4 text-right">L / KM</th>
+                <th className="px-6 py-4 text-right">Valor</th>
+                <th className="px-6 py-4">Estabelecimento</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-              {filteredData.map((item, idx) => (
-                <tr key={idx} className="group hover:bg-gray-50/50 dark:hover:bg-gray-900/30 transition-all">
-                  <td className="px-8 py-5 text-sm font-medium text-gray-500 whitespace-nowrap">
-                    {new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR')}
+            <tbody className="divide-y divide-gray-50">
+              {filteredData.slice(0, 500).map((item, idx) => (
+                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 font-bold text-gray-500">
+                    {item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}
                   </td>
-                  <td className="px-6 py-5">
-                    <span className="bg-gray-900 text-white px-3 py-1.5 rounded-lg font-black text-sm shadow-lg shadow-black/10 tracking-tight">
+                  <td className="px-6 py-4 text-center">
+                    <span className="bg-[#0b7336] text-white px-2 py-1 rounded-md font-black">
                       {item.placa}
                     </span>
                   </td>
-                  <td className="px-6 py-5">
-                    <span className="text-[10px] font-black text-gray-400 uppercase bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-md">
-                      {item.tipo_combustivel}
-                    </span>
+                  <td className="px-6 py-4 font-black text-gray-800">{item.projeto}</td>
+                  <td className="px-6 py-4 font-medium text-gray-600 uppercase">{item.nome_motorista || '---'}</td>
+                  <td className="px-6 py-4 uppercase text-[#0b7336] font-bold">{item.tipo_combustivel}</td>
+                  <td className="px-6 py-4 text-right tabular-nums">
+                    <div>{item.litros.toFixed(2)} L</div>
+                    <div className="text-[10px] text-gray-400">{item.km_rodados_horas} KM</div>
                   </td>
-                  <td className="px-6 py-5 text-right font-black text-gray-900 dark:text-white tabular-nums">
-                    {item.litros.toFixed(2)} L
+                  <td className="px-6 py-4 text-right font-black text-gray-900 bg-green-50/30">
+                    {item.valor_emissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </td>
-                  <td className="px-6 py-5 text-right font-bold text-gray-500 text-xs tabular-nums">
-                    {item.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </td>
-                  <td className="px-6 py-5 text-right font-black text-[#0b7336] tabular-nums">
-                    {item.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </td>
-                  <td className="px-8 py-5">
-                    <p className="text-xs font-black text-gray-900 dark:text-white uppercase leading-tight truncate max-w-[200px]">
-                      {item.nome_estabelecimento}
-                    </p>
-                    <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Cód: {item.codigo_estabelecimento}</p>
+                  <td className="px-6 py-4 truncate max-w-[150px] uppercase font-bold text-gray-400">
+                    {item.estabelecimento}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {filteredData.length > 500 && (
+            <div className="p-4 text-center bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              Exibindo primeiros 500 registros de {filteredData.length}
+            </div>
+          )}
         </div>
       </div>
-
-      {isConfigOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in-95 duration-200">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2 leading-tight">Configuração OneDrive</h2>
-            <p className="text-sm text-gray-500 font-medium mb-8">Cole o link de compartilhamento da sua planilha Excel.</p>
-            <input 
-              type="text" 
-              placeholder="https://1drv.ms/x/s!..."
-              value={oneDriveUrl}
-              onChange={(e) => setOneDriveUrl(e.target.value)}
-              className="w-full p-5 bg-gray-50 dark:bg-gray-800 border-0 rounded-2xl text-sm mb-8 focus:ring-2 focus:ring-[#0b7336]/20 font-medium"
-            />
-            <div className="flex gap-3">
-              <button 
-                onClick={() => setIsConfigOpen(false)}
-                className="flex-1 px-6 py-4 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-white rounded-2xl font-bold text-sm"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => {
-                  localStorage.setItem("onedrive_abastecimentos_url", oneDriveUrl);
-                  setIsConfigOpen(false);
-                  fetchFromOneDrive();
-                }}
-                className="flex-[2] px-6 py-4 bg-[#0b7336] text-white rounded-2xl font-bold text-sm shadow-xl shadow-green-500/20"
-              >
-                Salvar e Sincronizar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

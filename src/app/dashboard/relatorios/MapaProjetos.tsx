@@ -1,408 +1,272 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { MapPinIcon, MapIcon, FunnelIcon, ChartBarIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { 
+  FunnelIcon, 
+  ChartBarIcon, 
+  ArrowTrendingUpIcon, 
+  ArrowTrendingDownIcon, 
+  UserIcon,
+  TagIcon,
+  TruckIcon,
+  CalendarIcon,
+  ChevronDownIcon,
+  ChevronRightIcon
+} from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
-import dynamic from 'next/dynamic';
-import 'leaflet/dist/leaflet.css';
-
-const MapContainer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.MapContainer),
-  { ssr: false }
-);
-const TileLayer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.TileLayer),
-  { ssr: false }
-);
-const Marker = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Marker),
-  { ssr: false }
-);
-const Popup = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Popup),
-  { ssr: false }
-);
-
-interface Projeto {
-  id: string;
-  nome: string;
-  endereco: string;
-  latitude: number;
-  longitude: number;
-  detalhes_json: any;
-}
 
 interface Abastecimento {
+  id: string;
+  projeto: string;
   placa: string;
   data_transacao: string;
+  nome_motorista: string;
   tipo_combustivel: string;
   litros: number;
   valor_litro: number;
-  valor_total: number;
-  nome_estabelecimento: string;
+  valor_emissao: number;
+  estabelecimento: string;
+  modelo_veiculo: string;
 }
 
-const BRAZIL_BOUNDS: [[number, number], [number, number]] = [
-  [-33.75, -73.99],
-  [5.27, -28.84]
-];
-
-export default function MapaProjetos() {
-  const [projetos, setProjetos] = useState<Projeto[]>([]);
-  const [veiculosFrota, setVeiculosFrota] = useState<any[]>([]);
+export default function RelatorioProjetos() {
   const [abastecimentos, setAbastecimentos] = useState<Abastecimento[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
-  const [projetoSelecionado, setProjetoSelecionado] = useState<Projeto | null>(null);
-  const mapRef = useRef<any>(null);
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [expandedVehicles, setExpandedVehicles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      import('leaflet').then((L) => {
-        const DefaultIcon = L.icon({
-          iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-          shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-          iconSize: [25, 41],
-          iconAnchor: [12, 41],
-        });
-        L.Marker.prototype.options.icon = DefaultIcon;
-      });
-    }
     fetchDados();
-  }, []);
+  }, [selectedMonth]);
 
   async function fetchDados() {
     setLoading(true);
     try {
-      const [projRes, veicRes] = await Promise.all([
-        supabase.from('projetos').select('*'),
-        supabase.from('frota_veiculos').select('*')
-      ]);
+      // Busca todos os dados do mês selecionado
+      const { data, error } = await supabase
+        .from('abastecimentos')
+        .select('*')
+        .gte('data_transacao', `${selectedMonth}-01`)
+        .lte('data_transacao', `${selectedMonth}-31`)
+        .order('data_transacao', { ascending: false });
 
-      setProjetos(projRes.data || []);
-      setVeiculosFrota(veicRes.data || []);
-
-      // FETCH RECURSIVO PARA BYPASSAR O LIMITE DE 1000 DO SUPABASE
-      let allAbast: any[] = [];
-      let from = 0;
-      let to = 999;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('abastecimentos')
-          .select('*')
-          .order('data_transacao', { ascending: false })
-          .range(from, to);
-
-        if (error) throw error;
-        if (!data || data.length === 0) {
-          hasMore = false;
-        } else {
-          allAbast = [...allAbast, ...data];
-          if (data.length < 1000) {
-            hasMore = false;
-          } else {
-            from += 1000;
-            to += 1000;
-          }
-        }
-        // Safety break para não entrar em loop infinito
-        if (allAbast.length > 20000) break;
-      }
-
-      setAbastecimentos(allAbast);
-      
-      if (allAbast.length > 0) {
-        const lastDate = allAbast[0].data_transacao;
-        if (lastDate && lastDate.includes('-')) {
-           setSelectedMonth(lastDate.slice(0, 7));
-        }
-      }
+      if (error) throw error;
+      setAbastecimentos(data || []);
     } catch (error) {
-      console.error('Erro ao buscar dados:', error);
-      toast.error('Erro ao carregar dados do mapa');
+      console.error('Erro:', error);
+      toast.error('Erro ao carregar relatório');
     } finally {
       setLoading(false);
     }
   }
 
+  // Gera lista de meses baseada no calendário (ou dados)
   const availableMonths = useMemo(() => {
-    const months = new Set<string>();
-    abastecimentos.forEach((a: any) => {
-      if (a.data_transacao) {
-        let monthStr = a.data_transacao.slice(0, 7);
-        if (!monthStr.startsWith('20')) {
-             const parts = a.data_transacao.split('-');
-             if (parts.length >= 2) {
-                 const monthsMap: any = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12', set: '09', out: '10', dez: '12' };
-                 const m = monthsMap[parts[1].toLowerCase()] || '01';
-                 const y = parts[2]?.length === 2 ? "20" + parts[2] : (parts[2] || "2025");
-                 monthStr = `${y}-${m}`;
-             }
-        }
-        months.add(monthStr);
+    const months = [];
+    const date = new Date();
+    for (let i = 0; i < 12; i++) {
+      months.push(date.toISOString().slice(0, 7));
+      date.setMonth(date.getMonth() - 1);
+    }
+    return months;
+  }, []);
+
+  // Agrupamento Hierárquico: Projeto > Veículo
+  const projectsData = useMemo(() => {
+    const grouped: any = {};
+
+    abastecimentos.forEach(a => {
+      const projName = a.projeto || "SEM PROJETO";
+      const placa = a.placa || "SEM PLACA";
+
+      if (!grouped[projName]) {
+        grouped[projName] = {
+          nome: projName,
+          totalGasto: 0,
+          totalLitros: 0,
+          veiculos: {}
+        };
       }
+
+      grouped[projName].totalGasto += a.valor_emissao || 0;
+      grouped[projName].totalLitros += a.litros || 0;
+
+      if (!grouped[projName].veiculos[placa]) {
+        grouped[projName].veiculos[placa] = {
+          placa: placa,
+          modelo: a.modelo_veiculo,
+          totalGasto: 0,
+          totalLitros: 0,
+          abastecimentos: []
+        };
+      }
+
+      grouped[projName].veiculos[placa].totalGasto += a.valor_emissao || 0;
+      grouped[projName].veiculos[placa].totalLitros += a.litros || 0;
+      grouped[projName].veiculos[placa].abastecimentos.push(a);
     });
-    if (months.size === 0) months.add(new Date().toISOString().slice(0, 7));
-    return Array.from(months).sort((a: any, b: any) => b.localeCompare(a));
+
+    return Object.values(grouped).sort((a: any, b: any) => b.totalGasto - a.totalGasto);
   }, [abastecimentos]);
 
-  const analytics = useMemo(() => {
-    if (!projetoSelecionado) return null;
+  const toggleProject = (name: string) => {
+    const newExpanded = new Set(expandedProjects);
+    if (newExpanded.has(name)) newExpanded.delete(name);
+    else newExpanded.add(name);
+    setExpandedProjects(newExpanded);
+  };
 
-    const projectVehicles = (projetoSelecionado.detalhes_json?.veiculos || [])
-      .map((p: string) => p.trim().toUpperCase())
-      .filter((p: string) => p !== "");
-    
-    const projectAbast = abastecimentos.filter((a: any) => {
-      const aPlaca = a.placa?.trim().toUpperCase();
-      if (!projectVehicles.includes(aPlaca)) return false;
-      
-      let d = a.data_transacao || "";
-      if (!d.startsWith('20') && d.includes('-')) {
-          const parts = d.split('-');
-          const monthsMap: any = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12', set: '09', out: '10', dez: '12' };
-          const m = monthsMap[parts[1]?.toLowerCase()] || '01';
-          const y = parts[2]?.length === 2 ? "20" + parts[2] : (parts[2] || "2025");
-          d = `${y}-${m}`;
-      }
-      return d.startsWith(selectedMonth);
-    });
-
-    const totalGasto = projectAbast.reduce((acc: number, curr: any) => acc + curr.valor_total, 0);
-    const sortedByPrice = [...projectAbast].sort((a: any, b: any) => b.valor_litro - a.valor_litro);
-    
-    const relatorioVeiculos = projectVehicles.map((placa: string) => {
-      const frotaData = veiculosFrota.find((vf: any) => vf.placa.trim().toUpperCase() === placa);
-      const vAbast = projectAbast.filter((a: any) => a.placa?.trim().toUpperCase() === placa);
-      
-      const porPosto = vAbast.reduce((acc: any, curr: any) => {
-        const key = curr.nome_estabelecimento?.trim().toUpperCase() || 'DESCONHECIDO';
-        if (!acc[key]) {
-          acc[key] = {
-            nome: curr.nome_estabelecimento,
-            combustivel: curr.tipo_combustivel,
-            valor_litro: curr.valor_litro,
-            litros: 0,
-            total: 0,
-            count: 0
-          };
-        }
-        acc[key].litros += curr.litros;
-        acc[key].total += curr.valor_total;
-        acc[key].count += 1;
-        return acc;
-      }, {});
-
-      return {
-        id: placa,
-        placa: placa,
-        identificacao: frotaData?.identificacao || 'NÃO ENCONTRADO NA FROTA',
-        status: frotaData?.status || 'N/A',
-        data: Object.values(porPosto),
-        totalGasto: vAbast.reduce((acc: number, curr: any) => acc + curr.valor_total, 0),
-        totalLitros: vAbast.reduce((acc: number, curr: any) => acc + curr.litros, 0),
-        totalAbast: vAbast.length,
-        combustivelPredominante: vAbast[0]?.tipo_combustivel || '---'
-      };
-    }).sort((a: any, b: any) => b.totalGasto - a.totalGasto);
-
-    return {
-      vehicles: relatorioVeiculos,
-      abastCount: projectAbast.length,
-      totalGasto,
-      maisCaro: sortedByPrice[0],
-      maisBarato: sortedByPrice[sortedByPrice.length - 1],
-      totalBase: abastecimentos.length
-    };
-  }, [projetoSelecionado, veiculosFrota, abastecimentos, selectedMonth]);
-
-  if (loading && projetos.length === 0) {
-    return (
-      <div className="h-[500px] w-full flex items-center justify-center bg-gray-100 dark:bg-gray-900 rounded-3xl animate-pulse text-[#0b7336]">
-        <MapIcon className="w-10 h-10 animate-bounce mr-2" />
-        <span className="font-bold uppercase tracking-widest text-xs">Carregando Mapa Operacional...</span>
-      </div>
-    );
-  }
+  const toggleVehicle = (id: string) => {
+    const newExpanded = new Set(expandedVehicles);
+    if (newExpanded.has(id)) newExpanded.delete(id);
+    else newExpanded.add(id);
+    setExpandedVehicles(newExpanded);
+  };
 
   return (
-    <div className="flex flex-col gap-6 w-full h-full">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <MapIcon className="w-6 h-6 text-[#0b7336]" />
-          <h3 className="text-xl font-bold text-gray-800 dark:text-white tracking-tight">Status Operacional e Custos</h3>
+    <div className="flex flex-col gap-6 w-full h-full p-4">
+      {/* Header com Filtros */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-[#0b7336] rounded-2xl">
+            <ChartBarIcon className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-gray-900 tracking-tight">Relatório por Projeto</h3>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Baseado nos dados da planilha</p>
+          </div>
         </div>
         
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 p-2 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-            <FunnelIcon className="w-4 h-4 text-gray-400" />
-            <select 
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent border-0 text-xs font-bold text-gray-700 dark:text-gray-200 focus:ring-0 cursor-pointer"
-            >
-              {availableMonths.map(m => (
-                <option key={m} value={m}>{new Date(m + "-01").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+          <FunnelIcon className="w-4 h-4 text-gray-400" />
+          <select 
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="bg-transparent border-0 text-sm font-bold text-gray-700 focus:ring-0 cursor-pointer"
+          >
+            {availableMonths.map(m => (
+              <option key={m} value={m}>
+                {new Date(m + "-01T12:00:00").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      <div className="w-full relative rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/20 bg-gray-100 dark:bg-gray-900 min-h-[500px]" style={{ height: '500px' }}>
-        <MapContainer 
-          center={[-10.6, -42.7]} 
-          zoom={5} 
-          minZoom={3}
-          maxBounds={BRAZIL_BOUNDS}
-          maxBoundsViscosity={1.0}
-          style={{ height: '100%', width: '100%' }}
-          className="z-0"
-          scrollWheelZoom={true}
-          ref={(m) => { if (m) mapRef.current = m; }}
-        >
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          {projetos.map((p) => (
-            <Marker 
-              key={p.id} 
-              position={[p.latitude, p.longitude]}
-              eventHandlers={{
-                click: () => {
-                  setProjetoSelecionado(p);
-                  setTimeout(() => {
-                    document.getElementById('project-report')?.scrollIntoView({ behavior: 'smooth' });
-                    if (mapRef.current) mapRef.current.invalidateSize();
-                  }, 100);
-                }
-              }}
-            >
-              <Popup>
-                <div className="font-bold text-[#0b7336] text-center">{p.nome}</div>
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
-      </div>
-
-      {projetoSelecionado ? (
-        <div id="project-report" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-[#0b7336] rounded-[1.5rem] shadow-lg shadow-green-500/20">
-              <ChartBarIcon className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h4 className="text-2xl font-black text-gray-900 dark:text-white leading-none">{projetoSelecionado.nome}</h4>
-              <p className="text-sm font-medium text-gray-500 mt-2 uppercase tracking-wide">
-                Relatório de {new Date(selectedMonth + "-01").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-[#0b7336] p-6 rounded-[2.5rem] shadow-xl shadow-green-500/10 text-white">
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-70 block mb-1">Total Gasto no Mês</span>
-                <p className="text-2xl font-black">{analytics?.totalGasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800/60 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm relative group overflow-hidden">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Abastecimentos</span>
-                <p className="text-2xl font-black text-gray-900 dark:text-white">{analytics?.abastCount}x</p>
-                <div className="absolute inset-x-0 bottom-0 h-1 bg-blue-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800/60 p-6 rounded-[2.5rem] border border-red-50/50 dark:border-red-900/20">
-                <div className="flex items-center gap-2 mb-1">
-                  <ArrowTrendingUpIcon className="w-4 h-4 text-red-500" />
-                  <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Preço Máximo</span>
-                </div>
-                <p className="text-xl font-black text-red-600">{analytics?.maisCaro?.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || '---'}</p>
-                <p className="text-[9px] font-bold text-gray-400 mt-1 truncate uppercase">{analytics?.maisCaro?.nome_estabelecimento || '---'}</p>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800/60 p-6 rounded-[2.5rem] border border-green-50/50 dark:border-green-900/20">
-                <div className="flex items-center gap-2 mb-1">
-                  <ArrowTrendingDownIcon className="w-4 h-4 text-green-500" />
-                  <span className="text-[10px] font-black text-green-500 uppercase tracking-widest">Preço Mínimo</span>
-                </div>
-                <p className="text-xl font-black text-green-600">{analytics?.maisBarato?.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || '---'}</p>
-                <p className="text-[9px] font-bold text-gray-400 mt-1 truncate uppercase">{analytics?.maisBarato?.nome_estabelecimento || '---'}</p>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              {analytics?.vehicles.map((v: any) => (
-                <div key={v.id} className="bg-white dark:bg-gray-800/60 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden group hover:border-[#0b7336]/30 transition-all duration-300">
-                  <div className="px-8 py-6 border-b border-gray-50 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/30 flex items-center justify-between flex-wrap gap-4">
-                    <div className="flex items-center gap-5">
-                      <div className="bg-gray-900 text-white px-5 py-3 rounded-2xl font-black text-xl shadow-2xl tracking-tight">
-                        {v.placa}
-                      </div>
-                      <div>
-                        <div className="font-black text-gray-900 dark:text-white uppercase tracking-tight text-lg">{v.identificacao}</div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-black text-[#0b7336] uppercase bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-lg">PROJETO ATUAL</span>
-                          <span className={`text-[10px] font-black uppercase ${
-                            v.status === 'Ativo' || v.status === 'Disponível' ? 'text-blue-500' : 'text-amber-500'
-                          }`}>
-                            Status: {v.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-10">
-                      <div className="text-right">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Consumo Total</p>
-                        <p className="text-xl font-black text-gray-900 dark:text-white">{v.totalLitros.toFixed(2)} L</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Gasto Total</p>
-                        <p className="text-xl font-black text-[#0b7336]">{v.totalGasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/10 dark:bg-gray-900/10">
-                          <th className="px-8 py-4">Estabelecimento</th>
-                          <th className="px-6 py-4">Tipo</th>
-                          <th className="px-6 py-4 text-right">Preço/Litro</th>
-                          <th className="px-6 py-4 text-right">Qtd.</th>
-                          <th className="px-6 py-4 text-right">Volume</th>
-                          <th className="px-8 py-4 text-right">Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                        {v.data.map((item: any, idx: number) => (
-                          <tr key={idx} className="text-sm hover:bg-gray-50/50 dark:hover:bg-gray-900/30 transition-colors">
-                            <td className="px-8 py-5 font-bold text-gray-900 dark:text-white uppercase text-xs">{item.nome}</td>
-                            <td className="px-6 py-5 font-black text-blue-500 text-[10px] uppercase">{item.combustivel}</td>
-                            <td className="px-6 py-5 text-right font-black text-gray-900 dark:text-white">{item.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                            <td className="px-6 py-5 text-right font-black text-gray-900 dark:text-white tabular-nums">{item.count}x</td>
-                            <td className="px-6 py-5 text-right font-bold text-gray-500 tabular-nums">{item.litros.toFixed(2)} L</td>
-                            <td className="px-8 py-5 text-right font-black text-[#0b7336] tabular-nums">{item.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 grayscale opacity-50">
+          <div className="w-12 h-12 border-4 border-[#0b7336] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-xs font-black uppercase tracking-widest text-[#0b7336]">Cruzando Dados Operacionais...</p>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-32 bg-white/40 dark:bg-gray-800/30 rounded-[3.5rem] border-2 border-dashed border-gray-100 dark:border-gray-700 shadow-inner">
-          <div className="bg-gray-100 dark:bg-gray-900 p-8 rounded-full mb-8 shadow-lg">
-            <MapPinIcon className="w-16 h-16 text-gray-300" />
-          </div>
-          <h4 className="text-2xl font-black text-gray-400 uppercase tracking-tighter">Selecione um projeto para detalhar</h4>
-          <p className="text-sm font-bold text-gray-300 mt-3 uppercase tracking-widest">Dados operacionais e financeiros em tempo real</p>
+        <div className="space-y-4">
+          {projectsData.length === 0 && (
+             <div className="text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-gray-100 italic text-gray-400">
+                Nenhum dado encontrado para o mês selecionado.
+             </div>
+          )}
+
+          {projectsData.map((project: any) => (
+            <div key={project.nome} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden transition-all duration-300">
+              {/* Header do Projeto */}
+              <div 
+                onClick={() => toggleProject(project.nome)}
+                className="p-6 flex items-center justify-between cursor-pointer hover:bg-gray-50 group"
+              >
+                <div className="flex items-center gap-5">
+                  <div className="flex items-center justify-center w-12 h-12 bg-green-50 rounded-2xl group-hover:scale-110 transition-transform">
+                    {expandedProjects.has(project.nome) ? <ChevronDownIcon className="w-5 h-5 text-[#0b7336]" /> : <ChevronRightIcon className="w-5 h-5 text-gray-300" />}
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black text-gray-900 leading-none">{project.nome}</h4>
+                    <p className="text-[10px] font-black text-gray-400 uppercase mt-1 tracking-widest">
+                      {Object.keys(project.veiculos).length} Veículos Ativos
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-10">
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Litros</p>
+                    <p className="text-sm font-black text-gray-900">{project.totalLitros.toFixed(2)} L</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Custo Total</p>
+                    <p className="text-sm font-black text-[#0b7336]">
+                      {project.totalGasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista de Veículos (Expansível) */}
+              {expandedProjects.has(project.nome) && (
+                <div className="px-6 pb-6 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="h-px bg-gray-50 mb-4" />
+                  {Object.values(project.veiculos).map((veic: any) => {
+                    const vehicleKey = `${project.nome}-${veic.placa}`;
+                    return (
+                      <div key={vehicleKey} className="bg-gray-50/50 rounded-[2rem] border border-gray-100/50 overflow-hidden">
+                        <div 
+                          onClick={() => toggleVehicle(vehicleKey)}
+                          className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-gray-100/80 transition-colors"
+                        >
+                          <div className="flex items-center gap-4">
+                            <span className="bg-gray-900 text-white px-3 py-1 rounded-lg font-black text-xs tracking-tight">
+                              {veic.placa}
+                            </span>
+                            <span className="text-xs font-bold text-gray-500 uppercase">{veic.modelo || 'MODELO NÃO IDENTIFICADO'}</span>
+                          </div>
+                          <div className="flex items-center gap-8">
+                             <div className="text-[10px] font-black text-gray-400 uppercase">
+                                {veic.abastecimentos.length} Abast.
+                             </div>
+                             <div className="font-black text-sm text-gray-700">
+                                {veic.totalGasto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                             </div>
+                             {expandedVehicles.has(vehicleKey) ? <ChevronDownIcon className="w-4 h-4 text-gray-400" /> : <ChevronRightIcon className="w-4 h-4 text-gray-400" />}
+                          </div>
+                        </div>
+
+                        {/* Detalhes do Veículo */}
+                        {expandedVehicles.has(vehicleKey) && (
+                          <div className="bg-white border-t border-gray-100 p-4">
+                            <table className="w-full text-left text-[10px]">
+                               <thead>
+                                 <tr className="uppercase font-black text-gray-400 tracking-widest border-b border-gray-50">
+                                    <th className="py-2">Data</th>
+                                    <th className="py-2">Motorista</th>
+                                    <th className="py-2">Tipo</th>
+                                    <th className="py-2 text-right">Litros</th>
+                                    <th className="py-2 text-right">Vl/L</th>
+                                    <th className="py-2 text-right">Total</th>
+                                    <th className="py-2 px-4">Posto</th>
+                                 </tr>
+                               </thead>
+                               <tbody>
+                                 {veic.abastecimentos.map((ab: any, idx: number) => (
+                                   <tr key={idx} className="hover:bg-gray-50 border-b border-gray-50 last:border-0 font-medium">
+                                      <td className="py-3">{new Date(ab.data_transacao + "T12:00:00").toLocaleDateString('pt-BR')}</td>
+                                      <td className="py-3 uppercase font-bold text-gray-600">{ab.nome_motorista || '---'}</td>
+                                      <td className="py-3 uppercase text-[#0b7336]">{ab.tipo_combustivel}</td>
+                                      <td className="py-3 text-right tabular-nums">{ab.litros.toFixed(2)} L</td>
+                                      <td className="py-3 text-right tabular-nums">{ab.valor_litro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                      <td className="py-3 text-right tabular-nums font-black">{ab.valor_emissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                      <td className="py-3 px-4 uppercase text-gray-400 truncate max-w-[150px]">{ab.estabelecimento}</td>
+                                   </tr>
+                                 ))}
+                               </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
