@@ -7,7 +7,7 @@ import {
   FunnelIcon, 
   MagnifyingGlassIcon,
   ArrowPathIcon,
-  Cog6ToothIcon,
+  CloudArrowUpIcon,
   ChartBarSquareIcon,
   HashtagIcon,
   CurrencyDollarIcon,
@@ -15,9 +15,11 @@ import {
 } from "@heroicons/react/24/outline";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
+import { supabase } from "@/lib/supabase";
 
 interface Abastecimento {
   placa: string;
+  data_transacao: string;
   tipo_combustivel: string;
   litros: number;
   valor_litro: number;
@@ -34,16 +36,82 @@ export default function AbastecimentosPage() {
   const [oneDriveUrl, setOneDriveUrl] = useState("");
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
 
-  // Carrega configurações salvas no localStorage
+  // Carrega configurações do Supabase (Prioridade) e fallback localStorage
   useEffect(() => {
     const savedUrl = localStorage.getItem("onedrive_abastecimentos_url");
-    const savedData = localStorage.getItem("onedrive_abastecimentos_cache");
-    const savedTime = localStorage.getItem("onedrive_abastecimentos_last_update");
-
     if (savedUrl) setOneDriveUrl(savedUrl);
-    if (savedData) setData(JSON.parse(savedData));
-    if (savedTime) setLastUpdate(savedTime);
+    
+    loadFromSupabase();
   }, []);
+
+  const loadFromSupabase = async () => {
+    setLoading(true);
+    try {
+      const { data: dbData, error } = await supabase
+        .from('abastecimentos')
+        .select('*')
+        .order('data_transacao', { ascending: false });
+
+      if (error) throw error;
+
+      if (dbData && dbData.length > 0) {
+        setData(dbData);
+        // Pega a data da última sincronização do localStorage se disponível, ou do registro mais novo
+        const savedTime = localStorage.getItem("onedrive_abastecimentos_last_update");
+        setLastUpdate(savedTime || "Banco de Dados");
+      } else {
+        // Fallback para cache local se banco estiver vazio
+        const savedData = localStorage.getItem("onedrive_abastecimentos_cache");
+        if (savedData) setData(JSON.parse(savedData));
+      }
+    } catch (err: any) {
+      console.error("Erro ao carregar do Supabase:", err);
+      toast.error("Erro ao carregar dados do servidor.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveToSupabase = async (items: Abastecimento[]) => {
+    try {
+      // Limpa dados antigos para uma sincronização limpa (Opcional - pode-se usar upsert se houver IDs únicos)
+      // Aqui vamos deletar e inserir para garantir que a planilha seja a fonte da verdade
+      const { error: delError } = await supabase.from('abastecimentos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (delError) throw delError;
+
+      // Supabase insert permite arrays massivos
+      const { error: insError } = await supabase.from('abastecimentos').insert(items);
+      if (insError) throw insError;
+
+      const now = new Date().toLocaleString("pt-BR");
+      setLastUpdate(now);
+      localStorage.setItem("onedrive_abastecimentos_last_update", now);
+      localStorage.setItem("onedrive_abastecimentos_cache", JSON.stringify(items));
+      
+      toast.success("Dados salvos permanentemente no banco!");
+    } catch (err: any) {
+      console.error("Erro ao salvar no Supabase:", err);
+      toast.error("Erro ao salvar no servidor: " + err.message);
+    }
+  };
+
+  // Helper para converter data do Excel
+  const parseExcelDate = (val: any) => {
+    if (!val) return new Date().toISOString().split('T')[0];
+    if (typeof val === 'number') {
+      // Converte serial do Excel para Date JS
+      const date = new Date((val - 25569) * 86400 * 1000);
+      return date.toISOString().split('T')[0];
+    }
+    if (typeof val === 'string') {
+      // Tenta DD/MM/YYYY
+      const parts = val.split('/');
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+    return String(val);
+  };
 
   const fetchFromOneDrive = async () => {
     if (!oneDriveUrl) {
@@ -56,7 +124,6 @@ export default function AbastecimentosPage() {
     try {
       const cleanUrl = oneDriveUrl.trim();
       
-      // Converte o link de compartilhamento para link direto
       let base64Url = "";
       try {
         const bytes = new TextEncoder().encode(cleanUrl);
@@ -64,50 +131,42 @@ export default function AbastecimentosPage() {
         const encoded = btoa(binString);
         base64Url = encoded.replace(/=/g, '').replace(/\//g, '_').replace(/\+/g, '-');
       } catch (e) {
-        throw new Error("O link fornecido é inválido. Certifique-se de copiar o link completo do compartilhamento.");
+        throw new Error("O link fornecido é inválido.");
       }
 
       const downloadUrl = `https://api.onedrive.com/v1.0/shares/u!${base64Url}/root/content`;
-
       const response = await fetch(downloadUrl);
       
       if (!response.ok) {
         if (response.status === 403 || response.status === 401) {
-          throw new Error("Acesso negado. Verifique se o link está configurado como 'Qualquer pessoa com o link pode exibir'.");
+          throw new Error("Acesso negado. Verifique o compartilhamento.");
         }
-        throw new Error(`Erro ao acessar planilha (${response.status}).`);
+        throw new Error(`Erro (${response.status}).`);
       }
 
       const arrayBuffer = await response.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const rawData = XLSX.utils.sheet_to_json(worksheet) as any[];
 
-      // Mapeamento EXATO baseado na imagem (PLACA, TIPO COMBUSTIVEL, LITROS, VL/LITRO, VALOR EMISSAO, etc)
       const formattedData: Abastecimento[] = rawData.map((row: any) => ({
         placa: String(row["PLACA"] || "").trim(),
+        data_transacao: parseExcelDate(row["DATA TRANSACA"] || row["DATA TRANSACAO"] || row["DATA"]),
         tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || "").trim(),
         litros: Number(row["LITROS"] || 0),
         valor_litro: Number(row["VL/LITRO"] || 0),
-        valor_total: Number(row["VALOR EMISSAO"] || 0),
+        valor_total: Number(row["VALOR EMISSAO"] || row["VALOR TOTAL"] || 0),
         codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
         nome_estabelecimento: String(row["NOME ESTABELECIMENTO"] || "")
       })).filter(item => item.placa !== "" && item.placa !== "null");
 
       if (formattedData.length === 0) {
-        throw new Error("Nenhum dado encontrado. Verifique se os cabeçalhos são: PLACA, LITROS, TIPO COMBUSTIVEL, etc.");
+        throw new Error("Nenhum dado encontrado.");
       }
 
       setData(formattedData);
-      const now = new Date().toLocaleString("pt-BR");
-      setLastUpdate(now);
-
-      localStorage.setItem("onedrive_abastecimentos_cache", JSON.stringify(formattedData));
-      localStorage.setItem("onedrive_abastecimentos_last_update", now);
-
-      toast.success("Dados atualizados com sucesso!");
+      await saveToSupabase(formattedData);
+      toast.success("Sincronizado com sucesso!");
     } catch (error: any) {
       console.error(error);
       toast.error(error.message || "Erro ao buscar do OneDrive.");
@@ -162,7 +221,7 @@ export default function AbastecimentosPage() {
           </div>
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Abastecimentos</h1>
           <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">
-            Monitoramento de consumo e gastos da frota através do OneDrive.
+            Monitoramento de consumo e gastos da frota armazenado permanentemente no Supabase.
           </p>
         </div>
 
@@ -186,18 +245,20 @@ export default function AbastecimentosPage() {
                   
                   const formattedData: Abastecimento[] = rawData.map((row: any) => ({
                     placa: String(row["PLACA"] || "").trim(),
+                    data_transacao: parseExcelDate(row["DATA TRANSACA"] || row["DATA TRANSACAO"] || row["DATA"]),
                     tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || "").trim(),
                     litros: Number(row["LITROS"] || 0),
                     valor_litro: Number(row["VL/LITRO"] || 0),
-                    valor_total: Number(row["VALOR EMISSAO"] || 0),
+                    valor_total: Number(row["VALOR EMISSAO"] || row["VALOR TOTAL"] || 0),
                     codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
-                    nome_estabelecimento: String(row["NOME ESTABELECIMENTO"] || "")
+                    nome_estabelecimento: String(row["NOME ESTABELEVIMENTO"] || row["NOME ESTABELECIMENTO"] || "")
                   })).filter(item => item.placa !== "" && item.placa !== "null");
 
                   setData(formattedData);
-                  setLastUpdate(new Date().toLocaleString("pt-BR") + " (Manual)");
-                  toast.success("Arquivo importado com sucesso!");
+                  await saveToSupabase(formattedData);
+                  toast.success("Arquivo importado e salvo no banco!");
                 } catch (err) {
+                  console.error(err);
                   toast.error("Erro ao ler o arquivo selecionado.");
                 } finally {
                   setLoading(false);
@@ -298,7 +359,7 @@ export default function AbastecimentosPage() {
               <TableCellsIcon className="w-20 h-20 text-gray-200 mb-4" />
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Nenhum dado carregado</h3>
               <p className="text-gray-500 max-w-sm mb-8">
-                Configure o link da sua planilha OneDrive e clique em "Atualizar Planilha" para começar.
+                Configure o link da sua planilha OneDrive e clique em "Sincronizar" para começar.
               </p>
               <button
                 onClick={() => setIsConfigOpen(true)}
@@ -311,6 +372,7 @@ export default function AbastecimentosPage() {
             <table className="w-full text-left border-separate border-spacing-0">
               <thead>
                 <tr className="bg-gray-50/50 dark:bg-gray-900/50 sticky top-0 z-10">
+                  <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-700">Data</th>
                   <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-700">Placa</th>
                   <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-700">Combustível</th>
                   <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-700 text-right">Litros</th>
@@ -322,6 +384,9 @@ export default function AbastecimentosPage() {
               <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                 {filteredData.map((item, idx) => (
                   <tr key={idx} className="group hover:bg-green-50/30 dark:hover:bg-green-900/10 transition-colors">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                      {new Date(item.data_transacao).toLocaleDateString('pt-BR')}
+                    </td>
                     <td className="px-6 py-4">
                       <span className="font-black text-gray-900 dark:text-white tabular-nums bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded-lg">
                         {item.placa}

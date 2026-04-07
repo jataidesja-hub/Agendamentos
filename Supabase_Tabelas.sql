@@ -78,6 +78,30 @@ CREATE POLICY "Acesso historico para autenticados" ON historico_chaves
 
 
 -- =============================================
+-- TABELA 5: ABASTECIMENTOS (Dados importados/sincronizados)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS abastecimentos (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  placa TEXT NOT NULL,
+  data_transacao DATE NOT NULL,
+  tipo_combustivel TEXT,
+  litros DECIMAL(10,2),
+  valor_litro DECIMAL(10,2),
+  valor_total DECIMAL(10,2),
+  codigo_estabelecimento TEXT,
+  nome_estabelecimento TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE abastecimentos ENABLE ROW LEVEL SECURITY;
+
+-- Todos os usuários autenticados podem ver os dados da frota
+CREATE POLICY "Acesso abastecimentos para autenticados" ON abastecimentos
+  FOR ALL USING (auth.role() = 'authenticated');
+
+
+-- =============================================
 -- HABILITAR REALTIME EM TODAS AS TABELAS
 -- =============================================
 -- Isso permite que mudanças feitas por um usuário
@@ -88,4 +112,5 @@ ALTER PUBLICATION supabase_realtime ADD TABLE planos_acao;
 ALTER PUBLICATION supabase_realtime ADD TABLE frota_veiculos;
 ALTER PUBLICATION supabase_realtime ADD TABLE funcionarios;
 ALTER PUBLICATION supabase_realtime ADD TABLE historico_chaves;
+ALTER PUBLICATION supabase_realtime ADD TABLE abastecimentos;
 
