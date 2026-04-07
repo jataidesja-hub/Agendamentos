@@ -12,9 +12,15 @@
     "@heroicons/react": "^2.2.0",
     "@supabase/supabase-js": "^2.101.1",
     "date-fns": "^4.1.0",
+<<<<<<< HEAD
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
+=======
+    "next": "15.1.11",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+>>>>>>> 3ad5b8c57f6c4a7627a2817d570671b073d2b590
     "react-hot-toast": "^2.6.0",
     "resend": "^6.10.0",
     "xlsx": "^0.18.5"
