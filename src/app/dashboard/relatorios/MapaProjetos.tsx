@@ -67,7 +67,6 @@ export default function MapaProjetos() {
       setVeiculosFrota(veicRes.data || []);
       setAbastecimentos(abastRes.data || []);
       
-      // Define o mês inicial como o mais recente com dados
       if (abastRes.data && abastRes.data.length > 0) {
         const lastDate = abastRes.data[0].data_transacao;
         if (lastDate && lastDate.includes('-')) {
@@ -82,14 +81,11 @@ export default function MapaProjetos() {
     }
   }
 
-  // Gera lista de meses disponíveis
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
-    abastecimentos.forEach(a => {
+    abastecimentos.forEach((a: any) => {
       if (a.data_transacao) {
-        // Pega os primeiros 7 caracteres (YYYY-MM ou DD-MMM-)
         let monthStr = a.data_transacao.slice(0, 7);
-        // Se for DD-MMM (legado), tentamos normalizar apenas para o dropdown
         if (!monthStr.startsWith('20')) {
              const parts = a.data_transacao.split('-');
              if (parts.length >= 2) {
@@ -103,10 +99,9 @@ export default function MapaProjetos() {
       }
     });
     if (months.size === 0) months.add(new Date().toISOString().slice(0, 7));
-    return Array.from(months).sort((a, b) => b.localeCompare(a));
+    return Array.from(months).sort((a: any, b: any) => b.localeCompare(a));
   }, [abastecimentos]);
 
-  // Cálculos para o Painel Inferior
   const analytics = useMemo(() => {
     if (!projetoSelecionado) return null;
 
@@ -114,11 +109,10 @@ export default function MapaProjetos() {
       .map((p: string) => p.trim().toUpperCase())
       .filter((p: string) => p !== "");
     
-    const projectAbast = abastecimentos.filter(a => {
+    const projectAbast = abastecimentos.filter((a: any) => {
       const aPlaca = a.placa?.trim().toUpperCase();
       if (!projectVehicles.includes(aPlaca)) return false;
       
-      // Normalização da data para comparação
       let d = a.data_transacao || "";
       if (!d.startsWith('20') && d.includes('-')) {
           const parts = d.split('-');
@@ -131,11 +125,11 @@ export default function MapaProjetos() {
     });
 
     const totalGasto = projectAbast.reduce((acc: number, curr: any) => acc + curr.valor_total, 0);
-    const sortedByPrice = [...projectAbast].sort((a, b) => b.valor_litro - a.valor_litro);
+    const sortedByPrice = [...projectAbast].sort((a: any, b: any) => b.valor_litro - a.valor_litro);
     
     const relatorioVeiculos = projectVehicles.map((placa: string) => {
-      const frotaData = veiculosFrota.find(vf => vf.placa.trim().toUpperCase() === placa);
-      const vAbast = projectAbast.filter(a => a.placa?.trim().toUpperCase() === placa);
+      const frotaData = veiculosFrota.find((vf: any) => vf.placa.trim().toUpperCase() === placa);
+      const vAbast = projectAbast.filter((a: any) => a.placa?.trim().toUpperCase() === placa);
       
       const porPosto = vAbast.reduce((acc: any, curr: any) => {
         const key = curr.nome_estabelecimento?.trim().toUpperCase() || 'DESCONHECIDO';
@@ -166,7 +160,7 @@ export default function MapaProjetos() {
         totalAbast: vAbast.length,
         combustivelPredominante: vAbast[0]?.tipo_combustivel || '---'
       };
-    }).sort((a, b) => b.totalGasto - a.totalGasto);
+    }).sort((a: any, b: any) => b.totalGasto - a.totalGasto);
 
     return {
       vehicles: relatorioVeiculos,
@@ -178,11 +172,10 @@ export default function MapaProjetos() {
     };
   }, [projetoSelecionado, veiculosFrota, abastecimentos, selectedMonth]);
 
-  // Componente de Mapa Memoizado com altura fixa RIGOROSA
   const RenderMap = useMemo(() => (
     <div className="w-full relative rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/20 bg-gray-100 dark:bg-gray-900" style={{ height: '500px' }}>
       <MapContainer 
-        center={[-10.6, -42.7]} // Centralizado próximo a Juazeiro/BA para começar
+        center={[-10.6, -42.7]} 
         zoom={5} 
         minZoom={3}
         maxBounds={BRAZIL_BOUNDS}
@@ -227,7 +220,6 @@ export default function MapaProjetos() {
 
   return (
     <div className="flex flex-col gap-6 w-full h-full pb-20">
-      {/* Header com Diagnóstico */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <MapIcon className="w-6 h-6 text-[#0b7336]" />
@@ -353,16 +345,6 @@ export default function MapaProjetos() {
                             <td className="px-8 py-5 text-right font-black text-[#0b7336] tabular-nums">{item.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                           </tr>
                         ))}
-                        {v.data.length === 0 && (
-                          <tr>
-                            <td colSpan={6} className="px-8 py-12 text-center">
-                               <div className="flex flex-col items-center opacity-30">
-                                  <ExclamationTriangleIcon className="w-10 h-10 mb-3" />
-                                  <p className="text-xs font-black uppercase tracking-widest text-gray-400">Nenhum registro para {v.placa} este mês</p>
-                               </div>
-                            </td>
-                          </tr>
-                        )}
                       </tbody>
                     </table>
                   </div>
