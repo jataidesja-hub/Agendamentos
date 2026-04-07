@@ -47,7 +47,7 @@ const RelatorioPostos = () => {
         const fuel = String(a.tipo_combustivel || "OUTROS").toUpperCase();
 
         if (!cityGroups[city]) {
-          cityGroups[city] = { posts: {}, totalInvested: 0 };
+          cityGroups[city] = { posts: {}, totalInvested: 0, fuelPrices: {} };
         }
 
         if (!cityGroups[city].posts[post]) {
@@ -64,10 +64,19 @@ const RelatorioPostos = () => {
         }
 
         const fuelData = cityGroups[city].posts[post].fuels[fuel];
-        fuelData.sumPrice += (Number(a.valor_litro) || 0);
+        const currentPrice = (Number(a.valor_litro) || 0);
+        fuelData.sumPrice += currentPrice;
         fuelData.count += 1;
         fuelData.liters += (Number(a.litros) || 0);
         fuelData.value += (Number(a.valor_emissao) || 0);
+
+        // Rastreia min/max preços na cidade por combustível
+        if (!cityGroups[city].fuelPrices[fuel]) {
+          cityGroups[city].fuelPrices[fuel] = { min: currentPrice, max: currentPrice };
+        } else {
+          if (currentPrice > 0 && currentPrice < cityGroups[city].fuelPrices[fuel].min) cityGroups[city].fuelPrices[fuel].min = currentPrice;
+          if (currentPrice > cityGroups[city].fuelPrices[fuel].max) cityGroups[city].fuelPrices[fuel].max = currentPrice;
+        }
 
         cityGroups[city].posts[post].totalLiters += (Number(a.litros) || 0);
         cityGroups[city].posts[post].totalValue += (Number(a.valor_emissao) || 0);
@@ -82,12 +91,12 @@ const RelatorioPostos = () => {
         {/* Filtro de Mês */}
         <div className="bg-gray-900 p-8 rounded-[3rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 border border-white/5">
           <div>
-            <h2 className="text-2xl font-black text-white italic tracking-tighter">Comparativo de Postos</h2>
-            <p className="text-blue-500 font-bold text-[10px] uppercase tracking-widest mt-1">Visão geral por cidade e preço de combustível</p>
+            <h2 className="text-2xl font-black text-white italic tracking-tighter">Comparador de Preços</h2>
+            <p className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest mt-1">Análise competitiva de postos por cidade</p>
           </div>
 
-          <div className="flex items-center px-6 py-4 bg-white/5 rounded-2xl border border-white/10 hover:border-blue-500 transition-all cursor-pointer">
-            <FunnelIcon className="w-4 h-4 text-blue-500 mr-3" />
+          <div className="flex items-center px-6 py-4 bg-white/5 rounded-2xl border border-white/10 hover:border-emerald-500 transition-all cursor-pointer">
+            <FunnelIcon className="w-4 h-4 text-emerald-500 mr-3" />
             <select 
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
@@ -117,7 +126,7 @@ const RelatorioPostos = () => {
                   className="w-full px-8 py-6 flex justify-between items-center hover:bg-gray-50/50 transition-colors"
                 >
                   <div className="flex items-center">
-                    <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center mr-5 shadow-lg shadow-blue-500/20">
+                    <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center mr-5 shadow-lg shadow-emerald-500/20">
                       <MapPinIcon className="w-6 h-6 text-white" />
                     </div>
                     <div className="text-left">
@@ -132,7 +141,7 @@ const RelatorioPostos = () => {
                     </div>
                     <div className="text-right">
                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Custo Cidade</p>
-                       <p className="font-black text-blue-600 text-xl">{groupedByCity[city].totalInvested.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                       <p className="font-black text-emerald-600 text-xl">{groupedByCity[city].totalInvested.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                     </div>
                     {expandedCity === city ? <ChevronUpIcon className="w-5 h-5 text-gray-400" /> : <ChevronDownIcon className="w-5 h-5 text-gray-400" />}
                   </div>
@@ -142,10 +151,12 @@ const RelatorioPostos = () => {
                   <div className="px-8 pb-8 space-y-6 bg-gray-50/30">
                     <div className="h-px bg-gray-100 w-full" />
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {Object.keys(groupedByCity[city].posts).sort().map(post => (
-                        <div key={post} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                      {Object.keys(groupedByCity[city].posts).sort((a, b) => groupedByCity[city].posts[a].totalValue - groupedByCity[city].posts[b].totalValue).map(post => (
+                        <div key={post} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
                           <div className="flex items-center gap-4 mb-6">
-                             <BuildingStorefrontIcon className="w-5 h-5 text-gray-400" />
+                             <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                               <BuildingStorefrontIcon className="w-4 h-4 text-gray-500" />
+                             </div>
                              <h4 className="font-black text-gray-900 uppercase tracking-tight text-sm truncate">{post}</h4>
                           </div>
 
@@ -153,18 +164,35 @@ const RelatorioPostos = () => {
                             {Object.keys(groupedByCity[city].posts[post].fuels).map(fuel => {
                               const fuelData = groupedByCity[city].posts[post].fuels[fuel];
                               const avgPrice = fuelData.sumPrice / fuelData.count;
+                              const cityMin = groupedByCity[city].fuelPrices[fuel].min;
+                              const cityMax = groupedByCity[city].fuelPrices[fuel].max;
+                              
+                              const isMin = avgPrice <= cityMin && cityMin !== cityMax;
+                              const isMax = avgPrice >= cityMax && cityMin !== cityMax;
+
                               return (
-                                <div key={fuel} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                <div key={fuel} className={`flex justify-between items-center p-4 rounded-2xl border transition-all ${
+                                  isMin ? 'bg-emerald-50 border-emerald-100' : 
+                                  isMax ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'
+                                }`}>
                                    <div className="flex items-center">
-                                      <BeakerIcon className="w-4 h-4 text-blue-500 mr-2" />
+                                      <BeakerIcon className={`w-4 h-4 mr-2 ${isMin ? 'text-emerald-500' : isMax ? 'text-red-500' : 'text-blue-500'}`} />
                                       <div>
-                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{fuel}</p>
-                                         <p className="text-xs font-black text-gray-700">{avgPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} / L</p>
+                                         <div className="flex items-center gap-2">
+                                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{fuel}</p>
+                                           {isMin && <span className="bg-emerald-600 text-[6px] text-white px-1.5 py-0.5 rounded-full font-black uppercase">MELHOR PREÇO</span>}
+                                           {isMax && <span className="bg-red-600 text-[6px] text-white px-1.5 py-0.5 rounded-full font-black uppercase">MAIOR PREÇO</span>}
+                                         </div>
+                                         <p className={`text-xs font-black ${isMin ? 'text-emerald-900' : isMax ? 'text-red-900' : 'text-gray-700'}`}>
+                                           {avgPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} / L
+                                         </p>
                                       </div>
                                    </div>
                                    <div className="text-right">
                                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Investido</p>
-                                      <p className="text-xs font-black text-blue-600">{fuelData.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                                      <p className={`text-xs font-black ${isMin ? 'text-emerald-600' : isMax ? 'text-red-600' : 'text-blue-600'}`}>
+                                        {fuelData.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                      </p>
                                    </div>
                                 </div>
                               );
