@@ -8,6 +8,7 @@ import {
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
+import { dataCache } from "@/lib/cache";
 
 interface Abastecimento {
   codigo_transacao: string;
@@ -64,30 +65,25 @@ export default function AbastecimentosPage() {
   }, []);
 
   const loadFromSupabase = async () => {
-    // Tenta carregar do cache para ser instantâneo
-    const cachedData = sessionStorage.getItem('cache_abastecimentos');
-    const cachedFrota = sessionStorage.getItem('cache_veiculos_ativos');
-
-    if (cachedData && cachedFrota) {
-      setData(JSON.parse(cachedData));
-      setVeiculosAtivos(new Set(JSON.parse(cachedFrota)));
+    // Tenta carregar do cache RAM (instantâneo e sem limite)
+    if (dataCache.abastecimentos && dataCache.veiculosAtivos) {
+      setData(dataCache.abastecimentos);
+      setVeiculosAtivos(dataCache.veiculosAtivos);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Busca frota ativa na tabela correta
+      // 1. Busca frota ativa
       const { data: frota } = await supabase.from('veiculos_frota').select('placa').eq('status', 'Ativo');
       
-      // Normalização: Remove espaços e hífens para garantir o match
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
       
-      let frotaNormalizada: string[] = [];
       if (frota) {
         const setAtivos = new Set<string>(frota.map(v => normalize(v.placa)));
         setVeiculosAtivos(setAtivos);
-        frotaNormalizada = Array.from(setAtivos);
+        dataCache.veiculosAtivos = setAtivos;
       }
 
       // 2. Busca exaustiva de abastecimentos
@@ -115,17 +111,14 @@ export default function AbastecimentosPage() {
             to += 1000;
           }
         }
-        if (allData.length > 50000) break;
+        if (allData.length > 100000) break;
       }
       setData(allData as Abastecimento[]);
-      
-      // Salva no cache
-      sessionStorage.setItem('cache_abastecimentos', JSON.stringify(allData));
-      sessionStorage.setItem('cache_veiculos_ativos', JSON.stringify(frotaNormalizada));
+      dataCache.abastecimentos = allData;
 
     } catch (err: any) {
       console.error("Erro ao carregar dados complexos:", err);
-      toast.error("Erro ao sincronizar histórico.");
+      toast.error("Erro ao carregar histórico.");
     } finally {
       setLoading(false);
     }
@@ -136,7 +129,7 @@ export default function AbastecimentosPage() {
     if (!confirm) return;
     setLoading(true);
     try {
-      sessionStorage.removeItem('cache_abastecimentos'); // Limpa o cache ao subir nova planilha
+      dataCache.clear(); // Limpa o cache RAM ao subir nova planilha
       await supabase.from('abastecimentos').delete().neq('placa', 'PLACEHOLDER');
       const chunkSize = 500;
       for (let i = 0; i < items.length; i += chunkSize) {

@@ -8,6 +8,7 @@ import {
   FunnelIcon,
   TruckIcon
 } from '@heroicons/react/24/outline';
+import { dataCache } from '@/lib/cache';
 
 const RelatorioProjetos = () => {
     const [abastecimentos, setAbastecimentos] = useState<any[]>([]);
@@ -22,33 +23,34 @@ const RelatorioProjetos = () => {
     }, []);
 
     const fetchDadosCompletos = async () => {
-      // Tenta carregar do cache primeiro (para ser instantâneo)
-      const cachedData = sessionStorage.getItem('cache_abastecimentos');
-      const cachedFrota = sessionStorage.getItem('cache_veiculos_ativos');
-      
-      if (cachedData && cachedFrota) {
-        setAbastecimentos(JSON.parse(cachedData));
-        setVeiculosAtivos(new Set(JSON.parse(cachedFrota)));
+      // Tenta carregar do cache RAM (Instantâneo e sem limite de cota)
+      if (dataCache.abastecimentos && dataCache.veiculosAtivos) {
+        setAbastecimentos(dataCache.abastecimentos);
+        setVeiculosAtivos(dataCache.veiculosAtivos);
+        
+        // Define o mês mais recente disponível como padrão se necessário
+        if (dataCache.abastecimentos.length > 0 && !selectedMonth) {
+          const latestMonth = String(dataCache.abastecimentos[0].data_transacao).slice(0, 7);
+          setSelectedMonth(latestMonth);
+        }
         setLoading(false);
         return;
       }
 
       setLoading(true);
       try {
-        // Normalização: Remove espaços e hífens para garantir o match
         const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
 
-        // 1. Busca todos os veículos ativos na tabela correta
+        // 1. Busca todos os veículos ativos
         const { data: frota, error: errFrota } = await supabase
           .from('veiculos_frota')
           .select('placa')
           .eq('status', 'Ativo');
         
-        let frotaNormalizada: string[] = [];
         if (!errFrota && frota) {
           const setAtivos = new Set<string>(frota.map((v: any) => normalize(v.placa)));
           setVeiculosAtivos(setAtivos);
-          frotaNormalizada = Array.from(setAtivos);
+          dataCache.veiculosAtivos = setAtivos;
         }
 
         // 2. Busca exaustiva de todos os abastecimentos
@@ -77,14 +79,11 @@ const RelatorioProjetos = () => {
               to += 1000;
             }
           }
-          if (allAbastecimentos.length > 50000) break;
+          if (allAbastecimentos.length > 100000) break;
         }
 
         setAbastecimentos(allAbastecimentos);
-        
-        // Salva no cache para a próxima vez
-        sessionStorage.setItem('cache_abastecimentos', JSON.stringify(allAbastecimentos));
-        sessionStorage.setItem('cache_veiculos_ativos', JSON.stringify(frotaNormalizada));
+        dataCache.abastecimentos = allAbastecimentos;
 
         if (allAbastecimentos.length > 0) {
           const latestMonth = String(allAbastecimentos[0].data_transacao).slice(0, 7);
