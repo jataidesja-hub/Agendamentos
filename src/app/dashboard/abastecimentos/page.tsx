@@ -117,7 +117,7 @@ export default function AbastecimentosPage() {
       loadFromSupabase();
     } catch (err: any) {
       console.error("Erro ao salvar no Supabase:", err);
-      toast.error("Erro ao salvar dados detalhados. Verifique se o SQL foi rodado.");
+      toast.error("Erro ao salvar dados detalhados.");
     } finally {
       setLoading(false);
     }
@@ -130,28 +130,19 @@ export default function AbastecimentosPage() {
       return date.toISOString().split('T')[0];
     }
     if (typeof val === 'string') {
-      // Ignora as horas (00:00:00) e pega apenas o primeiro pedaço da data
       const dateOnly = val.trim().split(' ')[0];
       const parts = dateOnly.split(/[-/]/);
-      
       if (parts.length === 3) {
-         // Formato YYYY-MM-DD (já ISO)
          if (parts[0].length === 4) return dateOnly.substring(0, 10);
-         
          const d = parts[0].padStart(2, '0');
          const monthPart = parts[1];
          let y = parts[2];
          if (y.length === 2) y = "20" + y;
-
-         // Se o mês for texto (EX: JAN, JAN, SET)
          if (isNaN(Number(monthPart))) {
              const monthsMap: any = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12', set: '09', out: '10', dez: '12' };
-             const convertedM = monthsMap[monthPart.toLowerCase().substring(0, 3)] || '01';
-             return `${y}-${convertedM}-${d}`;
+             return `${y}-${monthsMap[monthPart.toLowerCase().substring(0, 3)] || '01'}-${d}`;
          }
-         
-         const m = monthPart.padStart(2, '0');
-         return `${y}-${m}-${d}`;
+         return `${y}-${monthPart.padStart(2, '0')}-${d}`;
       }
     }
     return null;
@@ -175,7 +166,7 @@ export default function AbastecimentosPage() {
           forma_pagamento: String(row["FORMA DE PAGAMENTO"] || ""),
           codigo_cliente: String(row["CODIGO CLIENTE"] || ""),
           nome_reduzido: String(row["NOME REDUZIDO"] || ""),
-          data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA TRANSACA"] || row["DATA"] || "") || "",
+          data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA TRANSACAC"] || row["DATA"] || "") || "",
           placa: String(row["PLACA"] || "").trim(),
           tipo_frota: String(row["TIPO FROTA"] || ""),
           modelo_veiculo: String(row["MODELO VEICULO"] || ""),
@@ -309,7 +300,7 @@ export default function AbastecimentosPage() {
               {filteredData.slice(0, 500).map((item: Abastecimento, idx: number) => (
                 <tr key={idx} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 font-bold text-gray-500">
-                    {item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR')}
+                    {item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className="bg-[#0b7336] text-white px-2 py-1 rounded-md font-black">
