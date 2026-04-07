@@ -229,7 +229,7 @@ export default function MapaProjetos() {
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full h-full pb-20">
+    <div className="flex flex-col gap-6 w-full h-full">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <MapIcon className="w-6 h-6 text-[#0b7336]" />

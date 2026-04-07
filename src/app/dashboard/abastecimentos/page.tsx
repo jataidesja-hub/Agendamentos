@@ -250,7 +250,7 @@ export default function AbastecimentosPage() {
   }, [filteredData]);
 
   return (
-    <div className="h-full flex flex-col pb-20">
+    <div className="h-full flex flex-col">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>
           <div className="flex items-center space-x-3 mb-2">
