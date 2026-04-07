@@ -95,21 +95,53 @@ export default function AbastecimentosPage() {
     }
   };
 
-  // Helper para converter data do Excel
+  // Helper para converter data do Excel (suporta Serial, DD/MM/YYYY, DD-MMM-YY)
   const parseExcelDate = (val: any) => {
     if (!val) return new Date().toISOString().split('T')[0];
+    
+    // Se for número (Serial do Excel)
     if (typeof val === 'number') {
-      // Converte serial do Excel para Date JS
       const date = new Date((val - 25569) * 86400 * 1000);
       return date.toISOString().split('T')[0];
     }
+
     if (typeof val === 'string') {
-      // Tenta DD/MM/YYYY
-      const parts = val.split('/');
-      if (parts.length === 3) {
-        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      const cleanStr = val.trim();
+      
+      // Caso 1: DD/MM/YYYY
+      const slashParts = cleanStr.split('/');
+      if (slashParts.length === 3) {
+        const d = slashParts[0].padStart(2, '0');
+        const m = slashParts[1].padStart(2, '0');
+        let y = slashParts[2];
+        if (y.length === 2) y = "20" + y;
+        return `${y}-${m}-${d}`;
+      }
+
+      // Caso 2: DD-MMM-YY (ex: 28-Jan-26 ou 28-Jan-2026)
+      const dashParts = cleanStr.split('-');
+      if (dashParts.length === 3) {
+        const d = dashParts[0].padStart(2, '0');
+        const monthStr = dashParts[1].toLowerCase();
+        let y = dashParts[2];
+        if (y.length === 2) y = "20" + y;
+
+        const monthsMap: any = {
+          jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+          jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+          set: '09', out: '10', dez: '12' // Suporte a abreviações em PT-BR comuns
+        };
+
+        const m = monthsMap[monthStr.substring(0, 3)] || '01';
+        return `${y}-${m}-${d}`;
+      }
+
+      // Caso 3: ISO já formatado ou YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}/.test(cleanStr)) {
+        return cleanStr.substring(0, 10);
       }
     }
+
     return String(val);
   };
 
