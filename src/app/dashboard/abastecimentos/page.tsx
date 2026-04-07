@@ -130,19 +130,27 @@ export default function AbastecimentosPage() {
       return date.toISOString().split('T')[0];
     }
     if (typeof val === 'string') {
-      const cleanStr = val.trim();
-      const parts = cleanStr.split(/[-/]/);
+      // Ignora as horas (00:00:00) e pega apenas o primeiro pedaço da data
+      const dateOnly = val.trim().split(' ')[0];
+      const parts = dateOnly.split(/[-/]/);
+      
       if (parts.length === 3) {
-         if (parts[0].length === 4) return cleanStr.substring(0, 10);
+         // Formato YYYY-MM-DD (já ISO)
+         if (parts[0].length === 4) return dateOnly.substring(0, 10);
+         
          const d = parts[0].padStart(2, '0');
-         const m = parts[1].padStart(2, '0');
+         const monthPart = parts[1];
          let y = parts[2];
          if (y.length === 2) y = "20" + y;
-         if (isNaN(Number(m))) {
+
+         // Se o mês for texto (EX: JAN, JAN, SET)
+         if (isNaN(Number(monthPart))) {
              const monthsMap: any = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12', set: '09', out: '10', dez: '12' };
-             const convertedM = monthsMap[m.toLowerCase().substring(0, 3)] || '01';
+             const convertedM = monthsMap[monthPart.toLowerCase().substring(0, 3)] || '01';
              return `${y}-${convertedM}-${d}`;
          }
+         
+         const m = monthPart.padStart(2, '0');
          return `${y}-${m}-${d}`;
       }
     }
@@ -167,7 +175,7 @@ export default function AbastecimentosPage() {
           forma_pagamento: String(row["FORMA DE PAGAMENTO"] || ""),
           codigo_cliente: String(row["CODIGO CLIENTE"] || ""),
           nome_reduzido: String(row["NOME REDUZIDO"] || ""),
-          data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA"] || "") || "",
+          data_transacao: parseExcelDate(row["DATA TRANSACAO"] || row["DATA TRANSACA"] || row["DATA"] || "") || "",
           placa: String(row["PLACA"] || "").trim(),
           tipo_frota: String(row["TIPO FROTA"] || ""),
           modelo_veiculo: String(row["MODELO VEICULO"] || ""),
@@ -177,12 +185,12 @@ export default function AbastecimentosPage() {
           nome_motorista: String(row["NOME MOTORISTA"] || ""),
           servico: String(row["SERVICO"] || ""),
           tipo_combustivel: String(row["TIPO COMBUSTIVEL"] || ""),
-          litros: Number(row["LITROS"] || 0),
-          valor_litro: Number(row["VL/LITRO"] || 0),
-          hodometro_horimetro: Number(row["HODOMETRO OU HORIMETRO"] || 0),
-          km_rodados_horas: Number(row["KM RODADOS OU HORAS TRABALHADAS"] || 0),
-          km_litro_rendimento: Number(row["KM/LITRO OU LITROS/HORA"] || 0),
-          valor_emissao: Number(row["VALOR EMISSAO"] || 0),
+          litros: Number(String(row["LITROS"] || 0).replace(',', '.')),
+          valor_litro: Number(String(row["VL/LITRO"] || 0).replace(',', '.')),
+          hodometro_horimetro: Number(String(row["HODOMETRO OU HORIMETRO"] || 0).replace(',', '.')),
+          km_rodados_horas: Number(String(row["KM RODADOS OU HORAS TRABALHADAS"] || 0).replace(',', '.')),
+          km_litro_rendimento: Number(String(row["KM/LITRO OU LITROS/HORA"] || 0).replace(',', '.')),
+          valor_emissao: Number(String(row["VALOR EMISSAO"] || 0).replace(',', '.')),
           codigo_estabelecimento: String(row["CODIGO ESTABELECIMENTO"] || ""),
           estrela_auto_posto: String(row["ESTRELA AUTO POSTO"] || ""),
           estabelecimento: String(row["ESTABELECIMENTO"] || ""),
@@ -301,7 +309,7 @@ export default function AbastecimentosPage() {
               {filteredData.slice(0, 500).map((item: Abastecimento, idx: number) => (
                 <tr key={idx} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 font-bold text-gray-500">
-                    {item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}
+                    {item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR')}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className="bg-[#0b7336] text-white px-2 py-1 rounded-md font-black">
@@ -311,11 +319,11 @@ export default function AbastecimentosPage() {
                   <td className="px-6 py-4 font-black text-gray-800">{item.projeto}</td>
                   <td className="px-6 py-4 font-medium text-gray-600 uppercase">{item.nome_motorista || '---'}</td>
                   <td className="px-6 py-4 text-right tabular-nums">
-                    <div>{item.litros.toFixed(2)} L</div>
-                    <div className="text-[10px] text-gray-400">{item.km_rodados_horas} KM</div>
+                    <div>{Number(item.litros || 0).toFixed(2)} L</div>
+                    <div className="text-[10px] text-gray-400">{Number(item.km_rodados_horas || 0)} KM</div>
                   </td>
                   <td className="px-6 py-4 text-right font-black text-gray-900 bg-green-50/30">
-                    {item.valor_emissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {Number(item.valor_emissao || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </td>
                   <td className="px-6 py-4 truncate max-w-[150px] uppercase font-bold text-gray-400">
                     {item.estabelecimento}
