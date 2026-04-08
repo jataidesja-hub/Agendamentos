@@ -12,7 +12,9 @@ import {
   BuildingOffice2Icon,
   ArrowTrendingUpIcon,
   TrophyIcon,
-  BeakerIcon
+  BeakerIcon,
+  WrenchScrewdriverIcon,
+  DeviceTabletIcon
 } from '@heroicons/react/24/outline';
 import { dataCache } from '@/lib/cache';
 
@@ -46,6 +48,10 @@ const RelatorioMeioAmbiente = () => {
     let totalKm = 0;
     const projectStats: any = {};
     const fuelStats: any = {};
+    const assetStats: any = {
+      'VEÍCULOS': { co2: 0, liters: 0, count: 0 },
+      'GERADORES': { co2: 0, liters: 0, count: 0 }
+    };
 
     filtered.forEach((a: any) => {
       const litros = Number(a.litros) || 0;
@@ -53,21 +59,19 @@ const RelatorioMeioAmbiente = () => {
       const fuelRaw = String(a.tipo_combustivel || "OUTROS").toUpperCase().trim();
       const project = String(a.projeto || "SEM PROJETO").toUpperCase().trim();
       const vehicleType = String(a.tipo_frota || a.modelo_veiculo || "").toUpperCase();
+      const plate = String(a.placa || "").toUpperCase();
 
       let recordCO2 = 0;
 
-      // Cálculo de emissão (Prioridade para Litros se houver, senão KM)
-      // Baseado na imagem fornecida pelo usuário:
-      // Gasolina Brasil: Litros x 0.82 x 0.75 x 3.7 = ~2.27 kg CO2/L
+      // Cálculo de emissão
       if (fuelRaw.includes("GASOLINA")) {
         recordCO2 = litros * 2.27;
       } else if (fuelRaw.includes("DIESEL")) {
-        recordCO2 = litros * 2.68; // Fator padrão para Diesel
+        recordCO2 = litros * 2.68;
       } else if (fuelRaw.includes("ETANOL")) {
-        recordCO2 = litros * 0.45; // Etanol em ciclo de vida (RenovaBio)
+        recordCO2 = litros * 0.45;
       } else if (litros === 0 && km > 0) {
-        // Se não houver litros mas houver KM, usa o fator por KM da imagem
-        let kmFactor = 0.314; // Carro Pequeno
+        let kmFactor = 0.314;
         if (vehicleType.includes("CAMINHONETE") || vehicleType.includes("PICKUP")) {
           kmFactor = 0.461;
         } else if (vehicleType.includes("MOTO")) {
@@ -75,13 +79,20 @@ const RelatorioMeioAmbiente = () => {
         }
         recordCO2 = km * kmFactor;
       } else if (litros > 0) {
-        // Fallback genérico para outros combustíveis baseados em litros
         recordCO2 = litros * 2.3;
       }
 
       totalCO2 += recordCO2;
       totalLiters += litros;
       totalKm += km;
+
+      // Identificação VEÍCULO vs GERADOR
+      const isGenerator = vehicleType.includes("GERADOR") || plate.includes("GERADOR") || plate.includes("GEN") || String(a.servico || "").toUpperCase().includes("GERADOR");
+      const assetCategory = isGenerator ? 'GERADORES' : 'VEÍCULOS';
+      
+      assetStats[assetCategory].co2 += recordCO2;
+      assetStats[assetCategory].liters += litros;
+      assetStats[assetCategory].count += 1;
 
       // Agrupamento por combustível
       if (!fuelStats[fuelRaw]) {
@@ -119,6 +130,7 @@ const RelatorioMeioAmbiente = () => {
       totalKm,
       projectRanking: projectRanking.map((d: any) => ({ ...d, barScale: (d.co2 / maxExp) * 100 })),
       fuelRanking,
+      assetStats,
       totalRecords: filtered.length
     };
   }, [abastecimentos, selectedMonth]);
@@ -161,7 +173,7 @@ const RelatorioMeioAmbiente = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-gray-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+        <div className="bg-gray-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group border border-white/10">
            <div className="absolute -right-6 -top-6 w-32 h-32 bg-emerald-500/20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-1000" />
            <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-4">Total Emitido</p>
            <div className="flex items-baseline gap-2">
@@ -210,6 +222,52 @@ const RelatorioMeioAmbiente = () => {
               <span className="text-sm font-bold text-amber-600 uppercase">Litros</span>
            </div>
            <p className="text-[10px] text-gray-400 font-medium mt-4 leading-relaxed">Soma de todos os abastecimentos do período selecionado.</p>
+        </div>
+      </div>
+
+      {/* Asset Type Distribution - NEW SECTION */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-gradient-to-br from-gray-900 to-gray-800 p-10 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mb-6 border border-white/10">
+              <TruckIcon className="w-10 h-10 text-emerald-400" />
+            </div>
+            <h3 className="text-xl font-black uppercase italic tracking-widest mb-2">Emissões de Veículos</h3>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-4xl font-black tracking-tighter text-emerald-400">{(processedData.assetStats['VEÍCULOS'].co2 / 1000).toFixed(2)}</span>
+              <span className="text-sm font-bold text-gray-400">ton CO₂</span>
+            </div>
+            <div className="flex gap-6 mt-4">
+               <div className="bg-white/5 px-4 py-2 rounded-2xl border border-white/5">
+                  <p className="text-[9px] font-black text-gray-500 uppercase">Litros</p>
+                  <p className="text-sm font-black">{processedData.assetStats['VEÍCULOS'].liters.toLocaleString('pt-BR')} L</p>
+               </div>
+               <div className="bg-white/5 px-4 py-2 rounded-2xl border border-white/5">
+                  <p className="text-[9px] font-black text-gray-500 uppercase">Ativos</p>
+                  <p className="text-sm font-black">{processedData.assetStats['VEÍCULOS'].count}</p>
+               </div>
+            </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 p-10 rounded-[3.5rem] border border-gray-100 dark:border-gray-700 shadow-xl flex flex-col items-center justify-center text-center relative overflow-hidden group">
+            <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center mb-6 border border-blue-100 dark:border-blue-500/10">
+              <WrenchScrewdriverIcon className="w-10 h-10 text-blue-600" />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase italic tracking-widest mb-2">Emissões de Geradores</h3>
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-4xl font-black tracking-tighter text-blue-600">{(processedData.assetStats['GERADORES'].co2 / 1000).toFixed(2)}</span>
+              <span className="text-sm font-bold text-gray-400">ton CO₂</span>
+            </div>
+            <div className="flex gap-6 mt-4">
+               <div className="bg-gray-50 dark:bg-gray-900 px-4 py-2 rounded-2xl border border-gray-100 dark:border-white/5">
+                  <p className="text-[9px] font-black text-gray-400 uppercase">Litros</p>
+                  <p className="text-sm font-black text-gray-700 dark:text-gray-200">{processedData.assetStats['GERADORES'].liters.toLocaleString('pt-BR')} L</p>
+               </div>
+               <div className="bg-gray-50 dark:bg-gray-900 px-4 py-2 rounded-2xl border border-gray-100 dark:border-white/5">
+                  <p className="text-[9px] font-black text-gray-400 uppercase">Ativos</p>
+                  <p className="text-sm font-black text-gray-700 dark:text-gray-200">{processedData.assetStats['GERADORES'].count}</p>
+               </div>
+            </div>
         </div>
       </div>
 
