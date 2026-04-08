@@ -27,6 +27,7 @@ export default function UsuariosPage() {
     { id: 'veiculos', nome: 'Veículos' },
     { id: 'projetos', nome: 'Projetos/Fazendas' },
     { id: 'abastecimentos', nome: 'Abastecimentos' },
+    { id: 'sustentabilidade', nome: 'Sustentabilidade/Ambiente' },
   ];
 
   useEffect(() => {
