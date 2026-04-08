@@ -5,15 +5,13 @@ import {
   ChartBarSquareIcon, 
   MapPinIcon, 
   BuildingStorefrontIcon, 
-  TruckIcon,
-  GlobeAmericasIcon
+  TruckIcon
 } from "@heroicons/react/24/outline";
 import MapaRelatorio from "./MapaRelatorio";
 import RelatorioPostos from "./RelatorioPostos";
-import RelatorioMeioAmbiente from "./RelatorioMeioAmbiente";
 
 export default function Relatorios() {
-  const [activeTab, setActiveTab] = useState<'projetos' | 'postos' | 'meio-ambiente'>('projetos');
+  const [activeTab, setActiveTab] = useState<'projetos' | 'postos'>('projetos');
 
   return (
     <div className="h-full flex flex-col p-6 gap-6">
@@ -26,7 +24,7 @@ export default function Relatorios() {
           <div>
             <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight italic uppercase">Relatórios de Abastecimento</h2>
             <p className="text-gray-500 dark:text-gray-400 text-xs font-black tracking-widest uppercase mt-1">
-              Indicadores de consumo, frota ativa e sustentabilidade
+              Indicadores de consumo, frota ativa e custo por estabelecimento
             </p>
           </div>
         </div>
@@ -53,17 +51,6 @@ export default function Relatorios() {
             <BuildingStorefrontIcon className="w-4 h-4" />
             POSTOS
           </button>
-          <button 
-            onClick={() => setActiveTab('meio-ambiente')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-2.5xl text-xs font-black tracking-widest transition-all ${
-              activeTab === 'meio-ambiente' 
-              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' 
-              : 'text-gray-500 hover:text-emerald-600'
-            }`}
-          >
-            <GlobeAmericasIcon className="w-4 h-4" />
-            MEIO AMBIENTE
-          </button>
         </div>
       </div>
 
@@ -73,10 +60,8 @@ export default function Relatorios() {
           <div className="min-h-[600px]">
             <MapaRelatorio />
           </div>
-        ) : activeTab === 'postos' ? (
-          <RelatorioPostos />
         ) : (
-          <RelatorioMeioAmbiente />
+          <RelatorioPostos />
         )}
       </div>
     </div>

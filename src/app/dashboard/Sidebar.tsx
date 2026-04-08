@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, ArrowRightOnRectangleIcon, Cog6ToothIcon, KeyIcon, UserGroupIcon, TruckIcon, MapIcon } from "@heroicons/react/24/outline";
+import { CalendarIcon, BellAlertIcon, QueueListIcon, ChartBarIcon, ArrowRightOnRectangleIcon, Cog6ToothIcon, KeyIcon, UserGroupIcon, TruckIcon, MapIcon, GlobeAmericasIcon } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 
@@ -28,7 +28,7 @@ export default function Sidebar() {
               setPermissões(data.telas_acesso);
             } else if (email === "logistica@cymi.com.br") {
               // Admin padrão tem tudo
-              setPermissões(['agenda', 'alertas', 'relatorios', 'configuracoes', 'chaves', 'perfis', 'veiculos', 'projetos', 'abastecimentos']);
+              setPermissões(['agenda', 'alertas', 'relatorios', 'configuracoes', 'chaves', 'perfis', 'veiculos', 'projetos', 'abastecimentos', 'sustentabilidade']);
             }
           });
       }
@@ -40,6 +40,7 @@ export default function Sidebar() {
     { id: 'tarefas', name: "Lista de Tarefas", href: "/dashboard/lista", icon: QueueListIcon },
     { id: 'alertas', name: "Alertas", href: "/dashboard/alertas", icon: BellAlertIcon },
     { id: 'relatorios', name: "Relatórios", href: "/dashboard/relatorios", icon: ChartBarIcon },
+    { id: 'sustentabilidade', name: "Sustentabilidade", href: "/dashboard/sustentabilidade", icon: GlobeAmericasIcon },
     { id: 'configuracoes', name: "Configurações", href: "/dashboard/configuracoes", icon: Cog6ToothIcon },
     { id: 'chaves', name: "Controle de Chaves", href: "/dashboard/chaves", icon: KeyIcon },
     { id: 'perfis', name: "Perfis", href: "/dashboard/usuarios", icon: UserGroupIcon },
