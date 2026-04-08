@@ -87,7 +87,17 @@ const RelatorioMeioAmbiente = () => {
       totalKm += km;
 
       // Identificação VEÍCULO vs GERADOR
-      const isGenerator = vehicleType.includes("GERADOR") || plate.includes("GERADOR") || plate.includes("GEN") || String(a.servico || "").toUpperCase().includes("GERADOR");
+      const modelo = String(a.modelo_veiculo || "").toUpperCase();
+      const frota = String(a.tipo_frota || "").toUpperCase();
+      const placaStr = String(a.placa || "").toUpperCase();
+      const servicoStr = String(a.servico || "").toUpperCase();
+
+      const isGenerator = modelo.includes("GERADOR") || 
+                          frota.includes("GERADOR") || 
+                          placaStr.includes("GERADOR") || 
+                          placaStr.includes("GEN") || 
+                          servicoStr.includes("GERADOR");
+
       const assetCategory = isGenerator ? 'GERADORES' : 'VEÍCULOS';
       
       assetStats[assetCategory].co2 += recordCO2;
