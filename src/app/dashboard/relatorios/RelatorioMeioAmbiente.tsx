@@ -252,7 +252,7 @@ const RelatorioMeioAmbiente = () => {
       assetStats,
       totalRecords: filtered.length
     };
-  }, [abastecimentos, selectedMonth]);
+  }, [abastecimentos, selectedMonth, selectedProject, veiculosAtivos]);
 
   const treeOffset = Math.ceil(processedData.totalCO2 / 15);
 
