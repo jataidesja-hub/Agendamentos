@@ -22,7 +22,10 @@ import { toast } from 'react-hot-toast';
 
 const RelatorioMeioAmbiente = () => {
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedProject, setSelectedProject] = useState('TODOS');
   const [loading, setLoading] = useState(!dataCache.abastecimentos);
+  const [loadingStep, setLoadingStep] = useState('Iniciando análise...');
+  const [progress, setProgress] = useState(0);
   const [abastecimentos, setAbastecimentos] = useState<any[]>(dataCache.abastecimentos || []);
   const [veiculosAtivos, setVeiculosAtivos] = useState<Set<string>>(dataCache.veiculosAtivos || new Set());
 
@@ -40,7 +43,9 @@ const RelatorioMeioAmbiente = () => {
   const loadFromSupabase = async () => {
     setLoading(true);
     try {
-      // 1. Busca frota ativa para filtrar (consistência com Dashboard de Frota)
+      // 1. Busca frota ativa para filtrar
+      setLoadingStep('Mapeando Frota Operacional...');
+      setProgress(10);
       const { data: frota } = await supabase.from('veiculos_frota').select('placa').eq('status', 'Ativo');
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
       
@@ -49,13 +54,23 @@ const RelatorioMeioAmbiente = () => {
         setVeiculosAtivos(setAtivos);
         dataCache.veiculosAtivos = setAtivos;
       }
+      setProgress(30);
 
-      // 2. Busca exaustiva de abastecimentos
+      // 2. Busca total estimado para progresso
+      setLoadingStep('Sincronizando Base de Emissões...');
+      const { count } = await supabase.from('abastecimentos').select('*', { count: 'exact', head: true });
+      const totalExpected = count || 1;
+
+      // 3. Busca exaustiva de abastecimentos
       let allData: any[] = [];
       let from = 0;
       let hasMore = true;
 
       while (hasMore) {
+        const currentProgress = Math.min(30 + Math.floor((allData.length / totalExpected) * 60), 90);
+        setProgress(currentProgress);
+        setLoadingStep(`Sincronizando Registros... (${allData.length} detectados)`);
+
         const { data: chunk, error } = await supabase
           .from('abastecimentos')
           .select('*')
@@ -75,14 +90,18 @@ const RelatorioMeioAmbiente = () => {
         }
         if (allData.length > 50000) break;
       }
+      
+      setProgress(95);
+      setLoadingStep('Processando Inventário de Carbono...');
       setAbastecimentos(allData);
       dataCache.abastecimentos = allData;
+      setProgress(100);
 
     } catch (err: any) {
       console.error("Erro ao carregar dados:", err);
       toast.error("Erro ao carregar dados de sustentabilidade.");
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 500); // Suave transição
     }
   };
 
@@ -97,6 +116,15 @@ const RelatorioMeioAmbiente = () => {
     return Array.from(monthsSet).sort().reverse();
   }, [abastecimentos]);
 
+  const availableProjects = useMemo(() => {
+    const projectsSet = new Set<string>();
+    abastecimentos.forEach((a: any) => {
+      const proj = String(a.projeto || "SEM PROJETO").toUpperCase().trim();
+      if (proj) projectsSet.add(proj);
+    });
+    return ['TODOS', ...Array.from(projectsSet).sort()];
+  }, [abastecimentos]);
+
   useEffect(() => {
     if (!selectedMonth && availableMonths.length > 0) {
       setSelectedMonth(availableMonths[0]);
@@ -109,6 +137,12 @@ const RelatorioMeioAmbiente = () => {
     const filtered = abastecimentos.filter((a: any) => {
       if (!a.data_transacao || !selectedMonth) return false;
       
+      // Filtro de Projeto
+      if (selectedProject !== 'TODOS') {
+        const proj = String(a.projeto || "SEM PROJETO").toUpperCase().trim();
+        if (proj !== selectedProject) return false;
+      }
+
       // Filtro de Frota Ativa
       if (veiculosAtivos.size > 0) {
         const placaNormalizada = normalize(a.placa);
@@ -224,9 +258,33 @@ const RelatorioMeioAmbiente = () => {
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center py-40 animate-pulse">
-        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="font-black text-emerald-500 text-xs uppercase tracking-[0.2em]">Processando Inventário de Carbono...</p>
+      <div className="flex-1 flex flex-col items-center justify-center py-40 animate-in fade-in duration-500">
+        <div className="relative group mb-12">
+            {/* outer glow */}
+            <div className="absolute -inset-8 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" />
+            
+            {/* background circle with rotating border */}
+            <div className="w-32 h-32 rounded-full border-4 border-emerald-500/10 flex items-center justify-center relative">
+               <div className="absolute inset-0 border-t-4 border-emerald-500 rounded-full animate-spin" />
+               <GlobeAmericasIcon className="w-14 h-14 text-emerald-500 animate-pulse" />
+            </div>
+        </div>
+
+        <div className="max-w-xs w-full space-y-4 text-center">
+            <h3 className="font-black text-gray-900 dark:text-white uppercase italic tracking-tighter text-lg">Sincronizando Eco-Dados</h3>
+            
+            <div className="h-1.5 w-full bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden border border-gray-200 dark:border-white/10">
+                <div 
+                  className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+            </div>
+
+            <div className="flex justify-between items-center px-1">
+                <p className="font-bold text-gray-400 text-[10px] uppercase tracking-widest">{loadingStep}</p>
+                <p className="font-black text-emerald-500 text-[10px]">{progress}%</p>
+            </div>
+        </div>
       </div>
     );
   }
@@ -246,21 +304,43 @@ const RelatorioMeioAmbiente = () => {
            </div>
         </div>
 
-        <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
-          <div className="relative flex items-center px-8 py-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-white/10 group-hover:border-emerald-500 transition-all cursor-pointer">
-            <FunnelIcon className="w-4 h-4 text-emerald-500 mr-4 group-hover:rotate-180 transition-transform duration-700" />
-            <select 
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent text-gray-900 dark:text-white font-black text-sm outline-none uppercase tracking-widest cursor-pointer"
-            >
-              {availableMonths.map(m => (
-                <option key={m} value={m} className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-                  {new Date(m + "-02").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                </option>
-              ))}
-            </select>
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          {/* Project Filter */}
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl blur opacity-10 group-hover:opacity-30 transition duration-1000"></div>
+            <div className="relative flex items-center px-6 py-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-white/10 group-hover:border-blue-500 transition-all cursor-pointer">
+              <BuildingOffice2Icon className="w-4 h-4 text-blue-500 mr-3" />
+              <select 
+                value={selectedProject}
+                onChange={(e) => setSelectedProject(e.target.value)}
+                className="bg-transparent text-gray-900 dark:text-white font-black text-[10px] outline-none uppercase tracking-widest cursor-pointer max-w-[150px]"
+              >
+                {availableProjects.map(p => (
+                  <option key={p} value={p} className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Month Filter */}
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-2xl blur opacity-10 group-hover:opacity-30 transition duration-1000"></div>
+            <div className="relative flex items-center px-6 py-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-white/10 group-hover:border-emerald-500 transition-all cursor-pointer">
+              <FunnelIcon className="w-4 h-4 text-emerald-500 mr-3" />
+              <select 
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="bg-transparent text-gray-900 dark:text-white font-black text-[10px] outline-none uppercase tracking-widest cursor-pointer"
+              >
+                {availableMonths.map(m => (
+                  <option key={m} value={m} className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+                    {new Date(m + "-02").toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '')}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
