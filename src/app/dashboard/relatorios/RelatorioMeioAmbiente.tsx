@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   GlobeAmericasIcon, 
   CloudIcon, 
@@ -16,11 +16,75 @@ import {
   WrenchScrewdriverIcon,
   DeviceTabletIcon
 } from '@heroicons/react/24/outline';
+import { supabase } from '@/lib/supabase';
 import { dataCache } from '@/lib/cache';
+import { toast } from 'react-hot-toast';
 
 const RelatorioMeioAmbiente = () => {
   const [selectedMonth, setSelectedMonth] = useState('');
-  const abastecimentos = dataCache.abastecimentos || [];
+  const [loading, setLoading] = useState(!dataCache.abastecimentos);
+  const [abastecimentos, setAbastecimentos] = useState<any[]>(dataCache.abastecimentos || []);
+  const [veiculosAtivos, setVeiculosAtivos] = useState<Set<string>>(dataCache.veiculosAtivos || new Set());
+
+  useEffect(() => {
+    if (!dataCache.abastecimentos || !dataCache.veiculosAtivos) {
+      loadFromSupabase();
+    } else {
+      // Se já existem no cache, garante que o estado local esteja sincronizado
+      setAbastecimentos(dataCache.abastecimentos);
+      setVeiculosAtivos(dataCache.veiculosAtivos);
+      setLoading(false);
+    }
+  }, []);
+
+  const loadFromSupabase = async () => {
+    setLoading(true);
+    try {
+      // 1. Busca frota ativa para filtrar (consistência com Dashboard de Frota)
+      const { data: frota } = await supabase.from('veiculos_frota').select('placa').eq('status', 'Ativo');
+      const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+      
+      if (frota) {
+        const setAtivos = new Set<string>(frota.map(v => normalize(v.placa)));
+        setVeiculosAtivos(setAtivos);
+        dataCache.veiculosAtivos = setAtivos;
+      }
+
+      // 2. Busca exaustiva de abastecimentos
+      let allData: any[] = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: chunk, error } = await supabase
+          .from('abastecimentos')
+          .select('*')
+          .order('data_transacao', { ascending: false })
+          .range(from, from + 999);
+
+        if (error) throw error;
+        if (!chunk || chunk.length === 0) {
+          hasMore = false;
+        } else {
+          allData = [...allData, ...chunk];
+          if (chunk.length < 1000) {
+            hasMore = false;
+          } else {
+            from += 1000;
+          }
+        }
+        if (allData.length > 50000) break;
+      }
+      setAbastecimentos(allData);
+      dataCache.abastecimentos = allData;
+
+    } catch (err: any) {
+      console.error("Erro ao carregar dados:", err);
+      toast.error("Erro ao carregar dados de sustentabilidade.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const availableMonths = useMemo(() => {
     const monthsSet = new Set<string>();
@@ -33,13 +97,24 @@ const RelatorioMeioAmbiente = () => {
     return Array.from(monthsSet).sort().reverse();
   }, [abastecimentos]);
 
-  if (!selectedMonth && availableMonths.length > 0) {
-    setSelectedMonth(availableMonths[0]);
-  }
+  useEffect(() => {
+    if (!selectedMonth && availableMonths.length > 0) {
+      setSelectedMonth(availableMonths[0]);
+    }
+  }, [availableMonths, selectedMonth]);
 
   const processedData = useMemo(() => {
+    const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+
     const filtered = abastecimentos.filter((a: any) => {
       if (!a.data_transacao || !selectedMonth) return false;
+      
+      // Filtro de Frota Ativa
+      if (veiculosAtivos.size > 0) {
+        const placaNormalizada = normalize(a.placa);
+        if (!veiculosAtivos.has(placaNormalizada)) return false;
+      }
+
       return String(a.data_transacao).slice(0, 7) === selectedMonth;
     });
 
@@ -146,6 +221,15 @@ const RelatorioMeioAmbiente = () => {
   }, [abastecimentos, selectedMonth]);
 
   const treeOffset = Math.ceil(processedData.totalCO2 / 15);
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center py-40 animate-pulse">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="font-black text-emerald-500 text-xs uppercase tracking-[0.2em]">Processando Inventário de Carbono...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
