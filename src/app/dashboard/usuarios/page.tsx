@@ -28,6 +28,7 @@ export default function UsuariosPage() {
     { id: 'projetos', nome: 'Projetos/Fazendas' },
     { id: 'abastecimentos', nome: 'Abastecimentos' },
     { id: 'sustentabilidade', nome: 'Sustentabilidade/Ambiente' },
+    { id: 'manutencao', nome: 'Manutenção' },
   ];
 
   useEffect(() => {
