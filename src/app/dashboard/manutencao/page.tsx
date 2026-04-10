@@ -200,20 +200,6 @@ export default function ManutencaoPage() {
       toast.error("Erro ao finalizar.");
     }
   };
-    try {
-      const { error } = await supabase
-        .from('manutencao_veiculos')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
-      if (error) throw error;
-      
-      setData(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
-      toast.success(`Status atualizado para ${newStatus}`);
-    } catch (err) {
-      toast.error("Erro ao atualizar status.");
-    }
-  };
 
   const handleSendEmail = (item: ManutencaoVeiculo) => {
     const to = item.emails_admin;
