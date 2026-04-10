@@ -67,31 +67,44 @@ export default function ManutencaoPage() {
         const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
         
         const getV = (row: any, names: string[]) => {
+          const keys = Object.keys(row);
+          // Primeiro tenta correspondência exata
           for (const name of names) {
-            const found = Object.keys(row).find(k => k.toUpperCase().trim() === name.toUpperCase().trim());
+            const found = keys.find(k => k.toUpperCase().trim() === name.toUpperCase().trim());
             if (found) return row[found];
+          }
+          // Depois tenta correspondência parcial para casos como "EMAIL_GERENTE e SERVICOs"
+          if (names.includes("EMAIL_GERENTE")) {
+             const found = keys.find(k => k.toUpperCase().includes("EMAIL") && k.toUpperCase().includes("GERENTE"));
+             if (found) return row[found];
+          }
+          if (names.includes("EMAIL_ADM")) {
+             const found = keys.find(k => k.toUpperCase().includes("EMAIL") && (k.toUpperCase().includes("ADM") || k.toUpperCase().includes("ADMIN")));
+             if (found) return row[found];
           }
           return "";
         };
 
         const formatted = rawData.map((row: any) => {
-          const rawEmailsAdmin = String(getV(row, ["EMAIL_ADM", "EMAIL ADM", "EMAIL ADMINISTRATIVO"]) || "").trim();
-          const rawEmailsGerente = String(getV(row, ["EMAIL_GERENTE", "EMAIL GERENTE", "EMAIL GESTOR", "EMAIL_GERENTE e SERVICOs"]) || "").trim();
+          const rawEmailsAdmin = String(getV(row, ["EMAIL_ADM", "EMAIL ADM"]) || "").trim();
+          const rawEmailsGerente = String(getV(row, ["EMAIL_GERENTE", "EMAIL_GERENTE e SERVICOs"]) || "").trim();
           
-          // Normaliza emails: troca "/" ou ";" por "," para o mailto funcionar
-          const normalizeEmails = (str: string) => str.replace(/[\/;]/g, ',').replace(/\s/g, '');
+          const normalizeEmails = (str: string) => {
+            if (!str || str === "#N/D") return "";
+            return str.replace(/[\/;]/g, ',').replace(/\s/g, '').replace(/,$/, '').replace(/^,/, '');
+          };
 
           return {
             placa: String(getV(row, ["PLACA", "VEICULO"]) || "").trim().toUpperCase(),
-            admins: String(getV(row, ["ADM", "ADMINISTRATIVO", "ADMINS"]) || "").trim(),
+            admins: String(getV(row, ["ADM", "ADMINISTRATIVO"]) || "").trim(),
             emails_admin: normalizeEmails(rawEmailsAdmin),
-            gerentes: String(getV(row, ["GERENTE", "GESTOR", "GERENTES"]) || "").trim(),
+            gerentes: String(getV(row, ["GERENTE", "GESTOR"]) || "").trim(),
             emails_gerente: normalizeEmails(rawEmailsGerente),
-            status: 'aguardando envio',
+            status: null,
             servicos: String(getV(row, ["SERVICOS", "SERVIÇOS", "DESCRICAO"]) || "").trim(),
             updated_at: new Date().toISOString()
           };
-        }).filter(item => item.placa !== "");
+        }).filter(item => item.placa !== "" && item.placa !== "#N/D");
 
         if (formatted.length === 0) {
            toast.error("Nenhum dado válido encontrado na planilha.");
@@ -216,7 +229,17 @@ Por favor, solicita-se a assinatura do gestor do projeto no orçamento para que 
 
 Serviços: ${item.servicos || "N/A"}`;
 
-    const mailtoUrl = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    // Construção robusta do mailto:
+    // Standard mailto: e-mail1,e-mail2?cc=e-mail3&subject=...
+    let mailtoUrl = `mailto:${to}`;
+    const params = [];
+    if (cc) params.push(`cc=${cc}`);
+    params.push(`subject=${encodeURIComponent(subject)}`);
+    params.push(`body=${encodeURIComponent(body)}`);
+    
+    if (params.length > 0) {
+      mailtoUrl += "?" + params.join("&");
+    }
     
     window.location.href = mailtoUrl;
 
