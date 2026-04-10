@@ -31,6 +31,8 @@ export default function ManutencaoPage() {
   const [data, setData] = useState<ManutencaoVeiculo[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [plateSearch, setPlateSearch] = useState("");
+  const [searchResult, setSearchResult] = useState<ManutencaoVeiculo | null>(null);
 
   useEffect(() => {
     loadData();
@@ -72,16 +74,24 @@ export default function ManutencaoPage() {
           return "";
         };
 
-        const formatted = rawData.map((row: any) => ({
-          placa: String(getV(row, ["PLACA", "VEICULO"]) || "").trim().toUpperCase(),
-          admins: String(getV(row, ["ADM", "ADMINISTRATIVO", "ADMINS"]) || "").trim(),
-          emails_admin: String(getV(row, ["EMAIL_ADM", "EMAIL ADM", "EMAIL ADMINISTRATIVO"]) || "").trim(),
-          gerentes: String(getV(row, ["GERENTE", "GESTOR", "GERENTES"]) || "").trim(),
-          emails_gerente: String(getV(row, ["EMAIL_GERENTE", "EMAIL GERENTE", "EMAIL GESTOR"]) || "").trim(),
-          status: 'aguardando envio',
-          servicos: String(getV(row, ["SERVICOS", "SERVIÇOS", "DESCRICAO"]) || "").trim(),
-          updated_at: new Date().toISOString()
-        })).filter(item => item.placa !== "");
+        const formatted = rawData.map((row: any) => {
+          const rawEmailsAdmin = String(getV(row, ["EMAIL_ADM", "EMAIL ADM", "EMAIL ADMINISTRATIVO"]) || "").trim();
+          const rawEmailsGerente = String(getV(row, ["EMAIL_GERENTE", "EMAIL GERENTE", "EMAIL GESTOR", "EMAIL_GERENTE e SERVICOs"]) || "").trim();
+          
+          // Normaliza emails: troca "/" ou ";" por "," para o mailto funcionar
+          const normalizeEmails = (str: string) => str.replace(/[\/;]/g, ',').replace(/\s/g, '');
+
+          return {
+            placa: String(getV(row, ["PLACA", "VEICULO"]) || "").trim().toUpperCase(),
+            admins: String(getV(row, ["ADM", "ADMINISTRATIVO", "ADMINS"]) || "").trim(),
+            emails_admin: normalizeEmails(rawEmailsAdmin),
+            gerentes: String(getV(row, ["GERENTE", "GESTOR", "GERENTES"]) || "").trim(),
+            emails_gerente: normalizeEmails(rawEmailsGerente),
+            status: 'aguardando envio',
+            servicos: String(getV(row, ["SERVICOS", "SERVIÇOS", "DESCRICAO"]) || "").trim(),
+            updated_at: new Date().toISOString()
+          };
+        }).filter(item => item.placa !== "");
 
         if (formatted.length === 0) {
            toast.error("Nenhum dado válido encontrado na planilha.");
@@ -109,7 +119,87 @@ export default function ManutencaoPage() {
     reader.readAsBinaryString(file);
   };
 
+  const searchPlate = async () => {
+    if (!plateSearch) return;
+    setLoading(true);
+    try {
+      const { data: result, error } = await supabase
+        .from('manutencao_veiculos')
+        .select('*')
+        .eq('placa', plateSearch.toUpperCase().trim())
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (!result) {
+        toast.error("Veículo não encontrado na base de contatos.");
+        setSearchResult(null);
+      } else {
+        setSearchResult(result);
+      }
+    } catch (err) {
+      toast.error("Erro na busca.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startMaintenance = async (item: ManutencaoVeiculo) => {
+    try {
+      const { error } = await supabase
+        .from('manutencao_veiculos')
+        .update({ 
+          status: 'aguardando envio', 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', item.id);
+
+      if (error) throw error;
+      
+      toast.success("Processo de manutenção iniciado!");
+      setSearchResult(null);
+      setPlateSearch("");
+      loadData();
+    } catch (err) {
+      toast.error("Erro ao iniciar manutenção.");
+    }
+  };
+
   const updateStatus = async (id: string, newStatus: ManutencaoVeiculo['status']) => {
+    try {
+      const { error } = await supabase
+        .from('manutencao_veiculos')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      setData(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
+      toast.success(`Status atualizado para ${newStatus}`);
+    } catch (err) {
+      toast.error("Erro ao atualizar status.");
+    }
+  };
+
+  const finalizeMaintenance = async (id: string) => {
+    if (!window.confirm("Deseja finalizar e arquivar este processo de manutenção?")) return;
+    try {
+      const { error } = await supabase
+        .from('manutencao_veiculos')
+        .update({ 
+          status: null, // Ou 'finalizado'
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      toast.success("Manutenção finalizada!");
+      loadData();
+    } catch (err) {
+      toast.error("Erro ao finalizar.");
+    }
+  };
     try {
       const { error } = await supabase
         .from('manutencao_veiculos')
@@ -151,7 +241,12 @@ Serviços: ${item.servicos || "N/A"}`;
   };
 
   const filteredData = useMemo(() => {
-    return data.filter(item => 
+    // Apenas processos em andamento (status não nulo e diferente de 'finalizado' se você usar assim)
+    const active = data.filter(item => item.status && item.status !== 'finalizado' as any);
+    
+    if (!searchTerm) return active;
+    
+    return active.filter(item => 
       item.placa.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.admins.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.gerentes.toLowerCase().includes(searchTerm.toLowerCase())
@@ -200,17 +295,66 @@ Serviços: ${item.servicos || "N/A"}`;
         </div>
       </div>
 
-      <div className="flex-1 bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden flex flex-col min-h-[500px]">
+      <div className="flex flex-col md:flex-row gap-6 mb-8 mt-4">
+        {/* Nova Seção de Início de Processo */}
+        <div className="flex-1 bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-xl">
+          <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 block">Iniciar Nova Manutenção</label>
+          <div className="flex gap-4">
+            <input 
+              type="text" 
+              placeholder="Digite a placa do veículo..." 
+              value={plateSearch}
+              onChange={(e) => setPlateSearch(e.target.value.toUpperCase())}
+              className="flex-1 px-6 py-4 bg-gray-50 dark:bg-gray-800 border-0 rounded-[1.5rem] text-sm font-bold focus:ring-2 focus:ring-[#0b7336] transition-all"
+              onKeyDown={(e) => e.key === 'Enter' && searchPlate()}
+            />
+            <button 
+              onClick={searchPlate}
+              className="px-8 py-4 bg-[#0b7336] text-white rounded-[1.5rem] font-bold text-sm hover:scale-105 transition-all shadow-lg active:scale-95 flex items-center gap-2"
+            >
+              <MagnifyingGlassIcon className="w-5 h-5" />
+              Buscar
+            </button>
+          </div>
+
+          {searchResult && (
+            <div className="mt-6 p-6 bg-green-50/50 dark:bg-green-500/10 border border-green-100 dark:border-green-500/20 rounded-[2rem] animate-in slide-in-from-top-4 duration-300">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-[#0b7336] rounded-xl flex items-center justify-center text-white font-black">
+                    {searchResult.placa.substring(0, 3)}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900 dark:text-white">{searchResult.placa}</h3>
+                    <p className="text-sm text-gray-500 font-medium">ADM: {searchResult.admins} • Gerente: {searchResult.gerentes}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => startMaintenance(searchResult)}
+                  className="px-6 py-3 bg-[#0b7336] text-white rounded-xl font-bold text-xs hover:bg-[#075a2a] transition-all"
+                >
+                  Iniciar Processo
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-xl overflow-hidden flex flex-col min-h-[400px]">
         <div className="p-6 border-b border-gray-50 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
            <div className="relative w-full max-w-md">
               <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input 
                 type="text" 
-                placeholder="Filtrar placa, admin ou gerente..." 
+                placeholder="Filtrar processos ativos..." 
                 value={searchTerm} 
                 onChange={(e) => setSearchTerm(e.target.value)} 
                 className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-800 border-0 rounded-2xl text-sm shadow-sm focus:ring-2 focus:ring-[#0b7336] transition-all" 
               />
+           </div>
+           <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+             {filteredData.length} Processos em Aberto
            </div>
         </div>
 
@@ -230,11 +374,13 @@ Serviços: ${item.servicos || "N/A"}`;
               {filteredData.length === 0 && !loading ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-20 text-center">
-                    <div className="flex flex-col items-center">
-                      <TruckIcon className="w-12 h-12 text-gray-200 mb-4" />
-                      <p className="text-gray-400 font-bold">Nenhum veículo em manutenção encontrado.</p>
-                      <p className="text-gray-300 text-sm">Suba uma planilha para começar.</p>
-                    </div>
+                      <div className="flex flex-col items-center">
+                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-full mb-4">
+                          <ClockIcon className="w-10 h-10 text-gray-200" />
+                        </div>
+                        <p className="text-gray-400 font-bold">Nenhum processo de manutenção ativo.</p>
+                        <p className="text-gray-300 text-sm">Use o campo de busca acima para iniciar um novo.</p>
+                      </div>
                   </td>
                 </tr>
               ) : (
@@ -275,20 +421,30 @@ Serviços: ${item.servicos || "N/A"}`;
                       </p>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {item.status === 'aguardando envio' ? (
+                      <div className="flex items-center justify-center gap-3">
+                        {item.status === 'aguardando envio' ? (
+                          <button 
+                            onClick={() => handleSendEmail(item)}
+                            className="flex items-center gap-2 px-4 py-2 bg-[#0b7336] hover:bg-[#075a2a] text-white rounded-xl text-xs font-bold transition-all shadow-md group"
+                          >
+                            <EnvelopeIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                            Enviar Email
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-gray-400">
+                            {getStatusIcon(item.status)}
+                            <span className="text-[10px] font-bold uppercase">{item.status}</span>
+                          </div>
+                        )}
+                        
                         <button 
-                          onClick={() => handleSendEmail(item)}
-                          className="flex items-center gap-2 px-4 py-2 bg-[#0b7336] hover:bg-[#075a2a] text-white rounded-xl text-xs font-bold transition-all shadow-md group mx-auto"
+                          onClick={() => finalizeMaintenance(item.id)}
+                          className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                          title="Finalizar e Arkivar"
                         >
-                          <EnvelopeIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                          Enviar Email
+                          <CheckCircleIcon className="w-5 h-5" />
                         </button>
-                      ) : (
-                        <div className="flex items-center justify-center gap-1.5 text-gray-400">
-                          {getStatusIcon(item.status)}
-                          <span className="text-[10px] font-bold uppercase">{item.status}</span>
-                        </div>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))
