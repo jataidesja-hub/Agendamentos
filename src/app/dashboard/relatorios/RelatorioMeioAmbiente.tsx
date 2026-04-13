@@ -269,19 +269,25 @@ const RelatorioMeioAmbiente = () => {
 
       // Agrupamento por projeto
       if (!projectStats[project]) {
-        projectStats[project] = { name: project, co2: 0, liters: 0, km: 0 };
+        projectStats[project] = { name: project, co2: 0, liters: 0, km: 0, fuels: {} };
       }
       projectStats[project].co2 += recordCO2;
       projectStats[project].liters += litros;
       projectStats[project].km += km;
+      if (!projectStats[project].fuels[fuelRaw]) projectStats[project].fuels[fuelRaw] = { liters: 0, co2: 0 };
+      projectStats[project].fuels[fuelRaw].liters += litros;
+      projectStats[project].fuels[fuelRaw].co2 += recordCO2;
 
       // Agrupamento por base
       if (!baseStats[base]) {
-        baseStats[base] = { name: base, co2: 0, liters: 0, km: 0 };
+        baseStats[base] = { name: base, co2: 0, liters: 0, km: 0, fuels: {} };
       }
       baseStats[base].co2 += recordCO2;
       baseStats[base].liters += litros;
       baseStats[base].km += km;
+      if (!baseStats[base].fuels[base]) baseStats[base].fuels[fuelRaw] = { liters: 0, co2: 0 };
+      baseStats[base].fuels[fuelRaw].liters += litros;
+      baseStats[base].fuels[fuelRaw].co2 += recordCO2;
     });
 
     const rankingData = selectedProject === 'TODOS' ? projectStats : baseStats;
@@ -566,10 +572,25 @@ const RelatorioMeioAmbiente = () => {
                      }}
                    >
                      <div className="flex justify-between items-center mb-2 px-1">
-                        <span className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight truncate max-w-[75%] group-hover:text-emerald-500 transition-colors">
-                          {idx + 1}. {item.name}
+                        <div className="flex flex-col truncate max-w-[75%]">
+                          <span className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight truncate group-hover:text-emerald-500 transition-colors">
+                            {idx + 1}. {item.name}
+                          </span>
+                          <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1">
+                             {Object.entries(item.fuels || {})
+                               .sort(([, a]: any, [, b]: any) => b.liters - a.liters)
+                               .slice(0, 2)
+                               .map(([fName, fStats]: [string, any]) => (
+                                 <span key={fName} className="text-[8px] font-bold text-gray-400 dark:text-gray-500 uppercase flex items-center gap-1">
+                                    <div className="w-1 h-1 rounded-full bg-emerald-500/50" />
+                                    {fName.split(' ')[0]}: {fStats.liters.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} L
+                                 </span>
+                               ))}
+                          </div>
+                        </div>
+                        <span className="text-xs font-black text-gray-900 dark:text-white shrink-0">
+                          {item.co2.toFixed(1)} <span className="text-[8px] text-gray-400">kg</span>
                         </span>
-                        <span className="text-xs font-black text-gray-900 dark:text-white">{item.co2.toFixed(1)}</span>
                      </div>
                      <div className="h-4 bg-gray-50 dark:bg-gray-900/50 rounded-full overflow-hidden border border-gray-100 dark:border-white/5">
                          <div 
