@@ -27,7 +27,7 @@ import { supabase } from "@/lib/supabase";
 const ETAPAS = [
   { id: "aguardando_envio", label: "Aguardando Envio", color: "amber", icon: ClockIcon },
   { id: "enviado", label: "Enviado p/ Email", color: "blue", icon: PaperAirplaneIcon },
-  { id: "aguardando_aprovacao", label: "Aguardando Aprovação", color: "purple", icon: ClockIcon },
+  { id: "aguardando_aprovacao", label: "Aprovação confirmada via email", color: "purple", icon: CheckCircleIcon },
   { id: "aprovado", label: "Aprovado", color: "emerald", icon: CheckCircleIcon },
 ] as const;
 
@@ -43,6 +43,7 @@ interface ManutencaoVeiculo {
   status: string | null;
   servicos: string;
   pdf_url: string | null;
+  obs_aprovacao: string | null;
   updated_at: string;
 }
 
@@ -95,6 +96,8 @@ export default function ManutencaoPage() {
   const [uploadingPdfId, setUploadingPdfId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editServicoText, setEditServicoText] = useState("");
+  const [obsEditId, setObsEditId] = useState<string | null>(null);
+  const [obsEditText, setObsEditText] = useState("");
 
   useEffect(() => {
     loadData();
@@ -782,6 +785,59 @@ Serviços: ${item.servicos || "N/A"}`;
                               {item.servicos}
                             </p>
                           )
+                        )}
+
+                        {/* Observação da Aprovação (se existir ou se estiver na etapa) */}
+                        {(item.status === 'aguardando_aprovacao' || item.obs_aprovacao) && (
+                          <div className="mb-3">
+                            {obsEditId === item.id ? (
+                              <div className="space-y-2">
+                                <label className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">Descrição da Aprovação</label>
+                                <textarea
+                                  value={obsEditText}
+                                  onChange={(e) => setObsEditText(e.target.value)}
+                                  placeholder="Detalhes da aprovação..."
+                                  rows={2}
+                                  className="w-full px-3 py-2 bg-purple-50/50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-800 rounded-lg text-[11px] font-medium focus:ring-2 focus:ring-purple-500 transition-all resize-none"
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const { error } = await supabase
+                                        .from('manutencao_veiculos')
+                                        .update({ obs_aprovacao: obsEditText, updated_at: new Date().toISOString() })
+                                        .eq('id', item.id);
+                                      if (error) throw error;
+                                      setData(prev => prev.map(d => d.id === item.id ? { ...d, obs_aprovacao: obsEditText } : d));
+                                      setObsEditId(null);
+                                      toast.success("Aprovação atualizada!");
+                                    } catch {
+                                      toast.error("Erro ao salvar.");
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-[10px] font-bold hover:bg-purple-700 transition-all"
+                                >
+                                  <CheckIcon className="w-3.5 h-3.5" />
+                                  Confirmar
+                                </button>
+                              </div>
+                            ) : (
+                              <div 
+                                onClick={() => { setObsEditId(item.id); setObsEditText(item.obs_aprovacao || ""); }}
+                                className="p-2.5 bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100/50 dark:border-purple-800/50 rounded-lg cursor-pointer hover:bg-purple-100/50 dark:hover:bg-purple-900/30 transition-all"
+                              >
+                                <p className="text-[9px] font-black text-purple-400 dark:text-purple-500 uppercase mb-1 tracking-tighter">Aprovação por email</p>
+                                {item.obs_aprovacao ? (
+                                  <p className="text-[11px] text-purple-700 dark:text-purple-300 font-medium line-clamp-2">
+                                    {item.obs_aprovacao}
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-purple-400 font-bold italic">+ Adicionar descrição da aprovação</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         )}
 
                         {/* ========== ÁREA DO PDF ========== */}
