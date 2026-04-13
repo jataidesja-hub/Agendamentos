@@ -17,15 +17,59 @@ import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 
 const RelatorioGestores = () => {
-    const [selectedMonth, setSelectedMonth] = useState('');
-    const [expandedGestor, setExpandedGestor] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
-    
-    const abastecimentos = dataCache.abastecimentos || [];
-    // @ts-ignore
-    const placaToGerente = dataCache.placaToGerente || new Map();
-    // @ts-ignore
-    const placaToAdmin = dataCache.placaToAdmin || new Map();
+    const [abastecimentos, setAbastecimentos] = useState<any[]>(dataCache.abastecimentos || []);
+    const [veiculosAtivos, setVeiculosAtivos] = useState<Set<string>>(dataCache.veiculosAtivos || new Set());
+    const [maps, setMaps] = useState({
+        placaToGerente: new Map(),
+        placaToAdmin: new Map()
+    });
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            // Carrega Frota para mapear emails
+            const { data: frota } = await supabase
+                .from('frota_veiculos')
+                .select('placa, email_gerente, email_administrativo')
+                .eq('status', 'Ativo');
+
+            const pToGerente = new Map();
+            const pToAdmin = new Map();
+            const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+
+            if (frota) {
+                frota.forEach(v => {
+                    const norm = normalize(v.placa);
+                    if (v.email_gerente) pToGerente.set(norm, v.email_gerente);
+                    if (v.email_administrativo) pToAdmin.set(norm, v.email_administrativo);
+                });
+            }
+
+            setMaps({ placaToGerente: pToGerente, placaToAdmin: pToAdmin });
+
+            // Carrega Abastecimentos se não estiver no cache
+            if (!dataCache.abastecimentos) {
+                const { data: abs } = await supabase
+                    .from('abastecimentos')
+                    .select('*')
+                    .order('data_transacao', { ascending: false });
+                if (abs) {
+                    setAbastecimentos(abs);
+                    dataCache.abastecimentos = abs;
+                }
+            } else {
+                setAbastecimentos(dataCache.abastecimentos);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+    }, []);
 
     const availableMonths = useMemo(() => {
       const monthsSet = new Set<string>();
@@ -82,7 +126,7 @@ const RelatorioGestores = () => {
       filtered.forEach((a: any) => {
         const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
         const normPlaca = normalize(a.placa);
-        const gestorEmail = placaToGerente.get(normPlaca) || placaToAdmin.get(normPlaca) || "NÃO ATRIBUÍDO";
+        const gestorEmail = maps.placaToGerente.get(normPlaca) || maps.placaToAdmin.get(normPlaca) || "NÃO ATRIBUÍDO";
         
         if (!data[gestorEmail]) {
           data[gestorEmail] = { vehicles: {}, totalSpent: 0, alerts: 0 };
@@ -111,12 +155,12 @@ const RelatorioGestores = () => {
         };
 
         data[gestorEmail].vehicles[normPlaca].fuelings.push(entry);
-        data[gestorEmail].totalSpent += (Number(a.valor_emissao) || 0);
+        data[gestorEmail].totalSpent += (Number(a.valor_total || a.valor_abastecimento) || 0);
         if (isExpensive) data[gestorEmail].alerts += 1;
       });
 
       return data;
-    }, [abastecimentos, selectedMonth, cheapestByCity, placaToGerente, placaToAdmin]);
+    }, [abastecimentos, selectedMonth, cheapestByCity, maps]);
 
     const handleSendAlert = (email: string, managerData: any) => {
         if (email === "NÃO ATRIBUÍDO") {
