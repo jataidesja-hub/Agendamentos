@@ -45,7 +45,7 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="h-full m-0 p-0 overflow-hidden bg-white dark:bg-black">
+      <body className="min-h-full m-0 p-0 overflow-hidden bg-[#f4f7f5] dark:bg-[#0a0a0a]">
         <Toaster 
           position="top-right" 
           toastOptions={{ 
