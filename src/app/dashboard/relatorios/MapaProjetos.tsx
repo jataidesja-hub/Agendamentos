@@ -44,26 +44,34 @@ const RelatorioProjetos = () => {
       try {
         const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
 
-        // 1. Busca todos os veículos ativos com metadados
+        // 1. Busca todos os veículos ativos com metadados estendidos
         const { data: frota, error: errFrota } = await supabase
           .from('frota_veiculos')
-          .select('placa, projeto')
+          .select('placa, projeto, email_gerente, email_administrativo')
           .eq('status', 'Ativo');
         
         if (!errFrota && frota) {
           const setAtivos = new Set<string>();
           const placaToProject = new Map<string, string>();
+          const placaToGerente = new Map<string, string>();
+          const placaToAdmin = new Map<string, string>();
           
           frota.forEach((v: any) => {
             const norm = normalize(v.placa);
             setAtivos.add(norm);
             if (v.projeto) placaToProject.set(norm, v.projeto);
+            if (v.email_gerente) placaToGerente.set(norm, v.email_gerente);
+            if (v.email_administrativo) placaToAdmin.set(norm, v.email_administrativo);
           });
 
           setVeiculosAtivos(setAtivos);
           dataCache.veiculosAtivos = setAtivos;
           // @ts-ignore
           dataCache.placaToProject = placaToProject;
+          // @ts-ignore
+          dataCache.placaToGerente = placaToGerente;
+          // @ts-ignore
+          dataCache.placaToAdmin = placaToAdmin;
         }
 
         // 2. Busca exaustiva de todos os abastecimentos

@@ -9,9 +9,11 @@ import {
 } from "@heroicons/react/24/outline";
 import MapaRelatorio from "./MapaRelatorio";
 import RelatorioPostos from "./RelatorioPostos";
+import RelatorioGestores from "./RelatorioGestores";
+import { UserGroupIcon } from "@heroicons/react/24/outline";
 
 export default function Relatorios() {
-  const [activeTab, setActiveTab] = useState<'projetos' | 'postos'>('projetos');
+  const [activeTab, setActiveTab] = useState<'projetos' | 'postos' | 'gestores'>('projetos');
 
   return (
     <div className="h-full flex flex-col p-6 gap-6">
@@ -51,6 +53,17 @@ export default function Relatorios() {
             <BuildingStorefrontIcon className="w-4 h-4" />
             POSTOS
           </button>
+          <button 
+            onClick={() => setActiveTab('gestores')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2.5xl text-xs font-black tracking-widest transition-all ${
+              activeTab === 'gestores' 
+              ? 'bg-orange-600 text-white shadow-lg shadow-orange-500/20' 
+              : 'text-gray-500 hover:text-orange-600'
+            }`}
+          >
+            <UserGroupIcon className="w-4 h-4" />
+            GESTORES
+          </button>
         </div>
       </div>
 
@@ -60,8 +73,10 @@ export default function Relatorios() {
           <div className="min-h-[600px]">
             <MapaRelatorio />
           </div>
-        ) : (
+        ) : activeTab === 'postos' ? (
           <RelatorioPostos />
+        ) : (
+          <RelatorioGestores />
         )}
       </div>
     </div>
