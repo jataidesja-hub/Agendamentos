@@ -94,17 +94,24 @@ const RelatorioGestores = () => {
       }
     }, [availableMonths, selectedMonth]);
 
+    const normalizeFuel = (f: string) => {
+        const fuel = String(f || "").toUpperCase().trim();
+        if (fuel.includes("DIESEL") && fuel.includes("S10")) return "DIESEL S10";
+        if (fuel.includes("DIESEL") && fuel.includes("S-10")) return "DIESEL S10";
+        if (fuel.includes("ARLA")) return "ARLA 32";
+        if (fuel.includes("GASOLINA")) return "GASOLINA";
+        return fuel;
+    };
+
     // Melhor preço por cidade/combustível (baseado apenas no ÚLTIMO preço de cada posto)
     const cheapestByCity = useMemo(() => {
-      // 1. Mapear o último preço conhecido de cada posto/combustível/cidade
       const latestPricesByStation: Record<string, any> = {};
       
       abastecimentos.forEach((a: any) => {
-        if (!a.data_transacao || !selectedMonth) return;
-        // Consideramos dados do mês selecionado e do anterior para ter referência de preço
-        // mas focamos no mais recente para o cálculo
+        if (!a.data_transacao) return;
+        
         const city = String(a.cidade || a.municipio || "NÃO INFORMADA").toUpperCase().trim();
-        const fuel = String(a.tipo_combustivel || "OUTROS").toUpperCase().trim();
+        const fuel = normalizeFuel(a.tipo_combustivel);
         const post = String(a.estabelecimento || "POSTO").toUpperCase().trim();
         const price = Number(a.valor_litro) || 0;
         const date = new Date(a.data_transacao).getTime();
@@ -112,14 +119,13 @@ const RelatorioGestores = () => {
         if (price <= 0) return;
 
         const key = `${city}|${fuel}|${post}`;
+        // Queremos o preço mais recente de cada posto
         if (!latestPricesByStation[key] || date > latestPricesByStation[key].date) {
             latestPricesByStation[key] = { price, post, city, fuel, date };
         }
       });
 
-      // 2. Com os últimos preços em mãos, encontrar o menor preço por Cidade/Combustível
       const bestPrices: Record<string, Record<string, { price: number; post: string }>> = {};
-      
       Object.values(latestPricesByStation).forEach((item: any) => {
           if (!bestPrices[item.city]) bestPrices[item.city] = {};
           if (!bestPrices[item.city][item.fuel] || item.price < bestPrices[item.city][item.fuel].price) {
@@ -128,7 +134,7 @@ const RelatorioGestores = () => {
       });
 
       return bestPrices;
-    }, [abastecimentos, selectedMonth]);
+    }, [abastecimentos]);
 
     // Agrupamento por Gestor
     const managersData = useMemo(() => {
@@ -146,7 +152,8 @@ const RelatorioGestores = () => {
         }
 
         const city = String(a.cidade || a.municipio || "NÃO INFORMADA").toUpperCase().trim();
-        const fuel = String(a.tipo_combustivel || "OUTROS").toUpperCase().trim();
+        const fuel = normalizeFuel(a.tipo_combustivel);
+        const post = String(a.estabelecimento || "POSTO").toUpperCase().trim();
         const price = Number(a.valor_litro) || 0;
         
         if (!data[gestorEmail].vehicles[normPlaca]) {
@@ -154,13 +161,16 @@ const RelatorioGestores = () => {
         }
 
         const best = cheapestByCity[city]?.[fuel];
-        const isExpensive = !!(best && price > 0 && best.price < (price - 0.05));
+        // SÓ É ALERTA SE:
+        // 1. O posto sugerido NÃO É o mesmo onde abasteceu (evita erro de datas diferentes no mesmo posto)
+        // 2. O preço sugerido é pelo menos 5 centavos mais barato
+        const isExpensive = !!(best && price > 0 && best.post !== post && best.price < (price - 0.05));
 
         data[gestorEmail].vehicles[normPlaca].fuelings.push({
             city,
-            fuel,
+            fuel: String(a.tipo_combustivel).toUpperCase(), // Mostramos o nome original mas comparamos o normalizado
             price,
-            estabelecimento: a.estabelecimento || "POSTO",
+            estabelecimento: post,
             bestPrice: best?.price ?? 0,
             bestPost: best?.post ?? "N/A",
             isExpensive
