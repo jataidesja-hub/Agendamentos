@@ -94,25 +94,40 @@ const RelatorioGestores = () => {
       }
     }, [availableMonths, selectedMonth]);
 
-    // Melhor preço por cidade/combustível
+    // Melhor preço por cidade/combustível (baseado apenas no ÚLTIMO preço de cada posto)
     const cheapestByCity = useMemo(() => {
-      const prices: Record<string, Record<string, { price: number; post: string }>> = {};
+      // 1. Mapear o último preço conhecido de cada posto/combustível/cidade
+      const latestPricesByStation: Record<string, any> = {};
+      
       abastecimentos.forEach((a: any) => {
         if (!a.data_transacao || !selectedMonth) return;
-        if (String(a.data_transacao).slice(0, 7) !== selectedMonth) return;
-
+        // Consideramos dados do mês selecionado e do anterior para ter referência de preço
+        // mas focamos no mais recente para o cálculo
         const city = String(a.cidade || a.municipio || "NÃO INFORMADA").toUpperCase().trim();
         const fuel = String(a.tipo_combustivel || "OUTROS").toUpperCase().trim();
-        const price = Number(a.valor_litro) || 0;
         const post = String(a.estabelecimento || "POSTO").toUpperCase().trim();
+        const price = Number(a.valor_litro) || 0;
+        const date = new Date(a.data_transacao).getTime();
+
         if (price <= 0) return;
 
-        if (!prices[city]) prices[city] = {};
-        if (!prices[city][fuel] || price < prices[city][fuel].price) {
-          prices[city][fuel] = { price, post };
+        const key = `${city}|${fuel}|${post}`;
+        if (!latestPricesByStation[key] || date > latestPricesByStation[key].date) {
+            latestPricesByStation[key] = { price, post, city, fuel, date };
         }
       });
-      return prices;
+
+      // 2. Com os últimos preços em mãos, encontrar o menor preço por Cidade/Combustível
+      const bestPrices: Record<string, Record<string, { price: number; post: string }>> = {};
+      
+      Object.values(latestPricesByStation).forEach((item: any) => {
+          if (!bestPrices[item.city]) bestPrices[item.city] = {};
+          if (!bestPrices[item.city][item.fuel] || item.price < bestPrices[item.city][item.fuel].price) {
+              bestPrices[item.city][item.fuel] = { price: item.price, post: item.post };
+          }
+      });
+
+      return bestPrices;
     }, [abastecimentos, selectedMonth]);
 
     // Agrupamento por Gestor
