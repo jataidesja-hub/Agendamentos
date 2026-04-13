@@ -10,7 +10,8 @@ import {
   TruckIcon,
   MapPinIcon,
   CurrencyDollarIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 import { dataCache } from '@/lib/cache';
 import { supabase } from '@/lib/supabase';
