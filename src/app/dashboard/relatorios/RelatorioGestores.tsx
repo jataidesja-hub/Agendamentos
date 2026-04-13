@@ -229,8 +229,8 @@ const RelatorioGestores = () => {
                                <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-red-200 shadow-sm animate-pulse">
                                   <div className="text-right">
                                      <p className="text-[8px] font-black text-red-500 uppercase tracking-widest">Posto Mais Barato na Cidade</p>
-                                     <p className="text-[10px] font-black text-gray-900 truncate max-w-[150px]">{f.bestPost}</p>
-                                     <p className="text-xs font-black text-emerald-600">{f.bestPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} / L</p>
+                                     <p className="text-[10px] font-black text-gray-900 truncate max-w-[150px]">{f.bestPost || 'N/A'}</p>
+                                     <p className="text-xs font-black text-emerald-600">{(f.bestPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} / L</p>
                                   </div>
                                   <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
                                      <ArrowRightOnRectangleIcon className="w-4 h-4 text-red-600 rotate-180" />

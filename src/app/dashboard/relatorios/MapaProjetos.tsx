@@ -130,7 +130,7 @@ const RelatorioProjetos = () => {
       return Array.from(monthsSet).sort().reverse();
     }, [abastecimentos]);
 
-    // Aplica o filtro de Mês E o filtro de Veículos Ativos
+    // Aplica o filtro de Mês
     const filteredData = useMemo(() => {
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
       
@@ -141,11 +141,9 @@ const RelatorioProjetos = () => {
         const itemMonth = String(a.data_transacao).slice(0, 7);
         if (itemMonth !== selectedMonth) return false;
 
-        // NOVO: Filtro de Veículos Ativos (com normalização)
-        const placa = normalize(a.placa);
-        return veiculosAtivos.has(placa);
+        return true; // Exibe tudo do mês, independente de estar na frota ativa
       });
-    }, [abastecimentos, selectedMonth, veiculosAtivos]);
+    }, [abastecimentos, selectedMonth]);
 
     const groupedData = useMemo(() => {
       const groups: any = {};
