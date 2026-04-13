@@ -103,47 +103,33 @@ const RelatorioGestores = () => {
         return fuel;
     };
 
-    // Melhor preço por cidade/combustível (baseado apenas no ÚLTIMO preço de cada posto)
-    const cheapestByCity = useMemo(() => {
-      const latestPricesByStation: Record<string, any> = {};
-      
-      abastecimentos.forEach((a: any) => {
-        if (!a.data_transacao) return;
-        
-        const city = String(a.cidade || a.municipio || "NÃO INFORMADA").toUpperCase().trim();
-        const fuel = normalizeFuel(a.tipo_combustivel);
-        const post = String(a.estabelecimento || "POSTO").toUpperCase().trim();
-        const price = Number(a.valor_litro) || 0;
-        const date = new Date(a.data_transacao).getTime();
-
-        if (price <= 0) return;
-
-        const key = `${city}|${fuel}|${post}`;
-        // Queremos o preço mais recente de cada posto
-        if (!latestPricesByStation[key] || date > latestPricesByStation[key].date) {
-            latestPricesByStation[key] = { price, post, city, fuel, date };
-        }
-      });
-
-      const bestPrices: Record<string, Record<string, { price: number; post: string }>> = {};
-      Object.values(latestPricesByStation).forEach((item: any) => {
-          if (!bestPrices[item.city]) bestPrices[item.city] = {};
-          if (!bestPrices[item.city][item.fuel] || item.price < bestPrices[item.city][item.fuel].price) {
-              bestPrices[item.city][item.fuel] = { price: item.price, post: item.post };
-          }
-      });
-
-      return bestPrices;
-    }, [abastecimentos]);
-
-    // Agrupamento por Gestor
+    // Agrupamento por Gestor com Regra de Janela de 5 Dias
     const managersData = useMemo(() => {
       const data: Record<string, { vehicles: Record<string, { placa: string; fuelings: any[] }>; totalSpent: number; alerts: number }> = {};
+      const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
-      abastecimentos.forEach((a: any) => {
-        if (!a.data_transacao || !selectedMonth) return;
-        if (String(a.data_transacao).slice(0, 7) !== selectedMonth) return;
+      // Pré-filtra por mês para performance
+      const monthFiltered = abastecimentos.filter((a: any) => {
+        if (!a.data_transacao || !selectedMonth) return false;
+        return String(a.data_transacao).slice(0, 7) === selectedMonth;
+      });
 
+      // Indexa todos os abastecimentos por Cidade|Fuel para busca rápida
+      const cityFuelPool: Record<string, any[]> = {};
+      abastecimentos.forEach(a => {
+          if (!a.data_transacao) return;
+          const city = String(a.cidade || a.municipio || "NÃO INFORMADA").toUpperCase().trim();
+          const fuel = normalizeFuel(a.tipo_combustivel);
+          const key = `${city}|${fuel}`;
+          if (!cityFuelPool[key]) cityFuelPool[key] = [];
+          cityFuelPool[key].push({
+              price: Number(a.valor_litro) || 0,
+              post: String(a.estabelecimento || "POSTO").toUpperCase().trim(),
+              date: new Date(a.data_transacao).getTime()
+          });
+      });
+
+      monthFiltered.forEach((a: any) => {
         const normPlaca = normalize(a.placa);
         const gestorEmail = placaToGerente.get(normPlaca) || placaToAdmin.get(normPlaca) || "NÃO ATRIBUÍDO";
         
@@ -155,22 +141,36 @@ const RelatorioGestores = () => {
         const fuel = normalizeFuel(a.tipo_combustivel);
         const post = String(a.estabelecimento || "POSTO").toUpperCase().trim();
         const price = Number(a.valor_litro) || 0;
+        const date = new Date(a.data_transacao).getTime();
         
         if (!data[gestorEmail].vehicles[normPlaca]) {
           data[gestorEmail].vehicles[normPlaca] = { placa: a.placa, fuelings: [] };
         }
 
-        const best = cheapestByCity[city]?.[fuel];
-        // SÓ É ALERTA SE:
-        // 1. O posto sugerido NÃO É o mesmo onde abasteceu (evita erro de datas diferentes no mesmo posto)
-        // 2. O preço sugerido é pelo menos 5 centavos mais barato
-        const isExpensive = !!(best && price > 0 && best.post !== post && best.price < (price - 0.05));
+        // BUSCA MELHOR PREÇO NA JANELA DE 5 DIAS
+        const pool = cityFuelPool[`${city}|${fuel}`] || [];
+        let best: any = null;
+
+        pool.forEach(p => {
+            // Regras:
+            // 1. Deve ser do passado ou mesmo dia, dentro da janela de 5 dias
+            // 2. Não pode ser no mesmo posto
+            // 3. O preço deve ser válido (>0)
+            if (p.date <= date && p.date >= (date - FIVE_DAYS_MS) && p.post !== post && p.price > 0) {
+                if (!best || p.price < best.price) {
+                    best = p;
+                }
+            }
+        });
+
+        const isExpensive = !!(best && price > 0 && best.price < (price - 0.05));
 
         data[gestorEmail].vehicles[normPlaca].fuelings.push({
             city,
-            fuel: String(a.tipo_combustivel).toUpperCase(), // Mostramos o nome original mas comparamos o normalizado
+            fuel: String(a.tipo_combustivel).toUpperCase(),
             price,
             estabelecimento: post,
+            date: a.data_transacao,
             bestPrice: best?.price ?? 0,
             bestPost: best?.post ?? "N/A",
             isExpensive
@@ -181,7 +181,7 @@ const RelatorioGestores = () => {
       });
 
       return data;
-    }, [abastecimentos, selectedMonth, cheapestByCity, placaToGerente, placaToAdmin]);
+    }, [abastecimentos, selectedMonth, placaToGerente, placaToAdmin]);
 
     const handleSendAlert = (email: string, mgr: any) => {
         if (email === "NÃO ATRIBUÍDO") {
@@ -189,36 +189,43 @@ const RelatorioGestores = () => {
             return;
         }
 
-        const opportunities: string[] = [];
+        const groupsByPlate: Record<string, string[]> = {};
+        let totalAlerts = 0;
+
         Object.values(mgr.vehicles).forEach((v: any) => {
             v.fuelings.forEach((f: any) => {
                 if (f.isExpensive) {
-                    opportunities.push(
-                        `📌 VEÍCULO: ${v.placa}\n` +
-                        `• Local: ${f.city} (${f.estabelecimento})\n` +
-                        `• Pagou: ${formatBRL(f.price)}/L (${f.fuel})\n` +
-                        `• OPORTUNIDADE: No posto "${f.bestPost}" o preço é ${formatBRL(f.bestPrice)}/L\n` +
-                        `--------------------------`
+                    if (!groupsByPlate[v.placa]) groupsByPlate[v.placa] = [];
+                    groupsByPlate[v.placa].push(
+                        `📍 Abastecimento em: ${new Date(f.date).toLocaleDateString('pt-BR')} em ${f.city}\n` +
+                        `   • Posto Atual: ${f.estabelecimento} (Pago: ${formatBRL(f.price)}/L)\n` +
+                        `   • DICA: No posto "${f.bestPost}" o preço estava ${formatBRL(f.bestPrice)}/L\n`
                     );
+                    totalAlerts++;
                 }
             });
         });
 
-        if (opportunities.length === 0) {
+        if (totalAlerts === 0) {
             toast.success("Não há alertas de economia pendentes para este gestor.");
             return;
         }
 
+        let bodyLines = `Olá,\n\nIdentificamos ${totalAlerts} abastecimentos realizados em postos com preço acima da média da cidade nos últimos dias.\n\nConfira os detalhes por veículo:\n\n`;
+        
+        Object.entries(groupsByPlate).forEach(([placa, logs]) => {
+            bodyLines += `🚗 VEÍCULO ${placa}:\n`;
+            bodyLines += logs.join('\n');
+            bodyLines += `\n--------------------------\n\n`;
+        });
+
+        bodyLines += `Atenciosamente,\nGestão de Frota`;
+
         const subject = encodeURIComponent(`OPORTUNIDADE DE ECONOMIA - FROTA CYMI (${selectedMonth})`);
-        const body = encodeURIComponent(
-            `Olá,\n\nIdentificamos ${opportunities.length} abastecimentos realizados em postos com preço acima da média da cidade.\n\n` +
-            `Confira abaixo as oportunidades de economia:\n\n` +
-            opportunities.join('\n\n') +
-            ` \n\nAtenciosamente,\nGestão de Frota`
-        );
+        const body = encodeURIComponent(bodyLines);
 
         window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
-        toast.success('Gerando e-mail de notificação...');
+        toast.success('Gerando e-mail consolidado...');
     };
 
     const formatBRL = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
