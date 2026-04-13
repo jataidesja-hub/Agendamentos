@@ -198,7 +198,7 @@ const RelatorioGestores = () => {
                     if (!groupsByPlate[v.placa]) groupsByPlate[v.placa] = [];
                     groupsByPlate[v.placa].push(
                         `📍 Abastecimento em: ${new Date(f.date).toLocaleDateString('pt-BR')} em ${f.city}\n` +
-                        `   • Posto Atual: ${f.estabelecimento} (Pago: ${formatBRL(f.price)}/L)\n` +
+                        `   • Posto Atual: ${f.estabelecimento} (Pago: ${formatBRL(f.price)}/L - ${f.fuel})\n` +
                         `   • DICA: No posto "${f.bestPost}" o preço estava ${formatBRL(f.bestPrice)}/L\n`
                     );
                     totalAlerts++;
