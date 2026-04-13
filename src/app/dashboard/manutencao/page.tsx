@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   MagnifyingGlassIcon,
   DocumentArrowUpIcon,
@@ -13,7 +13,12 @@ import {
   EnvelopeIcon,
   TruckIcon,
   PlusIcon,
+  DocumentIcon,
+  ArrowDownTrayIcon,
+  TrashIcon,
+  PencilSquareIcon,
 } from "@heroicons/react/24/outline";
+import { CheckIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +42,7 @@ interface ManutencaoVeiculo {
   emails_gerente: string;
   status: string | null;
   servicos: string;
+  pdf_url: string | null;
   updated_at: string;
 }
 
@@ -85,6 +91,10 @@ export default function ManutencaoPage() {
   const [servicoText, setServicoText] = useState("");
   const [suggestions, setSuggestions] = useState<ManutencaoVeiculo[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [uploadingPdfId, setUploadingPdfId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editServicoText, setEditServicoText] = useState("");
 
   useEffect(() => {
     loadData();
@@ -179,6 +189,133 @@ export default function ManutencaoPage() {
       } finally { setLoading(false); }
     };
     reader.readAsBinaryString(file);
+  };
+
+  // ==========================================
+  // PDF Upload para Supabase Storage
+  // ==========================================
+  const uploadPdf = useCallback(async (vehicleId: string, placa: string, file: File) => {
+    if (file.type !== 'application/pdf') {
+      toast.error("Apenas arquivos PDF são aceitos.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      toast.error("O arquivo PDF deve ter no máximo 10MB.");
+      return;
+    }
+
+    setUploadingPdfId(vehicleId);
+    try {
+      // Nome do arquivo: placa_timestamp.pdf
+      const timestamp = Date.now();
+      const fileName = `${placa.replace(/\s/g, '_')}_${timestamp}.pdf`;
+      const filePath = `orcamentos/${fileName}`;
+
+      // Upload para o Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('manutencao-pdfs')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Pegar a URL pública
+      const { data: urlData } = supabase.storage
+        .from('manutencao-pdfs')
+        .getPublicUrl(filePath);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Atualizar a tabela com a URL do PDF
+      const { error: updateError } = await supabase
+        .from('manutencao_veiculos')
+        .update({ pdf_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq('id', vehicleId);
+
+      if (updateError) throw updateError;
+
+      // Atualizar estado local
+      setData(prev => prev.map(item => 
+        item.id === vehicleId ? { ...item, pdf_url: publicUrl } : item
+      ));
+
+      toast.success(`PDF anexado ao veículo ${placa}!`);
+    } catch (err: any) {
+      console.error("Erro no upload do PDF:", err);
+      toast.error("Erro ao enviar PDF. Verifique se o bucket 'manutencao-pdfs' existe no Supabase.");
+    } finally {
+      setUploadingPdfId(null);
+      setDragOverId(null);
+    }
+  }, []);
+
+  // Remover PDF
+  const removePdf = async (vehicleId: string, pdfUrl: string) => {
+    if (!window.confirm("Deseja remover o PDF anexado?")) return;
+    
+    try {
+      // Extrair o path do arquivo da URL
+      const urlParts = pdfUrl.split('/manutencao-pdfs/');
+      if (urlParts.length > 1) {
+        const filePath = decodeURIComponent(urlParts[1]);
+        await supabase.storage.from('manutencao-pdfs').remove([filePath]);
+      }
+
+      // Limpar a coluna pdf_url
+      const { error } = await supabase
+        .from('manutencao_veiculos')
+        .update({ pdf_url: null, updated_at: new Date().toISOString() })
+        .eq('id', vehicleId);
+
+      if (error) throw error;
+
+      setData(prev => prev.map(item => 
+        item.id === vehicleId ? { ...item, pdf_url: null } : item
+      ));
+
+      toast.success("PDF removido!");
+    } catch (err) {
+      console.error("Erro ao remover PDF:", err);
+      toast.error("Erro ao remover PDF.");
+    }
+  };
+
+  // Drag & Drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent, vehicleId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverId(vehicleId);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverId(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, vehicleId: string, placa: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      uploadPdf(vehicleId, placa, files[0]);
+    }
+  }, [uploadPdf]);
+
+  // Click para selecionar PDF
+  const handlePdfClick = (vehicleId: string, placa: string) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf';
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) uploadPdf(vehicleId, placa, file);
+    };
+    input.click();
   };
 
   // Busca sugestões ao digitar placa
@@ -353,6 +490,21 @@ Serviços: ${item.servicos || "N/A"}`;
     return data.filter(item => item.status && ETAPAS.some(e => e.id === item.status)).length;
   }, [data]);
 
+  // Extrair nome do arquivo da URL do PDF
+  const getPdfFileName = (url: string) => {
+    try {
+      const parts = url.split('/');
+      const fileName = decodeURIComponent(parts[parts.length - 1]);
+      // Encurtar se for muito longo
+      if (fileName.length > 25) {
+        return fileName.substring(0, 22) + '...pdf';
+      }
+      return fileName;
+    } catch {
+      return 'documento.pdf';
+    }
+  };
+
   return (
     <div className="h-full flex flex-col pb-10 px-4 md:px-8">
       {/* Header */}
@@ -521,59 +673,191 @@ Serviços: ${item.servicos || "N/A"}`;
                     <p className="text-xs text-gray-400 font-bold">Nenhum veículo</p>
                   </div>
                 ) : (
-                  items.map(item => (
-                    <div 
-                      key={item.id} 
-                      className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 group"
-                    >
-                      {/* Placa */}
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400 px-3 py-1.5 rounded-lg font-black text-sm border border-[#0b7336]/20">
-                          {item.placa}
-                        </span>
-                        <button 
-                          onClick={() => finalizeMaintenance(item.id)}
-                          className="p-1.5 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                          title="Finalizar"
-                        >
-                          <XMarkIcon className="w-4 h-4" />
-                        </button>
-                      </div>
+                  items.map(item => {
+                    const isDragOver = dragOverId === item.id;
+                    const isUploading = uploadingPdfId === item.id;
+                    
+                    return (
+                      <div 
+                        key={item.id} 
+                        className={`bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm hover:shadow-md transition-all duration-200 group ${
+                          isDragOver 
+                            ? 'border-[#0b7336] border-2 bg-green-50/50 dark:bg-green-500/5 ring-2 ring-[#0b7336]/20 scale-[1.02]' 
+                            : 'border-gray-100 dark:border-gray-700'
+                        }`}
+                        onDragOver={(e) => handleDragOver(e, item.id)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, item.id, item.placa)}
+                      >
+                        {/* Placa + ações do card */}
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400 px-3 py-1.5 rounded-lg font-black text-sm border border-[#0b7336]/20">
+                            {item.placa}
+                          </span>
+                          <div className="flex items-center gap-0.5">
+                            <button 
+                              onClick={() => {
+                                if (editingId === item.id) {
+                                  setEditingId(null);
+                                } else {
+                                  setEditingId(item.id);
+                                  setEditServicoText(item.servicos || "");
+                                }
+                              }}
+                              className={`p-1.5 transition-colors rounded-md ${
+                                editingId === item.id 
+                                  ? 'text-[#0b7336] bg-green-50 dark:bg-green-500/10' 
+                                  : 'text-gray-300 hover:text-[#0b7336] opacity-0 group-hover:opacity-100'
+                              }`}
+                              title="Editar"
+                            >
+                              <PencilSquareIcon className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => finalizeMaintenance(item.id)}
+                              className="p-1.5 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 rounded-md"
+                              title="Finalizar"
+                            >
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
 
-                      {/* Serviço */}
-                      {item.servicos && (
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 line-clamp-2" title={item.servicos}>
-                          <WrenchScrewdriverIcon className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
-                          {item.servicos}
-                        </p>
-                      )}
-
-                      {/* Ações */}
-                      <div className="flex flex-col gap-2">
-                        {/* Mover para outra etapa */}
-                        <select
-                          value={item.status || ""}
-                          onChange={(e) => moveToEtapa(item.id, e.target.value as EtapaId)}
-                          className="w-full text-[10px] font-bold uppercase px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-pointer focus:ring-2 focus:ring-[#0b7336] transition-all"
-                        >
-                          {ETAPAS.map(e => (
-                            <option key={e.id} value={e.id}>{e.label}</option>
-                          ))}
-                        </select>
-
-                        {/* Botão Enviar Email (apenas na etapa aguardando_envio) */}
-                        {item.status === 'aguardando_envio' && (
-                          <button
-                            onClick={() => handleSendEmail(item)}
-                            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#0b7336] text-white rounded-lg text-[10px] font-bold uppercase hover:bg-[#075a2a] transition-all"
-                          >
-                            <EnvelopeIcon className="w-3.5 h-3.5" />
-                            Enviar Email
-                          </button>
+                        {/* Serviço - modo edição ou visualização */}
+                        {editingId === item.id ? (
+                          <div className="mb-3 space-y-2">
+                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Serviço / Descrição</label>
+                            <textarea
+                              value={editServicoText}
+                              onChange={(e) => setEditServicoText(e.target.value)}
+                              placeholder="Descreva o serviço..."
+                              rows={2}
+                              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] font-medium focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all resize-none"
+                              autoFocus
+                            />
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const { error } = await supabase
+                                    .from('manutencao_veiculos')
+                                    .update({ servicos: editServicoText, updated_at: new Date().toISOString() })
+                                    .eq('id', item.id);
+                                  if (error) throw error;
+                                  setData(prev => prev.map(d => d.id === item.id ? { ...d, servicos: editServicoText } : d));
+                                  setEditingId(null);
+                                  toast.success("Serviço atualizado!");
+                                } catch {
+                                  toast.error("Erro ao salvar.");
+                                }
+                              }}
+                              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#0b7336] text-white rounded-lg text-[10px] font-bold hover:bg-[#075a2a] transition-all"
+                            >
+                              <CheckIcon className="w-3.5 h-3.5" />
+                              Salvar
+                            </button>
+                          </div>
+                        ) : (
+                          item.servicos && (
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 line-clamp-2 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 transition-colors" 
+                              title={`${item.servicos} (clique no lápis para editar)`}
+                              onClick={() => { setEditingId(item.id); setEditServicoText(item.servicos || ""); }}
+                            >
+                              <WrenchScrewdriverIcon className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
+                              {item.servicos}
+                            </p>
+                          )
                         )}
+
+                        {/* ========== ÁREA DO PDF ========== */}
+                        {item.pdf_url ? (
+                          // PDF anexado - mostrar info
+                          <div className="mb-3 bg-red-50 dark:bg-red-500/10 border border-red-200/60 dark:border-red-500/20 rounded-lg p-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center shrink-0">
+                                <DocumentIcon className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-bold text-red-700 dark:text-red-400 truncate">
+                                  {getPdfFileName(item.pdf_url)}
+                                </p>
+                                <p className="text-[9px] text-red-500/70">PDF anexado</p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <a
+                                  href={item.pdf_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-md transition-colors"
+                                  title="Abrir PDF"
+                                >
+                                  <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                                </a>
+                                <button
+                                  onClick={() => removePdf(item.id, item.pdf_url!)}
+                                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-md transition-colors"
+                                  title="Remover PDF"
+                                >
+                                  <TrashIcon className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          // Zona de drop para PDF
+                          <div 
+                            className={`mb-3 border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-all duration-200 ${
+                              isDragOver
+                                ? 'border-[#0b7336] bg-green-50 dark:bg-green-500/10'
+                                : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50/50 dark:hover:bg-gray-700/30'
+                            } ${isUploading ? 'opacity-60 pointer-events-none' : ''}`}
+                            onClick={() => !isUploading && handlePdfClick(item.id, item.placa)}
+                          >
+                            {isUploading ? (
+                              <div className="flex flex-col items-center gap-1.5 py-1">
+                                <ArrowPathIcon className="w-5 h-5 text-[#0b7336] animate-spin" />
+                                <span className="text-[10px] font-bold text-[#0b7336]">Enviando...</span>
+                              </div>
+                            ) : isDragOver ? (
+                              <div className="flex flex-col items-center gap-1.5 py-1">
+                                <DocumentArrowUpIcon className="w-5 h-5 text-[#0b7336]" />
+                                <span className="text-[10px] font-bold text-[#0b7336]">Solte o PDF aqui</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center gap-1 py-0.5">
+                                <DocumentArrowUpIcon className="w-4 h-4 text-gray-300 dark:text-gray-500" />
+                                <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">Arraste um PDF ou clique</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Ações */}
+                        <div className="flex flex-col gap-2">
+                          {/* Mover para outra etapa */}
+                          <select
+                            value={item.status || ""}
+                            onChange={(e) => moveToEtapa(item.id, e.target.value as EtapaId)}
+                            className="w-full text-[10px] font-bold uppercase px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-pointer focus:ring-2 focus:ring-[#0b7336] transition-all"
+                          >
+                            {ETAPAS.map(e => (
+                              <option key={e.id} value={e.id}>{e.label}</option>
+                            ))}
+                          </select>
+
+                          {/* Botão Enviar Email (apenas na etapa aguardando_envio) */}
+                          {item.status === 'aguardando_envio' && (
+                            <button
+                              onClick={() => handleSendEmail(item)}
+                              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#0b7336] text-white rounded-lg text-[10px] font-bold uppercase hover:bg-[#075a2a] transition-all"
+                            >
+                              <EnvelopeIcon className="w-3.5 h-3.5" />
+                              Enviar Email
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
