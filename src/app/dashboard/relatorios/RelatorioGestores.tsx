@@ -9,66 +9,72 @@ import {
   ExclamationTriangleIcon,
   TruckIcon,
   MapPinIcon,
-  CurrencyDollarIcon,
   CheckCircleIcon,
-  ArrowRightOnRectangleIcon
+  ArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { dataCache } from '@/lib/cache';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 
 const RelatorioGestores = () => {
+    const [selectedMonth, setSelectedMonth] = useState('');
+    const [expandedGestor, setExpandedGestor] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
     const [abastecimentos, setAbastecimentos] = useState<any[]>(dataCache.abastecimentos || []);
-    const [veiculosAtivos, setVeiculosAtivos] = useState<Set<string>>(dataCache.veiculosAtivos || new Set());
-    const [maps, setMaps] = useState({
-        placaToGerente: new Map(),
-        placaToAdmin: new Map()
-    });
+    const [placaToGerente, setPlacaToGerente] = useState<Map<string, string>>(new Map());
+    const [placaToAdmin, setPlacaToAdmin] = useState<Map<string, string>>(new Map());
 
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            // Carrega Frota para mapear emails
-            const { data: frota } = await supabase
-                .from('frota_veiculos')
-                .select('placa, email_gerente, email_administrativo')
-                .eq('status', 'Ativo');
-
-            const pToGerente = new Map();
-            const pToAdmin = new Map();
-            const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
-
-            if (frota) {
-                frota.forEach(v => {
-                    const norm = normalize(v.placa);
-                    if (v.email_gerente) pToGerente.set(norm, v.email_gerente);
-                    if (v.email_administrativo) pToAdmin.set(norm, v.email_administrativo);
-                });
-            }
-
-            setMaps({ placaToGerente: pToGerente, placaToAdmin: pToAdmin });
-
-            // Carrega Abastecimentos se não estiver no cache
-            if (!dataCache.abastecimentos) {
-                const { data: abs } = await supabase
-                    .from('abastecimentos')
-                    .select('*')
-                    .order('data_transacao', { ascending: false });
-                if (abs) {
-                    setAbastecimentos(abs);
-                    dataCache.abastecimentos = abs;
-                }
-            } else {
-                setAbastecimentos(dataCache.abastecimentos);
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
 
     useEffect(() => {
+        const loadData = async () => {
+            setLoading(true);
+            try {
+                // Carrega Frota para mapear emails
+                let frota: any[] | null = null;
+                try {
+                    const res = await supabase
+                        .from('frota_veiculos')
+                        .select('placa, email_gerente, email_administrativo')
+                        .eq('status', 'Ativo');
+                    frota = res.data;
+                } catch {
+                    // fallback se colunas não existirem
+                }
+
+                const pToGerente = new Map<string, string>();
+                const pToAdmin = new Map<string, string>();
+
+                if (frota) {
+                    frota.forEach((v: any) => {
+                        const norm = normalize(v.placa);
+                        if (v.email_gerente) pToGerente.set(norm, v.email_gerente);
+                        if (v.email_administrativo) pToAdmin.set(norm, v.email_administrativo);
+                    });
+                }
+
+                setPlacaToGerente(pToGerente);
+                setPlacaToAdmin(pToAdmin);
+
+                // Carrega Abastecimentos se não estiver no cache
+                if (!dataCache.abastecimentos) {
+                    const { data: abs } = await supabase
+                        .from('abastecimentos')
+                        .select('*')
+                        .order('data_transacao', { ascending: false });
+                    if (abs) {
+                        setAbastecimentos(abs);
+                        dataCache.abastecimentos = abs;
+                    }
+                } else {
+                    setAbastecimentos(dataCache.abastecimentos);
+                }
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
         loadData();
     }, []);
 
@@ -83,34 +89,28 @@ const RelatorioGestores = () => {
       return Array.from(monthsSet).sort().reverse();
     }, [abastecimentos]);
 
-    // Define o mês inicial
     useEffect(() => {
       if (!selectedMonth && availableMonths.length > 0) {
         setSelectedMonth(availableMonths[0]);
       }
     }, [availableMonths, selectedMonth]);
 
-    // Dados consolidados por cidade/combustível (Melhores preços)
+    // Melhor preço por cidade/combustível
     const cheapestByCity = useMemo(() => {
-      const prices: any = {};
-      const filtered = abastecimentos.filter((a: any) => {
-        if (!a.data_transacao || !selectedMonth) return false;
-        return String(a.data_transacao).slice(0, 7) === selectedMonth;
-      });
+      const prices: Record<string, Record<string, { price: number; post: string }>> = {};
+      abastecimentos.forEach((a: any) => {
+        if (!a.data_transacao || !selectedMonth) return;
+        if (String(a.data_transacao).slice(0, 7) !== selectedMonth) return;
 
-      filtered.forEach((a: any) => {
         const city = String(a.cidade || a.municipio || "NÃO INFORMADA").toUpperCase().trim();
         const fuel = String(a.tipo_combustivel || "OUTROS").toUpperCase().trim();
         const price = Number(a.valor_litro) || 0;
         const post = String(a.estabelecimento || "POSTO").toUpperCase().trim();
-
         if (price <= 0) return;
 
         if (!prices[city]) prices[city] = {};
-        if (!prices[city][fuel]) {
-          prices[city][fuel] = { price: price, post: post };
-        } else if (price < prices[city][fuel].price) {
-          prices[city][fuel] = { price: price, post: post };
+        if (!prices[city][fuel] || price < prices[city][fuel].price) {
+          prices[city][fuel] = { price, post };
         }
       });
       return prices;
@@ -118,16 +118,14 @@ const RelatorioGestores = () => {
 
     // Agrupamento por Gestor
     const managersData = useMemo(() => {
-      const data: any = {};
-      const filtered = abastecimentos.filter((a: any) => {
-        if (!a.data_transacao || !selectedMonth) return false;
-        return String(a.data_transacao).slice(0, 7) === selectedMonth;
-      });
+      const data: Record<string, { vehicles: Record<string, { placa: string; fuelings: any[] }>; totalSpent: number; alerts: number }> = {};
 
-      filtered.forEach((a: any) => {
-        const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+      abastecimentos.forEach((a: any) => {
+        if (!a.data_transacao || !selectedMonth) return;
+        if (String(a.data_transacao).slice(0, 7) !== selectedMonth) return;
+
         const normPlaca = normalize(a.placa);
-        const gestorEmail = maps.placaToGerente.get(normPlaca) || maps.placaToAdmin.get(normPlaca) || "NÃO ATRIBUÍDO";
+        const gestorEmail = placaToGerente.get(normPlaca) || placaToAdmin.get(normPlaca) || "NÃO ATRIBUÍDO";
         
         if (!data[gestorEmail]) {
           data[gestorEmail] = { vehicles: {}, totalSpent: 0, alerts: 0 };
@@ -138,47 +136,53 @@ const RelatorioGestores = () => {
         const price = Number(a.valor_litro) || 0;
         
         if (!data[gestorEmail].vehicles[normPlaca]) {
-          data[gestorEmail].vehicles[normPlaca] = { placa: a.placa, fuelings: [], totalLiters: 0 };
+          data[gestorEmail].vehicles[normPlaca] = { placa: a.placa, fuelings: [] };
         }
 
-        // Verifica se existe um posto mais barato nesta cidade para este combustível
         const best = cheapestByCity[city]?.[fuel];
-        const isExpensive = best && best.price < (price - 0.05); // Margem de 5 centavos
+        const isExpensive = !!(best && price > 0 && best.price < (price - 0.05));
 
-        const entry = {
-            ...a,
+        data[gestorEmail].vehicles[normPlaca].fuelings.push({
             city,
             fuel,
             price,
-            bestPrice: best?.price,
-            bestPost: best?.post,
+            estabelecimento: a.estabelecimento || "POSTO",
+            bestPrice: best?.price ?? 0,
+            bestPost: best?.post ?? "N/A",
             isExpensive
-        };
+        });
 
-        data[gestorEmail].vehicles[normPlaca].fuelings.push(entry);
-        data[gestorEmail].totalSpent += (Number(a.valor_total || a.valor_abastecimento) || 0);
+        data[gestorEmail].totalSpent += (Number(a.valor_total || a.valor_abastecimento || a.valor_emissao) || 0);
         if (isExpensive) data[gestorEmail].alerts += 1;
       });
 
       return data;
-    }, [abastecimentos, selectedMonth, cheapestByCity, maps]);
+    }, [abastecimentos, selectedMonth, cheapestByCity, placaToGerente, placaToAdmin]);
 
-    const handleSendAlert = (email: string, managerData: any) => {
+    const handleSendAlert = (email: string) => {
         if (email === "NÃO ATRIBUÍDO") {
             toast.error("Este grupo não possui um e-mail de gestor atribuído.");
             return;
         }
-        
-        // Simulação de envio ou integração com backend
         toast.promise(
             new Promise(resolve => setTimeout(resolve, 1500)),
             {
-                loading: `Gerando relatório de economia para ${email}...`,
-                success: 'Alerta de economia enviado com sucesso!',
-                error: 'Erro ao enviar e-mail.',
+                loading: `Gerando relatório para ${email}...`,
+                success: 'Alerta de economia enviado!',
+                error: 'Erro ao enviar.',
             }
         );
     };
+
+    const formatBRL = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full" />
+            </div>
+        );
+    }
 
     return (
       <div className="space-y-6 pb-20">
@@ -204,32 +208,32 @@ const RelatorioGestores = () => {
         </div>
 
         <div className="space-y-4">
-          {Object.entries(managersData).sort((a: any, b: any) => b[1].alerts - a[1].alerts).map(([email, data]: [string, any]) => (
+          {Object.entries(managersData).sort((a, b) => b[1].alerts - a[1].alerts).map(([email, mgr]) => (
             <div key={email} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
               <div className="w-full px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center flex-1">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-5 shadow-lg ${data.alerts > 0 ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-5 shadow-lg ${mgr.alerts > 0 ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600'}`}>
                     <UserGroupIcon className="w-6 h-6" />
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-gray-900 truncate max-w-md">{email}</h3>
                     <div className="flex gap-4 mt-1">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{Object.keys(data.vehicles).length} Veículos</span>
-                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{data.totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{Object.keys(mgr.vehicles).length} Veículos</span>
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{formatBRL(mgr.totalSpent)}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-4">
-                  {data.alerts > 0 && (
+                  {mgr.alerts > 0 && (
                     <div className="px-4 py-2 bg-orange-50 border border-orange-100 rounded-xl flex items-center gap-2">
                        <ExclamationTriangleIcon className="w-4 h-4 text-orange-600" />
-                       <span className="text-[10px] font-black text-orange-700 uppercase">{data.alerts} Oportunidades de Economia</span>
+                       <span className="text-[10px] font-black text-orange-700 uppercase">{mgr.alerts} Oportunidades de Economia</span>
                     </div>
                   )}
                   
                   <button 
-                    onClick={() => handleSendAlert(email, data)}
+                    onClick={() => handleSendAlert(email)}
                     className="flex items-center gap-2 px-5 py-2.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-[10px] font-black rounded-xl transition-all shadow-lg shadow-green-500/20"
                   >
                     <EnvelopeIcon className="w-4 h-4" />
@@ -248,7 +252,7 @@ const RelatorioGestores = () => {
               {expandedGestor === email && (
                 <div className="px-8 pb-8 space-y-4 bg-gray-50/30">
                   <div className="h-px bg-gray-100 w-full mb-4" />
-                  {Object.values(data.vehicles).map((v: any) => (
+                  {Object.values(mgr.vehicles).map((v) => (
                     <div key={v.placa} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                        <div className="px-6 py-4 bg-gray-50/50 flex justify-between items-center border-b border-gray-100">
                          <div className="flex items-center gap-3">
@@ -266,19 +270,19 @@ const RelatorioGestores = () => {
                                 </div>
                                 <div className="flex items-center gap-3">
                                    <span className="text-xs font-bold text-gray-700">{f.fuel}</span>
-                                   <span className="text-sm font-black text-gray-900">{f.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} / L</span>
+                                   <span className="text-sm font-black text-gray-900">{formatBRL(f.price)} / L</span>
                                 </div>
                              </div>
                              
                              {f.isExpensive ? (
-                               <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-red-200 shadow-sm animate-pulse">
+                               <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-red-200 shadow-sm">
                                   <div className="text-right">
                                      <p className="text-[8px] font-black text-red-500 uppercase tracking-widest">Posto Mais Barato na Cidade</p>
-                                     <p className="text-[10px] font-black text-gray-900 truncate max-w-[150px]">{f.bestPost || 'N/A'}</p>
-                                     <p className="text-xs font-black text-emerald-600">{(f.bestPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} / L</p>
+                                     <p className="text-[10px] font-black text-gray-900 truncate max-w-[200px]">{f.bestPost}</p>
+                                     <p className="text-xs font-black text-emerald-600">{formatBRL(f.bestPrice)} / L</p>
                                   </div>
                                   <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                                     <ArrowRightOnRectangleIcon className="w-4 h-4 text-red-600 rotate-180" />
+                                     <ArrowDownIcon className="w-4 h-4 text-red-600" />
                                   </div>
                                </div>
                              ) : (
