@@ -43,15 +43,23 @@ const RelatorioMeioAmbiente = () => {
   const loadFromSupabase = async () => {
     setLoading(true);
     try {
-      // 1. Busca frota ativa para filtrar
-      setLoadingStep('Mapeando Frota Operacional...');
+      // 1. Busca frota com seus respectivos projetos
+      setLoadingStep('Mapeando Estrutura de Projetos...');
       setProgress(10);
-      const { data: frota } = await supabase.from('veiculos_frota').select('placa').eq('status', 'Ativo');
+      const { data: frota } = await supabase.from('frota_veiculos').select('placa, projeto').eq('status', 'Ativo');
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
       
+      const placaToProject = new Map<string, string>();
       if (frota) {
-        const setAtivos = new Set<string>(frota.map(v => normalize(v.placa)));
+        const setAtivos = new Set<string>();
+        frota.forEach(v => {
+          const normPlaca = normalize(v.placa);
+          setAtivos.add(normPlaca);
+          if (v.projeto) placaToProject.set(normPlaca, v.projeto);
+        });
         setVeiculosAtivos(setAtivos);
+        // @ts-ignore
+        dataCache.placaToProject = placaToProject;
         dataCache.veiculosAtivos = setAtivos;
       }
       setProgress(30);
@@ -117,13 +125,18 @@ const RelatorioMeioAmbiente = () => {
   }, [abastecimentos]);
 
   const availableProjects = useMemo(() => {
+    // @ts-ignore
+    const placaToProject = dataCache.placaToProject || new Map();
+    const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+
     const projectsSet = new Set<string>();
     abastecimentos.forEach((a: any) => {
-      const proj = String(a.projeto || "SEM PROJETO").toUpperCase().trim();
+      const normPlaca = normalize(a.placa);
+      const proj = String(a.projeto || placaToProject.get(normPlaca) || "SEM PROJETO").toUpperCase().trim();
       if (proj) projectsSet.add(proj);
     });
     return ['TODOS', ...Array.from(projectsSet).sort()];
-  }, [abastecimentos]);
+  }, [abastecimentos, veiculosAtivos]);
 
   useEffect(() => {
     if (!selectedMonth && availableMonths.length > 0) {
@@ -133,20 +146,23 @@ const RelatorioMeioAmbiente = () => {
 
   const processedData = useMemo(() => {
     const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+    // @ts-ignore
+    const placaToProject = dataCache.placaToProject || new Map();
 
     const filtered = abastecimentos.filter((a: any) => {
       if (!a.data_transacao || !selectedMonth) return false;
       
+      const normPlaca = normalize(a.placa);
+      const proj = String(a.projeto || placaToProject.get(normPlaca) || "SEM PROJETO").toUpperCase().trim();
+
       // Filtro de Projeto
       if (selectedProject !== 'TODOS') {
-        const proj = String(a.projeto || "SEM PROJETO").toUpperCase().trim();
         if (proj !== selectedProject) return false;
       }
 
       // Filtro de Frota Ativa
       if (veiculosAtivos.size > 0) {
-        const placaNormalizada = normalize(a.placa);
-        if (!veiculosAtivos.has(placaNormalizada)) return false;
+        if (!veiculosAtivos.has(normPlaca)) return false;
       }
 
       return String(a.data_transacao).slice(0, 7) === selectedMonth;
@@ -164,9 +180,10 @@ const RelatorioMeioAmbiente = () => {
 
     filtered.forEach((a: any) => {
       const litros = Number(a.litros) || 0;
-      const km = Number(a.km_rodados_horas) || 0;
+      const km = Number(a.km_rodados_horas || a.km_rodados) || 0;
       const fuelRaw = String(a.tipo_combustivel || "OUTROS").toUpperCase().trim();
-      const project = String(a.projeto || "SEM PROJETO").toUpperCase().trim();
+      const normPlaca = normalize(a.placa);
+      const project = String(a.projeto || placaToProject.get(normPlaca) || "SEM PROJETO").toUpperCase().trim();
       const vehicleType = String(a.tipo_frota || a.modelo_veiculo || "").toUpperCase();
       const plate = String(a.placa || "").toUpperCase();
 
