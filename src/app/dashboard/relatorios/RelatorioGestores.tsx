@@ -30,16 +30,15 @@ const RelatorioGestores = () => {
         const loadData = async () => {
             setLoading(true);
             try {
-                // Carrega Frota para mapear emails
+                // Carrega base de manutenção para mapear emails
                 let frota: any[] | null = null;
                 try {
                     const res = await supabase
-                        .from('frota_veiculos')
-                        .select('placa, email_gerente, email_administrativo')
-                        .eq('status', 'Ativo');
+                        .from('manutencao_frota_base')
+                        .select('placa, emails_gerente, emails_admin');
                     frota = res.data;
                 } catch {
-                    // fallback se colunas não existirem
+                    // fallback
                 }
 
                 const pToGerente = new Map<string, string>();
@@ -48,8 +47,8 @@ const RelatorioGestores = () => {
                 if (frota) {
                     frota.forEach((v: any) => {
                         const norm = normalize(v.placa);
-                        if (v.email_gerente) pToGerente.set(norm, v.email_gerente);
-                        if (v.email_administrativo) pToAdmin.set(norm, v.email_administrativo);
+                        if (v.emails_gerente) pToGerente.set(norm, v.emails_gerente.split(',')[0]);
+                        if (v.emails_admin) pToAdmin.set(norm, v.emails_admin.split(',')[0]);
                     });
                 }
 
