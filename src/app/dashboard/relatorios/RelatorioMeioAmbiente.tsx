@@ -200,6 +200,7 @@ const RelatorioMeioAmbiente = () => {
     let totalLiters = 0;
     let totalKm = 0;
     const projectStats: any = {};
+    const baseStats: any = {};
     const fuelStats: any = {};
     const assetStats: any = {
       'VEÍCULOS': { co2: 0, liters: 0, count: 0 },
@@ -212,6 +213,7 @@ const RelatorioMeioAmbiente = () => {
       const fuelRaw = String(a.tipo_combustivel || "OUTROS").toUpperCase().trim();
       const normPlaca = normalize(a.placa);
       const project = String(a.projeto || placaToProject.get(normPlaca) || "SEM PROJETO").toUpperCase().trim();
+      const base = String(a.subprojeto || placaToSubproject.get(normPlaca) || "SEM BASE").toUpperCase().trim();
       const vehicleType = String(a.tipo_frota || a.modelo_veiculo || "").toUpperCase();
       const plate = String(a.placa || "").toUpperCase();
 
@@ -272,27 +274,37 @@ const RelatorioMeioAmbiente = () => {
       projectStats[project].co2 += recordCO2;
       projectStats[project].liters += litros;
       projectStats[project].km += km;
+
+      // Agrupamento por base
+      if (!baseStats[base]) {
+        baseStats[base] = { name: base, co2: 0, liters: 0, km: 0 };
+      }
+      baseStats[base].co2 += recordCO2;
+      baseStats[base].liters += litros;
+      baseStats[base].km += km;
     });
 
-    const projectRanking = Object.values(projectStats)
+    const rankingData = selectedProject === 'TODOS' ? projectStats : baseStats;
+    const rankingSorted = Object.values(rankingData)
       .sort((a: any, b: any) => b.co2 - a.co2)
-      .slice(0, 8);
+      .slice(0, 10);
 
     const fuelRanking = Object.entries(fuelStats)
       .map(([name, stats]: [string, any]) => ({
         name,
         co2: stats.co2,
+        liters: stats.liters,
         percentage: (stats.co2 / (totalCO2 || 1)) * 100
       }))
       .sort((a, b) => b.co2 - a.co2);
 
-    const maxExp = Math.max(...projectRanking.map((d: any) => d.co2), 1);
+    const maxExp = Math.max(...rankingSorted.map((d: any) => d.co2), 1);
 
     return {
       totalCO2,
       totalLiters,
       totalKm,
-      projectRanking: projectRanking.map((d: any) => ({ ...d, barScale: (d.co2 / maxExp) * 100 })),
+      ranking: rankingSorted.map((d: any) => ({ ...d, barScale: (d.co2 / maxExp) * 100 })),
       fuelRanking,
       assetStats,
       totalRecords: filtered.length
@@ -524,38 +536,52 @@ const RelatorioMeioAmbiente = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Project Impact Ranking */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-10 rounded-[3.5rem] border border-gray-100 dark:border-gray-700 shadow-xl">
-           <div className="flex justify-between items-center mb-10">
-              <div className="flex items-center gap-4">
-                 <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center">
-                    <TrophyIcon className="w-5 h-5 text-yellow-500" />
-                 </div>
-                 <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase italic tracking-tighter">Impacto por Projeto</h3>
-              </div>
-              <span className="text-[9px] font-black bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-4 py-1.5 rounded-full border border-gray-200 dark:border-white/10 uppercase tracking-widest">kg CO₂</span>
-           </div>
-
-           <div className="space-y-6">
-              {processedData.projectRanking.length === 0 ? (
-                <div className="text-center py-20 text-gray-400 italic font-medium">Nenhum dado encontrado para o período.</div>
-              ) : (
-                processedData.projectRanking.map((item: any, idx: number) => (
-                  <div key={item.name} className="relative group">
-                    <div className="flex justify-between items-center mb-2 px-1">
-                       <span className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight truncate max-w-[75%]">{idx + 1}. {item.name}</span>
-                       <span className="text-xs font-black text-gray-900 dark:text-white">{item.co2.toFixed(1)}</span>
-                    </div>
-                    <div className="h-4 bg-gray-50 dark:bg-gray-900/50 rounded-full overflow-hidden border border-gray-100 dark:border-white/5">
-                        <div 
-                          className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-1000 ease-out group-hover:from-emerald-600 group-hover:to-emerald-500"
-                          style={{ width: `${item.barScale}%` }}
-                        />
-                    </div>
+         <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-10 rounded-[3.5rem] border border-gray-100 dark:border-gray-700 shadow-xl">
+            <div className="flex justify-between items-center mb-10">
+               <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center">
+                     <TrophyIcon className="w-5 h-5 text-yellow-500" />
                   </div>
-                ))
-              )}
-           </div>
-        </div>
+                  <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase italic tracking-tighter">
+                    Impacto por {selectedProject === 'TODOS' ? 'Projeto' : 'Base'}
+                  </h3>
+               </div>
+               <span className="text-[9px] font-black bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-4 py-1.5 rounded-full border border-gray-200 dark:border-white/10 uppercase tracking-widest">kg CO₂</span>
+            </div>
+
+            <div className="space-y-6">
+               {processedData.ranking.length === 0 ? (
+                 <div className="text-center py-20 text-gray-400 italic font-medium">Nenhum dado encontrado para o período.</div>
+               ) : (
+                 processedData.ranking.map((item: any, idx: number) => (
+                   <div 
+                     key={item.name} 
+                     className="relative group cursor-pointer"
+                     onClick={() => {
+                       if (selectedProject === 'TODOS' && item.name !== 'SEM PROJETO') {
+                         setSelectedProject(item.name);
+                       } else if (selectedProject !== 'TODOS' && item.name !== 'SEM BASE') {
+                         setSelectedBase(item.name);
+                       }
+                     }}
+                   >
+                     <div className="flex justify-between items-center mb-2 px-1">
+                        <span className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-tight truncate max-w-[75%] group-hover:text-emerald-500 transition-colors">
+                          {idx + 1}. {item.name}
+                        </span>
+                        <span className="text-xs font-black text-gray-900 dark:text-white">{item.co2.toFixed(1)}</span>
+                     </div>
+                     <div className="h-4 bg-gray-50 dark:bg-gray-900/50 rounded-full overflow-hidden border border-gray-100 dark:border-white/5">
+                         <div 
+                           className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-1000 ease-out group-hover:from-emerald-600 group-hover:to-emerald-500"
+                           style={{ width: `${item.barScale}%` }}
+                         />
+                     </div>
+                   </div>
+                 ))
+               )}
+            </div>
+         </div>
 
         {/* Emissions by Fuel Type */}
         <div className="bg-white dark:bg-gray-800 p-10 rounded-[3.5rem] border border-gray-100 dark:border-gray-700 shadow-xl flex flex-col">
@@ -576,6 +602,7 @@ const RelatorioMeioAmbiente = () => {
                        <div>
                           <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">{item.name}</p>
                           <p className="text-xl font-black text-gray-900 dark:text-white">{(item.co2 / 1000).toFixed(2)} <span className="text-xs text-gray-400 font-bold">t CO₂</span></p>
+                          <p className="text-[10px] font-bold text-emerald-600/60 uppercase">{item.liters?.toLocaleString('pt-BR')} <span className="text-[8px]">Litros</span></p>
                        </div>
                        <div className="text-right">
                           <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Participação</p>
