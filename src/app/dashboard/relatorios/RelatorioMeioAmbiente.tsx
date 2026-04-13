@@ -584,7 +584,10 @@ const RelatorioMeioAmbiente = () => {
                                .map(([fName, fStats]: [string, any]) => (
                                  <span key={fName} className="text-[8px] font-bold text-gray-400 dark:text-gray-500 uppercase flex items-center gap-1">
                                     <div className="w-1 h-1 rounded-full bg-emerald-500/50" />
-                                    {fName.split(' ')[0]}: {fStats.liters.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} L
+                                    {fName.split(' ')[0]}: {fStats.liters.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} L 
+                                    <span className="text-gray-300 dark:text-gray-600 font-medium ml-1">
+                                       ({fStats.co2.toFixed(1)} kg)
+                                    </span>
                                  </span>
                                ))}
                           </div>
