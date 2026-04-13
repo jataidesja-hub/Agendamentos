@@ -106,6 +106,7 @@ export default function ManutencaoPage() {
       const { data: result, error } = await supabase
         .from('manutencao_veiculos')
         .select('*')
+        .not('status', 'is', null) // Apenas processos ativos
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
@@ -175,9 +176,11 @@ export default function ManutencaoPage() {
         if (!confirm) return;
 
         for (const item of formatted) {
+          // Remover campo servicos do item da base
+          const { servicos, ...baseItem } = item;
           const { error } = await supabase
-            .from('manutencao_veiculos')
-            .upsert(item, { onConflict: 'placa' });
+            .from('manutencao_frota_base')
+            .upsert(baseItem, { onConflict: 'placa' });
           if (error) throw error;
         }
 
@@ -325,9 +328,18 @@ export default function ManutencaoPage() {
     setSearchResult(null);
     
     if (upper.length >= 2) {
-      const matches = data.filter(item => item.placa.includes(upper));
-      setSuggestions(matches.slice(0, 8));
-      setShowSuggestions(matches.length > 0);
+      // Busca na tabela base para sugerir placas conhecidas
+      supabase
+        .from('manutencao_frota_base')
+        .select('*')
+        .ilike('placa', `%${upper}%`)
+        .limit(8)
+        .then(({ data: matches }) => {
+          if (matches) {
+            setSuggestions(matches as any);
+            setShowSuggestions(matches.length > 0);
+          }
+        });
     } else {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -347,7 +359,7 @@ export default function ManutencaoPage() {
     setLoading(true);
     try {
       const { data: result, error } = await supabase
-        .from('manutencao_veiculos')
+        .from('manutencao_frota_base')
         .select('*')
         .eq('placa', plateSearch.toUpperCase().trim())
         .single();
@@ -372,14 +384,19 @@ export default function ManutencaoPage() {
   const startMaintenance = async () => {
     if (!searchResult) return;
     try {
+      // Cria um NOVO registro de processo (INSERT)
       const { error } = await supabase
         .from('manutencao_veiculos')
-        .update({ 
+        .insert({ 
+          placa: searchResult.placa,
+          admins: searchResult.admins,
+          emails_admin: searchResult.emails_admin,
+          gerentes: searchResult.gerentes,
+          emails_gerente: searchResult.emails_gerente,
           status: selectedEtapa, 
           servicos: servicoText,
           updated_at: new Date().toISOString() 
-        })
-        .eq('id', searchResult.id);
+        });
 
       if (error) throw error;
       
@@ -415,14 +432,13 @@ export default function ManutencaoPage() {
 
   // Finalizar (remover do kanban - status volta a null)
   const finalizeMaintenance = async (id: string) => {
-    if (!window.confirm("Deseja finalizar e arquivar este processo?")) return;
+    if (!window.confirm("Deseja finalizar e remover este processo do painel?")) return;
     try {
+      // Como agora cada processo é um registro único, vamos deletar ao finalizar
+      // ou se preferir poderia manter histórico mudando o status para 'arquivado'
       const { error } = await supabase
         .from('manutencao_veiculos')
-        .update({ 
-          status: null,
-          updated_at: new Date().toISOString() 
-        })
+        .delete()
         .eq('id', id);
 
       if (error) throw error;
