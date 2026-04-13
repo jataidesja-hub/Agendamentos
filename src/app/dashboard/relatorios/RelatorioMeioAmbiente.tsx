@@ -23,6 +23,7 @@ import { toast } from 'react-hot-toast';
 const RelatorioMeioAmbiente = () => {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedProject, setSelectedProject] = useState('TODOS');
+  const [selectedBase, setSelectedBase] = useState('TODOS');
   const [loading, setLoading] = useState(!dataCache.abastecimentos);
   const [loadingStep, setLoadingStep] = useState('Iniciando análise...');
   const [progress, setProgress] = useState(0);
@@ -43,23 +44,37 @@ const RelatorioMeioAmbiente = () => {
   const loadFromSupabase = async () => {
     setLoading(true);
     try {
-      // 1. Busca frota com seus respectivos projetos
-      setLoadingStep('Mapeando Estrutura de Projetos...');
+      // 1. Busca frota com seus respectivos projetos e bases
+      setLoadingStep('Mapeando Estrutura de Projetos e Bases...');
       setProgress(10);
-      const { data: frota } = await supabase.from('frota_veiculos').select('placa, projeto').eq('status', 'Ativo');
+      const { data: frota } = await supabase.from('frota_veiculos').select('placa, projeto, subprojeto').eq('status', 'Ativo');
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
       
       const placaToProject = new Map<string, string>();
+      const placaToSubproject = new Map<string, string>();
+      const projectStructure: Record<string, Set<string>> = {};
+
       if (frota) {
         const setAtivos = new Set<string>();
         frota.forEach(v => {
           const normPlaca = normalize(v.placa);
+          const proj = v.projeto?.toUpperCase().trim() || "SEM PROJETO";
+          const sub = v.subprojeto?.toUpperCase().trim() || "";
+
           setAtivos.add(normPlaca);
-          if (v.projeto) placaToProject.set(normPlaca, v.projeto);
+          placaToProject.set(normPlaca, proj);
+          if (sub) placaToSubproject.set(normPlaca, sub);
+
+          if (!projectStructure[proj]) projectStructure[proj] = new Set();
+          if (sub) projectStructure[proj].add(sub);
         });
         setVeiculosAtivos(setAtivos);
         // @ts-ignore
         dataCache.placaToProject = placaToProject;
+        // @ts-ignore
+        dataCache.placaToSubproject = placaToSubproject;
+        // @ts-ignore
+        dataCache.projectStructure = projectStructure;
         dataCache.veiculosAtivos = setAtivos;
       }
       setProgress(30);
@@ -126,17 +141,22 @@ const RelatorioMeioAmbiente = () => {
 
   const availableProjects = useMemo(() => {
     // @ts-ignore
-    const placaToProject = dataCache.placaToProject || new Map();
-    const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
-
-    const projectsSet = new Set<string>();
-    abastecimentos.forEach((a: any) => {
-      const normPlaca = normalize(a.placa);
-      const proj = String(a.projeto || placaToProject.get(normPlaca) || "SEM PROJETO").toUpperCase().trim();
-      if (proj) projectsSet.add(proj);
-    });
-    return ['TODOS', ...Array.from(projectsSet).sort()];
+    const projectStructure = dataCache.projectStructure || {};
+    return ['TODOS', ...Object.keys(projectStructure).sort()];
   }, [abastecimentos, veiculosAtivos]);
+
+  const availableBases = useMemo(() => {
+    if (selectedProject === 'TODOS') return [];
+    // @ts-ignore
+    const projectStructure = dataCache.projectStructure || {};
+    const Bases = projectStructure[selectedProject];
+    if (!Bases || Bases.size === 0) return [];
+    return ['TODOS', ...Array.from(Bases).sort()];
+  }, [selectedProject, veiculosAtivos]);
+
+  useEffect(() => {
+    setSelectedBase('TODOS');
+  }, [selectedProject]);
 
   useEffect(() => {
     if (!selectedMonth && availableMonths.length > 0) {
@@ -148,16 +168,24 @@ const RelatorioMeioAmbiente = () => {
     const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
     // @ts-ignore
     const placaToProject = dataCache.placaToProject || new Map();
+    // @ts-ignore
+    const placaToSubproject = dataCache.placaToSubproject || new Map();
 
     const filtered = abastecimentos.filter((a: any) => {
       if (!a.data_transacao || !selectedMonth) return false;
       
       const normPlaca = normalize(a.placa);
       const proj = String(a.projeto || placaToProject.get(normPlaca) || "SEM PROJETO").toUpperCase().trim();
+      const base = String(a.subprojeto || placaToSubproject.get(normPlaca) || "").toUpperCase().trim();
 
       // Filtro de Projeto
       if (selectedProject !== 'TODOS') {
         if (proj !== selectedProject) return false;
+        
+        // Filtro de Base (Subprojeto)
+        if (selectedBase !== 'TODOS') {
+          if (base !== selectedBase) return false;
+        }
       }
 
       // Filtro de Frota Ativa
@@ -326,37 +354,67 @@ const RelatorioMeioAmbiente = () => {
           <div className="relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl blur opacity-10 group-hover:opacity-30 transition duration-1000"></div>
             <div className="relative flex items-center px-6 py-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-white/10 group-hover:border-blue-500 transition-all cursor-pointer">
-              <BuildingOffice2Icon className="w-4 h-4 text-blue-500 mr-3" />
-              <select 
-                value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-                className="bg-transparent text-gray-900 dark:text-white font-black text-[10px] outline-none uppercase tracking-widest cursor-pointer max-w-[150px]"
-              >
-                {availableProjects.map(p => (
-                  <option key={p} value={p} className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-                    {p}
-                  </option>
-                ))}
-              </select>
+              <BuildingOffice2Icon className="w-4 h-4 text-blue-500 mr-3 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Projeto</span>
+                <select 
+                  value={selectedProject}
+                  onChange={(e) => setSelectedProject(e.target.value)}
+                  className="bg-transparent text-gray-900 dark:text-white font-black text-[10px] outline-none uppercase tracking-widest cursor-pointer max-w-[150px]"
+                >
+                  {availableProjects.map(p => (
+                    <option key={p} value={p} className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
+
+          {/* Subproject (Base) Filter - Conditional */}
+          {availableBases.length > 0 && (
+            <div className="relative group animate-in slide-in-from-left duration-300">
+              <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-blue-500 rounded-2xl blur opacity-10 group-hover:opacity-30 transition duration-1000"></div>
+              <div className="relative flex items-center px-6 py-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-white/10 group-hover:border-purple-500 transition-all cursor-pointer">
+                <BuildingOffice2Icon className="w-4 h-4 text-purple-500 mr-3 shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Base</span>
+                  <select 
+                    value={selectedBase}
+                    onChange={(e) => setSelectedBase(e.target.value)}
+                    className="bg-transparent text-gray-900 dark:text-white font-black text-[10px] outline-none uppercase tracking-widest cursor-pointer max-w-[150px]"
+                  >
+                    {availableBases.map(b => (
+                      <option key={b} value={b} className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Month Filter */}
           <div className="relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-2xl blur opacity-10 group-hover:opacity-30 transition duration-1000"></div>
             <div className="relative flex items-center px-6 py-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-white/10 group-hover:border-emerald-500 transition-all cursor-pointer">
               <FunnelIcon className="w-4 h-4 text-emerald-500 mr-3" />
-              <select 
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-transparent text-gray-900 dark:text-white font-black text-[10px] outline-none uppercase tracking-widest cursor-pointer"
-              >
-                {availableMonths.map(m => (
-                  <option key={m} value={m} className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-                    {new Date(m + "-02").toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '')}
-                  </option>
-                ))}
-              </select>
+              <div className="flex flex-col">
+                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Mês Ref.</span>
+                <select 
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="bg-transparent text-gray-900 dark:text-white font-black text-[10px] outline-none uppercase tracking-widest cursor-pointer"
+                >
+                  {availableMonths.map(m => (
+                    <option key={m} value={m} className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+                      {new Date(m + "-02").toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '')}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
