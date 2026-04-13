@@ -15,6 +15,8 @@ END $$;
 ALTER TABLE frota_veiculos ADD COLUMN IF NOT EXISTS projeto TEXT;
 ALTER TABLE frota_veiculos ADD COLUMN IF NOT EXISTS subprojeto TEXT;
 ALTER TABLE frota_veiculos ADD COLUMN IF NOT EXISTS modelo TEXT;
+ALTER TABLE frota_veiculos ADD COLUMN IF NOT EXISTS email_gerente TEXT;
+ALTER TABLE frota_veiculos ADD COLUMN IF NOT EXISTS email_administrativo TEXT;
 
 -- 3. Garantir UNIQUE na placa para o UPSERT funcionar
 ALTER TABLE frota_veiculos DROP CONSTRAINT IF EXISTS frota_veiculos_placa_key;

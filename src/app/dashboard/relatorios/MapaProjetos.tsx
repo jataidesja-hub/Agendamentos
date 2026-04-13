@@ -44,11 +44,22 @@ const RelatorioProjetos = () => {
       try {
         const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
 
-        // 1. Busca todos os veículos ativos com metadados estendidos
-        const { data: frota, error: errFrota } = await supabase
+        // 1. Busca todos os veículos ativos com metadados estendidos (com fallback de segurança)
+        let { data: frota, error: errFrota } = await supabase
           .from('frota_veiculos')
           .select('placa, projeto, email_gerente, email_administrativo')
           .eq('status', 'Ativo');
+        
+        // Fallback: Se der erro (provavelmente colunas de e-mail não existem ainda no banco)
+        if (errFrota) {
+          console.warn("Colunas de e-mail não encontradas, tentando fallback para dados básicos.");
+          const resFallback = await supabase
+            .from('frota_veiculos')
+            .select('placa, projeto')
+            .eq('status', 'Ativo');
+          frota = resFallback.data;
+          errFrota = resFallback.error;
+        }
         
         if (!errFrota && frota) {
           const setAtivos = new Set<string>();

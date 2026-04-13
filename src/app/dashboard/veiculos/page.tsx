@@ -146,6 +146,8 @@ export default function VeiculosPage() {
                       identificacao: placa,
                       projeto: String(getV(row, ["PROJETO"]) || "").trim(),
                       subprojeto: String(getV(row, ["BASE", "SUBPROJETO"]) || "").trim(),
+                      email_gerente: String(getV(row, ["GERENTE", "EMAIL GERENTE", "EMAIL_GERENTE"]) || "").trim(),
+                      email_administrativo: String(getV(row, ["ADMINISTRATIVO", "EMAIL ADMINISTRATIVO", "EMAIL_ADMINISTRATIVO"]) || "").trim(),
                       status: 'Ativo'
                     };
                   }).filter(x => x.placa !== "");
