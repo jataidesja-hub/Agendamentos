@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { TruckIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { TruckIcon, PlusIcon, TrashIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 
 export default function VeiculosPage() {
   const [veiculos, setVeiculos] = useState<any[]>([]);
@@ -15,6 +16,8 @@ export default function VeiculosPage() {
   const [placa, setPlaca] = useState('');
   const [modelo, setModelo] = useState('');
   const [status, setStatus] = useState('Ativo');
+  const [projeto, setProjeto] = useState('');
+  const [base, setBase] = useState('');
 
   useEffect(() => {
     fetchVeiculos();
@@ -22,9 +25,9 @@ export default function VeiculosPage() {
 
   async function fetchVeiculos() {
     try {
-      const { data, error } = await supabase.from('veiculos_frota').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('frota_veiculos').select('*').order('created_at', { ascending: false });
       if (error) {
-        console.warn('Tabela veiculos_frota talvez não exista', error);
+        console.warn('Tabela frota_veiculos error', error);
         setVeiculos([]);
       } else {
         setVeiculos(data || []);
@@ -39,10 +42,12 @@ export default function VeiculosPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { error } = await supabase.from('veiculos_frota').insert({ 
+      const { error } = await supabase.from('frota_veiculos').insert({ 
         placa, 
         modelo,
-        status 
+        status,
+        projeto,
+        subprojeto: base
       });
       if (!error) toast.success('Veículo registrado!');
       setShowForm(false);
@@ -62,7 +67,7 @@ export default function VeiculosPage() {
 
     try {
       const { error } = await supabase
-        .from('veiculos_frota')
+        .from('frota_veiculos')
         .update({ status: newStatus })
         .eq('id', id);
       
@@ -81,7 +86,7 @@ export default function VeiculosPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja realmente excluir este veículo da frota?')) return;
     try {
-      const { error } = await supabase.from('veiculos_frota').delete().eq('id', id);
+      const { error } = await supabase.from('frota_veiculos').delete().eq('id', id);
       if (!error) {
         toast.success('Veículo removido!');
         fetchVeiculos();
@@ -102,7 +107,7 @@ export default function VeiculosPage() {
           </div>
           <div>
             <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Frota / Veículos</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Cadastro de placas e veículos da operação</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Cadastro de placas, projetos e bases da operação</p>
           </div>
         </div>
         
@@ -110,26 +115,63 @@ export default function VeiculosPage() {
           <div className="relative flex-1 md:w-64">
             <input 
               type="text" 
-              placeholder="Pesquisar placa..." 
+              placeholder="Pesquisar placa, projeto ou base..." 
               value={busca}
               onChange={(e) => setBusca(e.target.value.toUpperCase())}
               className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
+          <label className="flex items-center gap-2 bg-gray-800 hover:bg-black text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg cursor-pointer whitespace-nowrap">
+            <DocumentArrowUpIcon className="w-5 h-5" /> Importar Planilha
+            <input type="file" accept=".xlsx, .xls" className="hidden" onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setLoading(true);
+              const reader = new FileReader();
+              reader.onload = async (evt: any) => {
+                try {
+                  const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                  const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                  const getV = (row: any, names: string[]) => {
+                    for (const name of names) {
+                      const found = Object.keys(row).find(k => k.toUpperCase().trim() === name.toUpperCase().trim());
+                      if (found) return row[found];
+                    }
+                    return "";
+                  };
+                  const formatted = rawData.map(row => ({
+                    placa: String(getV(row, ["PLACA", "VEICULO"]) || "").trim().toUpperCase(),
+                    projeto: String(getV(row, ["PROJETO"]) || "").trim(),
+                    subprojeto: String(getV(row, ["BASE", "SUBPROJETO"]) || "").trim(),
+                    status: 'Ativo'
+                  })).filter(x => x.placa !== "");
+
+                  if (confirm(`Importar ${formatted.length} veículos?`)) {
+                    const { error } = await supabase.from('frota_veiculos').upsert(formatted, { onConflict: 'placa' });
+                    if (error) throw error;
+                    toast.success('Frota atualizada!');
+                    fetchVeiculos();
+                  }
+                } catch (err) { toast.error('Erro ao importar planilha'); }
+                finally { setLoading(false); }
+              };
+              reader.readAsBinaryString(file);
+            }} />
+          </label>
           <button 
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg hover:scale-105 active:scale-95 whitespace-nowrap"
           >
-            {showForm ? 'Cancelar' : <><PlusIcon className="w-5 h-5" /> Cadastrar Veiculo</>}
+            {showForm ? 'Cancelar' : <><PlusIcon className="w-5 h-5" /> Novo Veiculo</>}
           </button>
         </div>
       </div>
 
       {showForm && (
         <form onSubmit={handleSave} className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-gray-100 dark:border-gray-700/50 rounded-3xl p-6 md:p-8 shadow-xl animate-in slide-in-from-top-4 duration-300">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Placa do Veículo</label>
+              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Placa</label>
               <input 
                 required placeholder="EX: ABC-1234"
                 value={placa} onChange={e => setPlaca(e.target.value.toUpperCase())}
@@ -137,22 +179,38 @@ export default function VeiculosPage() {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Modelo / Descrição</label>
+              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Modelo</label>
               <input 
-                required placeholder="EX: Toyota Hilux 4x4"
+                placeholder="EX: Toyota Hilux"
                 value={modelo} onChange={e => setModelo(e.target.value)}
                 className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Status Operacional</label>
+              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Projeto</label>
+              <input 
+                placeholder="EX: ALIANÇA"
+                value={projeto} onChange={e => setProjeto(e.target.value.toUpperCase())}
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase text-gray-900 dark:text-white"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Base / Subprojeto</label>
+              <input 
+                placeholder="EX: SE ABDON"
+                value={base} onChange={e => setBase(e.target.value.toUpperCase())}
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase text-gray-900 dark:text-white"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Status</label>
               <select 
                 value={status} onChange={e => setStatus(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white font-bold"
               >
-                <option value="Ativo">Ativo</option>
-                <option value="Em Manutenção">Em Manutenção</option>
-                <option value="Fora de Serviço">Fora de Serviço</option>
+                <option value="Ativo">✅ Ativo</option>
+                <option value="Em Manutenção">🛠 Manutenção</option>
+                <option value="Fora de Serviço">🚫 Inativo</option>
               </select>
             </div>
           </div>
@@ -167,13 +225,14 @@ export default function VeiculosPage() {
 
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
         {veiculos
-          .filter(v => v.placa.includes(busca) || v.modelo?.toLowerCase().includes(busca.toLowerCase()))
+          .filter(v => v.placa.includes(busca) || v.projeto?.includes(busca) || v.subprojeto?.includes(busca) || v.modelo?.toLowerCase().includes(busca.toLowerCase()))
           .map(v => (
           <div key={v.id} className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border border-white/50 dark:border-gray-700/50 rounded-[2rem] p-7 shadow-[0_10px_40px_rgb(0,0,0,0.06)] flex flex-col justify-between group transition-all duration-300 hover:shadow-blue-500/10">
             <div className="flex items-start justify-between mb-6">
               <div>
-                <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">{v.modelo}</p>
-                <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-widest leading-none">{v.placa}</h3>
+                <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">{v.projeto || 'SEM PROJETO'}</p>
+                <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-widest leading-none mb-2">{v.placa}</h3>
+                <p className="text-[11px] font-bold text-gray-400 uppercase">{v.subprojeto || 'SEM BASE'}</p>
               </div>
               <div className="flex gap-2">
                 <button 

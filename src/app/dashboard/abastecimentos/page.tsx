@@ -11,47 +11,21 @@ import { supabase } from "@/lib/supabase";
 import { dataCache } from "@/lib/cache";
 
 interface Abastecimento {
-  codigo_transacao: string;
-  forma_pagamento: string;
-  codigo_cliente: string;
-  nome_reduzido: string;
+  id: string;
   data_transacao: string;
   placa: string;
   tipo_frota: string;
   modelo_veiculo: string;
-  projeto: string;
-  ano_referencia: string;
-  matricula: string;
-  nome_motorista: string;
-  servico: string;
   tipo_combustivel: string;
   litros: number;
   valor_litro: number;
   hodometro_horimetro: number;
-  km_rodados_horas: number;
-  km_litro_rendimento: number;
+  km_rodados: number;
+  km_litro: number;
   valor_emissao: number;
-  codigo_estabelecimento: string;
-  estrela_auto_posto: string;
-  estabelecimento: string;
-  endereco: string;
-  bairro: string;
+  nome_estabelecimento: string;
   cidade: string;
-  uf: string;
-  info_adicional_1: string;
-  info_adicional_2: string;
-  info_adicional_3: string;
-  status_transacao: string;
-  info_adicional_5: string;
-  forma_transacao: string;
-  codigo_liberacao: string;
-  serie_pos: string;
-  numero_cartao: string;
-  familia_veiculo: string;
-  grupo_restricao: string;
-  codigo_emissora: string;
-  responsavel: string;
-  tipo_entrada_hodometro: string;
+  created_at: string;
 }
 
 export default function AbastecimentosPage() {
@@ -76,7 +50,7 @@ export default function AbastecimentosPage() {
     setLoading(true);
     try {
       // 1. Busca frota ativa
-      const { data: frota } = await supabase.from('veiculos_frota').select('placa').eq('status', 'Ativo');
+      const { data: frota } = await supabase.from('frota_veiculos').select('placa').eq('status', 'Ativo');
       
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
       
@@ -190,35 +164,22 @@ export default function AbastecimentosPage() {
 
         const formatted = rawData.map((row: any) => {
           const placa = String(getV(row, ["PLACA"]) || "").trim();
-          const projKey = Object.keys(row).find(k => k.toUpperCase().match(/PROJETOS?|FAZENDA/));
           
           return {
-            codigo_transacao: String(getV(row, ["CODIGO TRANSACAO", "TRANSACAO"]) || ""),
-            forma_pagamento: String(getV(row, ["FORMA DE PAGAMENTO", "FORMA PAGAMENTO"]) || ""),
-            codigo_cliente: String(getV(row, ["CODIGO CLIENTE", "CLIENTE"]) || ""),
-            nome_reduzido: String(getV(row, ["NOME REDUZIDO", "NOME"]) || ""),
-            data_transacao: parseExcelDate(getV(row, ["DATA TRANSACAO", "DATA", "DATA TRANSACAC"])) || "",
             placa: placa,
-            projeto: String(projKey ? row[projKey] : "SEM PROJETO").trim(),
+            data_transacao: parseExcelDate(getV(row, ["DATA TRANSACAO", "DATA"])) || "",
             tipo_frota: String(getV(row, ["TIPO FROTA", "TIPO DE FROTA"]) || ""),
-            modelo_veiculo: String(getV(row, ["MODELO VEICULO", "MODELO DO VEICULO", "MODELO"]) || ""),
+            modelo_veiculo: String(getV(row, ["MODELO VEICULO", "MODELO"]) || ""),
             tipo_combustivel: String(getV(row, ["TIPO COMBUSTIVEL", "COMBUSTIVEL"]) || ""),
             litros: Number(String(getV(row, ["LITROS", "QTD"]) || 0).replace(',', '.')),
-            valor_litro: Number(String(getV(row, ["VL/LITRO", "VALOR LITRO", "PRECO UNITARIO"]) || 0).replace(',', '.')),
-            valor_emissao: Number(String(getV(row, ["VALOR EMISSAO", "TOTAL", "VALOR TOTAL"]) || 0).replace(',', '.')),
-            estabelecimento: String(getV(row, ["NOME ESTABELECIMENTO", "ESTABELECIMENTO", "POSTO"]) || ""),
-            estrela_auto_posto: String(getV(row, ["NOME ESTABELECIMENTO", "ESTABELECIMENTO"]) || ""),
-            nome_motorista: String(getV(row, ["NOME MOTORISTA", "MOTORISTA"]) || ""),
+            valor_litro: Number(String(getV(row, ["VL/LITRO", "VALOR LITRO"]) || 0).replace(',', '.')),
+            hodometro_horimetro: Number(String(getV(row, ["HODOMETRO OU HORIMETRO", "HODOMETRO", "HORIMETRO"]) || 0).replace(',', '.')),
+            km_rodados: Number(String(getV(row, ["KM RODADOS OU HORAS TRABALHADAS", "KM RODADOS"]) || 0).replace(',', '.')),
+            km_litro: Number(String(getV(row, ["KM/LITRO OU LITROS/HORA", "KM/LITRO"]) || 0).replace(',', '.')),
+            valor_emissao: Number(String(getV(row, ["VALOR EMISSAO", "VALOR TOTAL"]) || 0).replace(',', '.')),
+            nome_estabelecimento: String(getV(row, ["NOME ESTABELECIMENTO", "ESTABELECIMENTO"]) || ""),
             cidade: String(getV(row, ["CIDADE", "MUNICIPIO"]) || ""),
-            endereco: String(getV(row, ["ENDERECO", "LOGRADOURO"]) || ""),
-            bairro: String(getV(row, ["BAIRRO"]) || ""),
-            uf: String(getV(row, ["UF", "ESTADO"]) || ""),
-            matricula: String(getV(row, ["MATRICULA", "RE"]) || ""),
-            servico: String(getV(row, ["SERVICO"]) || ""),
-            hodometro_horimetro: Number(String(getV(row, ["HODOMETRO OU HORIMETRO", "KM TOTAL"]) || 0).replace(',', '.')),
-            km_rodados_horas: Number(String(getV(row, ["KM RODADOS OU HORAS TRABALHADAS", "KM PERCORRIDO"]) || 0).replace(',', '.')),
-            km_litro_rendimento: Number(String(getV(row, ["KM/LITRO OU LITROS/HORA", "CONSUMO"]) || 0).replace(',', '.')),
-          } as any;
+          };
         }).filter(item => item.placa !== "");
 
         console.log("Dados formatados para envio:", formatted.slice(0, 2));
@@ -244,8 +205,8 @@ export default function AbastecimentosPage() {
 
       const search = searchTerm.toLowerCase();
       return item.placa.toLowerCase().includes(search) ||
-             item.projeto.toLowerCase().includes(search) ||
-             item.nome_motorista.toLowerCase().includes(search);
+             item.modelo_veiculo.toLowerCase().includes(search) ||
+             item.nome_estabelecimento.toLowerCase().includes(search);
     });
   }, [data, searchTerm, veiculosAtivos]);
 
@@ -256,7 +217,7 @@ export default function AbastecimentosPage() {
       totalLiters: totalLiters.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
       totalValue: totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
       count: filteredData.length,
-      projectsCount: new Set(filteredData.map(d => d.projeto)).size
+      avgConsumo: (filteredData.reduce((acc, curr) => acc + (Number(curr.km_litro) || 0), 0) / (filteredData.length || 1)).toFixed(2)
     };
   }, [filteredData]);
 
@@ -275,22 +236,22 @@ export default function AbastecimentosPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-4 mb-8 text-center">
-         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Projetos Ativos</p>
-            <p className="text-3xl font-black">{stats.projectsCount}</p>
-         </div>
-         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm font-bold">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Registros Totais</p>
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Média Consumo</p>
+            <p className="text-3xl font-black">{stats.avgConsumo} <span className="text-sm">KM/L</span></p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm font-bold">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Abastecimentos</p>
             <p className="text-3xl font-black">{stats.count}</p>
-         </div>
-         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm text-[#0b7336]">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Investimento</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm text-[#0b7336]">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Gasto</p>
             <p className="text-3xl font-black">{stats.totalValue}</p>
-         </div>
-         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+          </div>
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Litros</p>
-            <p className="text-3xl font-black">{stats.totalLiters} L</p>
-         </div>
+            <p className="text-3xl font-black">{stats.totalLiters} <span className="text-sm text-gray-400">L</span></p>
+          </div>
       </div>
 
       <div className="flex-1 bg-white dark:bg-gray-800 rounded-[3rem] border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden flex flex-col mx-4 min-h-[400px]">
@@ -313,10 +274,11 @@ export default function AbastecimentosPage() {
                   <tr className="uppercase font-black tracking-tighter">
                     <th className="px-6 py-4">Data</th>
                     <th className="px-6 py-4 text-center">Placa</th>
-                    <th className="px-6 py-4">Projeto</th>
-                    <th className="px-6 py-4">Motorista</th>
-                    <th className="px-6 py-4 text-right">L / Valor</th>
-                    <th className="px-6 py-4">Estabelecimento</th>
+                    <th className="px-6 py-4">Modelo</th>
+                    <th className="px-6 py-4 text-right">Litros</th>
+                    <th className="px-6 py-4 text-right">KM/L</th>
+                    <th className="px-6 py-4 text-right">Valor Total</th>
+                    <th className="px-6 py-4">Posto / Cidade</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -324,15 +286,16 @@ export default function AbastecimentosPage() {
                     <tr key={idx} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 font-bold text-gray-400 whitespace-nowrap">{item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}</td>
                       <td className="px-6 py-4 text-center">
-                        <span className="bg-[#0b7336] text-white px-2 py-1 rounded-md font-black text-[10px]">{item.placa}</span>
+                        <span className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-2 py-1 rounded-md font-black text-[10px] border border-gray-200">{item.placa}</span>
                       </td>
-                      <td className="px-6 py-4 font-black text-gray-800 uppercase text-[10px]">{item.projeto}</td>
-                      <td className="px-6 py-4 font-medium text-gray-600 uppercase text-[10px]">{item.nome_motorista || '---'}</td>
-                      <td className="px-6 py-4 text-right tabular-nums">
-                        <div className="font-bold">{item.litros} L</div>
-                        <div className="text-emerald-600 font-bold">{Number(item.valor_emissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                      <td className="px-6 py-4 font-black text-gray-800 uppercase text-[10px]">{item.modelo_veiculo}</td>
+                      <td className="px-6 py-4 text-right font-bold tabular-nums">{item.litros.toLocaleString('pt-BR')} L</td>
+                      <td className="px-6 py-4 text-right font-black text-blue-600 tabular-nums">{item.km_litro?.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}</td>
+                      <td className="px-6 py-4 text-right font-black text-[#0b7336] tabular-nums">{Number(item.valor_emissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                         <div className="uppercase font-bold text-gray-500 text-[9px]">{item.nome_estabelecimento}</div>
+                         <div className="uppercase font-medium text-gray-400 text-[8px]">{item.cidade}</div>
                       </td>
-                      <td className="px-6 py-4 truncate max-w-[150px] uppercase font-bold text-gray-400 text-[9px]">{item.estabelecimento}</td>
                     </tr>
                   ))}
                 </tbody>
