@@ -132,22 +132,35 @@ export default function VeiculosPage() {
                 try {
                   const wb = XLSX.read(evt.target.result, { type: 'binary' });
                   const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                  // Busca flexível: procura coluna cujo nome CONTÉM o termo
                   const getV = (row: any, names: string[]) => {
                     for (const name of names) {
+                      const found = Object.keys(row).find(k => k.toUpperCase().trim().includes(name.toUpperCase().trim()));
+                      if (found && row[found] !== undefined && row[found] !== null) return row[found];
+                    }
+                    return "";
+                  };
+                  // Busca exata (para evitar ambiguidade em colunas como GERENTE vs EMAIL_GERENTE)
+                  const getVExact = (row: any, names: string[]) => {
+                    for (const name of names) {
                       const found = Object.keys(row).find(k => k.toUpperCase().trim() === name.toUpperCase().trim());
-                      if (found) return row[found];
+                      if (found && row[found] !== undefined && row[found] !== null) return row[found];
                     }
                     return "";
                   };
                   const rawFormatted = rawData.map(row => {
-                    const placa = String(getV(row, ["PLACA", "VEICULO"]) || "").trim().toUpperCase();
+                    const placa = String(getVExact(row, ["PLACA", "VEICULO"]) || "").trim().toUpperCase();
+                    // Para e-mails: buscar colunas que contenham "EMAIL_GERENTE" ou "EMAIL GERENTE"
+                    // e "EMAIL_ADM" ou "EMAIL ADM" ou "EMAIL_ADMINISTRATIVO"
+                    const emailGerente = String(getV(row, ["EMAIL_GERENTE", "EMAIL GERENTE"]) || "").trim();
+                    const emailAdmin = String(getV(row, ["EMAIL_ADM", "EMAIL ADM", "EMAIL_ADMINISTRATIVO", "EMAIL ADMINISTRATIVO"]) || "").trim();
                     return {
                       placa: placa,
                       identificacao: placa,
-                      projeto: String(getV(row, ["PROJETO"]) || "").trim(),
-                      subprojeto: String(getV(row, ["BASE", "SUBPROJETO"]) || "").trim(),
-                      email_gerente: String(getV(row, ["GERENTE", "EMAIL GERENTE", "EMAIL_GERENTE"]) || "").trim(),
-                      email_administrativo: String(getV(row, ["ADMINISTRATIVO", "EMAIL ADMINISTRATIVO", "EMAIL_ADMINISTRATIVO"]) || "").trim(),
+                      projeto: String(getVExact(row, ["PROJETO"]) || "").trim(),
+                      subprojeto: String(getVExact(row, ["BASE", "SUBPROJETO"]) || "").trim(),
+                      email_gerente: emailGerente,
+                      email_administrativo: emailAdmin,
                       status: 'Ativo'
                     };
                   }).filter(x => x.placa !== "");
