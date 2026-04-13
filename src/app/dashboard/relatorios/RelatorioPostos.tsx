@@ -44,8 +44,8 @@ const RelatorioPostos = () => {
 
       // Passo 1: Agrupar e somar valores
       filtered.forEach((a: any) => {
-        const uf = String(a.uf || "UF").toUpperCase().trim();
-        const city = String(a.cidade || "NÃO INFORMADA").toUpperCase().trim();
+        const uf = String(a.uf || a.estado || "UF").toUpperCase().trim();
+        const city = String(a.cidade || a.municipio || "NÃO INFORMADA").toUpperCase().trim();
         const post = String(a.estabelecimento || "POSTO DESCONHECIDO").toUpperCase().trim();
         const fuel = String(a.tipo_combustivel || "OUTROS").toUpperCase().trim();
 

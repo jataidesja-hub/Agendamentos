@@ -44,16 +44,26 @@ const RelatorioProjetos = () => {
       try {
         const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
 
-        // 1. Busca todos os veículos ativos
+        // 1. Busca todos os veículos ativos com metadados
         const { data: frota, error: errFrota } = await supabase
-          .from('veiculos_frota')
-          .select('placa')
+          .from('frota_veiculos')
+          .select('placa, projeto')
           .eq('status', 'Ativo');
         
         if (!errFrota && frota) {
-          const setAtivos = new Set<string>(frota.map((v: any) => normalize(v.placa)));
+          const setAtivos = new Set<string>();
+          const placaToProject = new Map<string, string>();
+          
+          frota.forEach((v: any) => {
+            const norm = normalize(v.placa);
+            setAtivos.add(norm);
+            if (v.projeto) placaToProject.set(norm, v.projeto);
+          });
+
           setVeiculosAtivos(setAtivos);
           dataCache.veiculosAtivos = setAtivos;
+          // @ts-ignore
+          dataCache.placaToProject = placaToProject;
         }
 
         // 2. Busca exaustiva de todos os abastecimentos
@@ -131,8 +141,14 @@ const RelatorioProjetos = () => {
 
     const groupedData = useMemo(() => {
       const groups: any = {};
+      const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+      // @ts-ignore
+      const placaToProject = dataCache.placaToProject || new Map();
+
       filteredData.forEach((a: any) => {
-        const projName = String(a.projeto || "SEM PROJETO").toUpperCase();
+        const normPlaca = normalize(a.placa);
+        const projName = String(a.projeto || placaToProject.get(normPlaca) || "SEM PROJETO").toUpperCase();
+        
         if (!groups[projName]) {
           groups[projName] = { vehicles: {}, totalLiters: 0, totalValue: 0 };
         }

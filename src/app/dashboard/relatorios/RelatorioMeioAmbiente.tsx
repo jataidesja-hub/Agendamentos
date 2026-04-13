@@ -285,7 +285,7 @@ const RelatorioMeioAmbiente = () => {
       baseStats[base].co2 += recordCO2;
       baseStats[base].liters += litros;
       baseStats[base].km += km;
-      if (!baseStats[base].fuels[base]) baseStats[base].fuels[fuelRaw] = { liters: 0, co2: 0 };
+      if (!baseStats[base].fuels[fuelRaw]) baseStats[base].fuels[fuelRaw] = { liters: 0, co2: 0 };
       baseStats[base].fuels[fuelRaw].liters += litros;
       baseStats[base].fuels[fuelRaw].co2 += recordCO2;
     });
