@@ -186,8 +186,9 @@ export default function AbastecimentosPage() {
             km_rodados: parseMoney(getV(row, ["KM RODADOS OU HORAS TRABALHADAS", "KM RODADOS"])),
             km_litro: parseMoney(getV(row, ["KM/LITRO OU LITROS/HORA", "KM/LITRO"])),
             valor_emissao: parseMoney(getV(row, ["VALOR EMISSAO", "VALOR TOTAL"])),
-            nome_estabelecimento: String(getV(row, ["NOME ESTABELECIMENTO", "ESTABELECIMENTO"]) || ""),
-            cidade: String(getV(row, ["CIDADE", "MUNICIPIO"]) || ""),
+            estabelecimento: String(getV(row, ["NOME ESTABELECIMENTO", "ESTABELECIMENTO", "NOME DO POSTO"]) || ""),
+            cidade: String(getV(row, ["CIDADE", "MUNICIPIO", "M"]) || ""),
+            uf: String(getV(row, ["UF", "ESTADO", "N"]) || ""),
           };
         }).filter(item => item.placa !== "");
 
