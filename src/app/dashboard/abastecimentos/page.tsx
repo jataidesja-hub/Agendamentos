@@ -112,8 +112,9 @@ export default function AbastecimentosPage() {
       }
       toast.success("Sincronização completa!");
       loadFromSupabase();
-    } catch (err) {
-      toast.error("Erro na sincronização.");
+    } catch (err: any) {
+      console.error("Erro na sincronização:", err);
+      toast.error("Erro na sincronização: " + (err.message || "Verifique o console"));
     } finally {
       setLoading(false);
     }
@@ -162,6 +163,14 @@ export default function AbastecimentosPage() {
           return "";
         };
 
+        const parseMoney = (val: any) => {
+          if (!val) return 0;
+          const str = String(val).replace('R$', '').trim();
+          // Remove pontos de milhar, troca vírgula por ponto
+          const clean = str.replace(/\./g, '').replace(',', '.');
+          return Number(clean) || 0;
+        };
+
         const formatted = rawData.map((row: any) => {
           const placa = String(getV(row, ["PLACA"]) || "").trim();
           
@@ -171,12 +180,12 @@ export default function AbastecimentosPage() {
             tipo_frota: String(getV(row, ["TIPO FROTA", "TIPO DE FROTA"]) || ""),
             modelo_veiculo: String(getV(row, ["MODELO VEICULO", "MODELO"]) || ""),
             tipo_combustivel: String(getV(row, ["TIPO COMBUSTIVEL", "COMBUSTIVEL"]) || ""),
-            litros: Number(String(getV(row, ["LITROS", "QTD"]) || 0).replace(',', '.')),
-            valor_litro: Number(String(getV(row, ["VL/LITRO", "VALOR LITRO"]) || 0).replace(',', '.')),
-            hodometro_horimetro: Number(String(getV(row, ["HODOMETRO OU HORIMETRO", "HODOMETRO", "HORIMETRO"]) || 0).replace(',', '.')),
-            km_rodados: Number(String(getV(row, ["KM RODADOS OU HORAS TRABALHADAS", "KM RODADOS"]) || 0).replace(',', '.')),
-            km_litro: Number(String(getV(row, ["KM/LITRO OU LITROS/HORA", "KM/LITRO"]) || 0).replace(',', '.')),
-            valor_emissao: Number(String(getV(row, ["VALOR EMISSAO", "VALOR TOTAL"]) || 0).replace(',', '.')),
+            litros: parseMoney(getV(row, ["LITROS", "QTD"])),
+            valor_litro: parseMoney(getV(row, ["VL/LITRO", "VALOR LITRO"])),
+            hodometro_horimetro: parseMoney(getV(row, ["HODOMETRO OU HORIMETRO"])),
+            km_rodados: parseMoney(getV(row, ["KM RODADOS OU HORAS TRABALHADAS", "KM RODADOS"])),
+            km_litro: parseMoney(getV(row, ["KM/LITRO OU LITROS/HORA", "KM/LITRO"])),
+            valor_emissao: parseMoney(getV(row, ["VALOR EMISSAO", "VALOR TOTAL"])),
             nome_estabelecimento: String(getV(row, ["NOME ESTABELECIMENTO", "ESTABELECIMENTO"]) || ""),
             cidade: String(getV(row, ["CIDADE", "MUNICIPIO"]) || ""),
           };
