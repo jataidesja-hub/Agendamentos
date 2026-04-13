@@ -164,11 +164,23 @@ export default function AbastecimentosPage() {
         };
 
         const parseMoney = (val: any) => {
-          if (!val) return 0;
-          const str = String(val).replace('R$', '').trim();
-          // Remove pontos de milhar, troca vírgula por ponto
-          const clean = str.replace(/\./g, '').replace(',', '.');
-          return Number(clean) || 0;
+          if (val === undefined || val === null || val === "") return 0;
+          if (typeof val === 'number') return val;
+          
+          let str = String(val).replace('R$', '').trim();
+          
+          // Se tiver vírgula e ponto, o ponto é milhar e a vírgula é decimal (ex: 1.234,56)
+          if (str.includes(',') && str.includes('.')) {
+            str = str.replace(/\./g, '').replace(',', '.');
+          } 
+          // Se tiver apenas vírgula, é decimal (ex: 7,79)
+          else if (str.includes(',')) {
+            str = str.replace(',', '.');
+          }
+          // Se tiver apenas ponto, e ele estiver antes de 2 ou 3 dígitos finais, pode ser decimal
+          // Mas no XLSX, se for número, já vem como ponto decimal.
+          
+          return Number(str) || 0;
         };
 
         const formatted = rawData.map((row: any) => {
