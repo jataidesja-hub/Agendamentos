@@ -139,16 +139,21 @@ export default function VeiculosPage() {
                     }
                     return "";
                   };
-                  const formatted = rawData.map(row => {
+                  const rawFormatted = rawData.map(row => {
                     const placa = String(getV(row, ["PLACA", "VEICULO"]) || "").trim().toUpperCase();
                     return {
                       placa: placa,
-                      identificacao: placa, // Satisfazer NOT NULL do banco original
+                      identificacao: placa,
                       projeto: String(getV(row, ["PROJETO"]) || "").trim(),
                       subprojeto: String(getV(row, ["BASE", "SUBPROJETO"]) || "").trim(),
                       status: 'Ativo'
                     };
                   }).filter(x => x.placa !== "");
+
+                  // Deduplicação: garantir que cada placa apareça apenas uma vez no lote de envio
+                  const uniqueMap = new Map();
+                  rawFormatted.forEach(item => uniqueMap.set(item.placa, item));
+                  const formatted = Array.from(uniqueMap.values());
 
                   if (confirm(`Importar ${formatted.length} veículos?`)) {
                     const { error } = await supabase.from('frota_veiculos').upsert(formatted, { onConflict: 'placa' });
