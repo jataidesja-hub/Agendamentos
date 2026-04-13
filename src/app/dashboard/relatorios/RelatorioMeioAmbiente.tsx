@@ -29,6 +29,7 @@ const RelatorioMeioAmbiente = () => {
   const [progress, setProgress] = useState(0);
   const [abastecimentos, setAbastecimentos] = useState<any[]>(dataCache.abastecimentos || []);
   const [veiculosAtivos, setVeiculosAtivos] = useState<Set<string>>(dataCache.veiculosAtivos || new Set());
+  const [projectStructure, setProjectStructure] = useState<Record<string, Set<string>>>(dataCache.projectStructure || {});
 
   useEffect(() => {
     if (!dataCache.abastecimentos || !dataCache.veiculosAtivos) {
@@ -52,7 +53,7 @@ const RelatorioMeioAmbiente = () => {
       
       const placaToProject = new Map<string, string>();
       const placaToSubproject = new Map<string, string>();
-      const projectStructure: Record<string, Set<string>> = {};
+      const newProjectStructure: Record<string, Set<string>> = {};
 
       if (frota) {
         const setAtivos = new Set<string>();
@@ -65,16 +66,20 @@ const RelatorioMeioAmbiente = () => {
           placaToProject.set(normPlaca, proj);
           if (sub) placaToSubproject.set(normPlaca, sub);
 
-          if (!projectStructure[proj]) projectStructure[proj] = new Set();
-          if (sub) projectStructure[proj].add(sub);
+          if (!newProjectStructure[proj]) newProjectStructure[proj] = new Set();
+          if (sub) newProjectStructure[proj].add(sub);
         });
+        
         setVeiculosAtivos(setAtivos);
+        setProjectStructure(newProjectStructure);
+        
+        // Sincroniza cache para outras telas
         // @ts-ignore
         dataCache.placaToProject = placaToProject;
         // @ts-ignore
         dataCache.placaToSubproject = placaToSubproject;
         // @ts-ignore
-        dataCache.projectStructure = projectStructure;
+        dataCache.projectStructure = newProjectStructure;
         dataCache.veiculosAtivos = setAtivos;
       }
       setProgress(30);
@@ -140,19 +145,15 @@ const RelatorioMeioAmbiente = () => {
   }, [abastecimentos]);
 
   const availableProjects = useMemo(() => {
-    // @ts-ignore
-    const projectStructure = dataCache.projectStructure || {};
     return ['TODOS', ...Object.keys(projectStructure).sort()];
-  }, [abastecimentos, veiculosAtivos]);
+  }, [projectStructure]);
 
   const availableBases = useMemo(() => {
     if (selectedProject === 'TODOS') return [];
-    // @ts-ignore
-    const projectStructure = dataCache.projectStructure || {};
     const Bases = projectStructure[selectedProject];
     if (!Bases || Bases.size === 0) return [];
     return ['TODOS', ...Array.from(Bases).sort()];
-  }, [selectedProject, veiculosAtivos]);
+  }, [selectedProject, projectStructure]);
 
   useEffect(() => {
     setSelectedBase('TODOS');
