@@ -159,7 +159,10 @@ export default function VeiculosPage() {
                     toast.success('Frota atualizada!');
                     fetchVeiculos();
                   }
-                } catch (err) { toast.error('Erro ao importar planilha'); }
+                } catch (err: any) { 
+                  console.error("Erro detalhes:", err);
+                  toast.error('Erro ao importar: ' + (err.message || String(err))); 
+                }
                 finally { setLoading(false); }
               };
               reader.readAsBinaryString(file);
