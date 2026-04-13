@@ -158,19 +158,42 @@ const RelatorioGestores = () => {
       return data;
     }, [abastecimentos, selectedMonth, cheapestByCity, placaToGerente, placaToAdmin]);
 
-    const handleSendAlert = (email: string) => {
+    const handleSendAlert = (email: string, mgr: any) => {
         if (email === "NÃO ATRIBUÍDO") {
             toast.error("Este grupo não possui um e-mail de gestor atribuído.");
             return;
         }
-        toast.promise(
-            new Promise(resolve => setTimeout(resolve, 1500)),
-            {
-                loading: `Gerando relatório para ${email}...`,
-                success: 'Alerta de economia enviado!',
-                error: 'Erro ao enviar.',
-            }
+
+        const opportunities: string[] = [];
+        Object.values(mgr.vehicles).forEach((v: any) => {
+            v.fuelings.forEach((f: any) => {
+                if (f.isExpensive) {
+                    opportunities.push(
+                        `📌 VEÍCULO: ${v.placa}\n` +
+                        `• Local: ${f.city} (${f.estabelecimento})\n` +
+                        `• Pagou: ${formatBRL(f.price)}/L (${f.fuel})\n` +
+                        `• OPORTUNIDADE: No posto "${f.bestPost}" o preço é ${formatBRL(f.bestPrice)}/L\n` +
+                        `--------------------------`
+                    );
+                }
+            });
+        });
+
+        if (opportunities.length === 0) {
+            toast.success("Não há alertas de economia pendentes para este gestor.");
+            return;
+        }
+
+        const subject = encodeURIComponent(`OPORTUNIDADE DE ECONOMIA - FROTA CYMI (${selectedMonth})`);
+        const body = encodeURIComponent(
+            `Olá,\n\nIdentificamos ${opportunities.length} abastecimentos realizados em postos com preço acima da média da cidade.\n\n` +
+            `Confira abaixo as oportunidades de economia:\n\n` +
+            opportunities.join('\n\n') +
+            ` \n\nAtenciosamente,\nGestão de Frota`
         );
+
+        window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+        toast.success('Gerando e-mail de notificação...');
     };
 
     const formatBRL = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -232,7 +255,7 @@ const RelatorioGestores = () => {
                   )}
                   
                   <button 
-                    onClick={() => handleSendAlert(email)}
+                    onClick={() => handleSendAlert(email, mgr)}
                     className="flex items-center gap-2 px-5 py-2.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-[10px] font-black rounded-xl transition-all shadow-lg shadow-green-500/20"
                   >
                     <EnvelopeIcon className="w-4 h-4" />
