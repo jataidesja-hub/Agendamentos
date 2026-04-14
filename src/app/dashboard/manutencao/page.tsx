@@ -101,10 +101,26 @@ export default function ManutencaoPage() {
 
   useEffect(() => {
     loadData();
+
+    // Inscrever para atualizações em tempo real (Supabase Realtime)
+    const channel = supabase
+      .channel('realtime_manutencao')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'manutencao_veiculos' 
+      }, () => {
+        loadData(true); // Silent reload
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const { data: result, error } = await supabase
         .from('manutencao_veiculos')

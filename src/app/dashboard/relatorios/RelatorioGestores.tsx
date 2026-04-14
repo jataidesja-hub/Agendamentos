@@ -262,7 +262,10 @@ const RelatorioGestores = () => {
         </div>
 
         <div className="space-y-4">
-          {Object.entries(managersData).sort((a, b) => b[1].alerts - a[1].alerts).map(([email, mgr]) => (
+          {Object.entries(managersData)
+            .filter(([email]) => email !== "NÃO ATRIBUÍDO")
+            .sort((a, b) => b[1].alerts - a[1].alerts)
+            .map(([email, mgr]) => (
             <div key={email} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
               <div className="w-full px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center flex-1">
