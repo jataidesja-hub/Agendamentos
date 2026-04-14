@@ -98,6 +98,17 @@ export default function ManutencaoPage() {
   const [editServicoText, setEditServicoText] = useState("");
   const [obsEditId, setObsEditId] = useState<string | null>(null);
   const [obsEditText, setObsEditText] = useState("");
+  
+  // Função para tocar o som de alerta
+  const playNotificationSound = () => {
+    try {
+      const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+      audio.volume = 0.5;
+      audio.play();
+    } catch (error) {
+      console.error("Erro ao reproduzir som:", error);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -109,7 +120,16 @@ export default function ManutencaoPage() {
         event: '*', 
         schema: 'public', 
         table: 'manutencao_veiculos' 
-      }, () => {
+      }, (payload: any) => {
+        // Tocar som se o novo status for "aguardando_aprovacao"
+        // E for uma inserção ou se o status antigo for diferente
+        if (payload.new && payload.new.status === 'aguardando_aprovacao') {
+           // Só toca se for um novo registro ou se mudou de outra etapa para esta
+           if (payload.eventType === 'INSERT' || (payload.old && payload.old.status !== 'aguardando_aprovacao')) {
+              playNotificationSound();
+           }
+        }
+        
         loadData(true); // Silent reload
       })
       .subscribe();
