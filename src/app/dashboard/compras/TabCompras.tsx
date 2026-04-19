@@ -258,13 +258,13 @@ export default function TabCompras() {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar produto, processo, fornecedor..."
-              className="pl-9 pr-4 py-2 w-full border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+              className="pl-9 pr-4 py-2 w-full border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
             />
           </div>
           <select
             value={filtroStatus}
             onChange={(e) => setFiltroStatus(e.target.value as StatusCompra | "")}
-            className="px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+            className="px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
           >
             <option value="">Todos status</option>
             {STATUS_COMPRA.map((s) => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
@@ -291,22 +291,22 @@ export default function TabCompras() {
       {showFiltros && (
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 flex flex-wrap gap-3">
           <div>
-            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide block mb-1">Responsável</label>
+            <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide block mb-1">Responsável</label>
             <select
               value={filtroResponsavel}
               onChange={(e) => setFiltroResponsavel(e.target.value)}
-              className="px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+              className="px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
             >
               <option value="">Todos</option>
               {[...new Set(processos.map((p) => p.responsavel_compra))].map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide block mb-1">Centro de Custo</label>
+            <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide block mb-1">Centro de Custo</label>
             <select
               value={filtroCentro}
               onChange={(e) => setFiltroCentro(e.target.value)}
-              className="px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+              className="px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
             >
               <option value="">Todos</option>
               {CENTROS_CUSTO.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -328,149 +328,149 @@ export default function TabCompras() {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Nº Processo</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Nº Processo</label>
               <input
                 value={form.numero_processo}
                 onChange={(e) => setForm({ ...form, numero_processo: e.target.value.toUpperCase() })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Requisição</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Requisição</label>
               <input
                 value={form.numero_requisicao}
                 onChange={(e) => setForm({ ...form, numero_requisicao: e.target.value.toUpperCase() })}
                 placeholder="ex: PCB5-47081"
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Pedido (PO)</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Pedido (PO)</label>
               <input
                 value={form.numero_pedido}
                 onChange={(e) => setForm({ ...form, numero_pedido: e.target.value.toUpperCase() })}
                 placeholder="ex: PCB5-47081"
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Status</label>
               <select
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value as StatusCompra })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               >
                 {STATUS_COMPRA.map((s) => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Centro de Custo *</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Centro de Custo *</label>
               <select
                 value={form.centro_custo}
                 onChange={(e) => setForm({ ...form, centro_custo: e.target.value })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               >
                 {CENTROS_CUSTO.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Projeto</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Projeto</label>
               <input
                 value={form.projeto}
                 onChange={(e) => setForm({ ...form, projeto: e.target.value.toUpperCase() })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div className="lg:col-span-2">
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Produto *</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Produto *</label>
               <input
                 value={form.produto_nome}
                 onChange={(e) => selecionarProduto(e.target.value.toUpperCase())}
                 list="produtos-list"
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
               <datalist id="produtos-list">
                 {produtos.map((p) => <option key={p.id} value={p.nome} />)}
               </datalist>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Quantidade</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Quantidade</label>
               <input
                 type="number"
                 min={1}
                 value={form.quantidade}
                 onChange={(e) => setForm({ ...form, quantidade: Number(e.target.value) })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Unidade</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Unidade</label>
               <select
                 value={form.unidade}
                 onChange={(e) => setForm({ ...form, unidade: e.target.value })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               >
                 {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Responsável Compra *</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Responsável Compra *</label>
               <input
                 value={form.responsavel_compra}
                 onChange={(e) => setForm({ ...form, responsavel_compra: e.target.value.toUpperCase() })}
                 list="responsaveis-list"
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
               <datalist id="responsaveis-list">
                 {RESPONSAVEIS.map((r) => <option key={r} value={r} />)}
               </datalist>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Solicitante</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Solicitante</label>
               <input
                 value={form.solicitante}
                 onChange={(e) => setForm({ ...form, solicitante: e.target.value.toUpperCase() })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Data do Pedido</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Data do Pedido</label>
               <input
                 type="date"
                 value={form.data_pedido}
                 onChange={(e) => setForm({ ...form, data_pedido: e.target.value })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Fornecedor Escolhido</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Fornecedor Escolhido</label>
               <input
                 value={form.fornecedor_escolhido_nome}
                 onChange={(e) => setForm({ ...form, fornecedor_escolhido_nome: e.target.value.toUpperCase() })}
                 list="fornecedores-escolhidos-list"
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
               <datalist id="fornecedores-escolhidos-list">
                 {fornecedores.map((f) => <option key={f.id} value={f.razao_social} />)}
               </datalist>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Valor (R$)</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Valor (R$)</label>
               <input
                 type="number"
                 value={form.preco_escolhido || ""}
                 onChange={(e) => setForm({ ...form, preco_escolhido: e.target.value ? Number(e.target.value) : undefined })}
                 placeholder="0,00"
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Observações</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Observações</label>
               <textarea
                 value={form.observacoes}
                 onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
                 rows={2}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40 resize-none"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40 resize-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
           </div>

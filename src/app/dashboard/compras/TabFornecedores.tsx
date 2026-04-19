@@ -116,7 +116,7 @@ export default function TabFornecedores() {
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar fornecedor ou CNPJ..."
-            className="pl-9 pr-4 py-2 w-full border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+            className="pl-9 pr-4 py-2 w-full border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
           />
         </div>
         <button
@@ -135,51 +135,51 @@ export default function TabFornecedores() {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Razão Social *</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Razão Social *</label>
               <input
                 value={form.razao_social}
                 onChange={(e) => setForm({ ...form, razao_social: e.target.value.toUpperCase() })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">CNPJ / CPF</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">CNPJ / CPF</label>
               <input
                 value={form.cnpj_cpf}
                 onChange={(e) => setForm({ ...form, cnpj_cpf: e.target.value })}
                 placeholder="00.000.000/0001-00"
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Contato</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Contato</label>
               <input
                 value={form.contato}
                 onChange={(e) => setForm({ ...form, contato: e.target.value })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">E-mail</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">E-mail</label>
               <input
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Telefone</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Telefone</label>
               <input
                 value={form.telefone}
                 onChange={(e) => setForm({ ...form, telefone: e.target.value })}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
             </div>
           </div>
 
           <div className="mt-4">
-            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Categorias que atende</label>
+            <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Categorias que atende</label>
             <div className="mt-2 flex flex-wrap gap-2">
               {CATEGORIAS.map((cat) => {
                 const sel = (form.categorias || []).includes(cat);

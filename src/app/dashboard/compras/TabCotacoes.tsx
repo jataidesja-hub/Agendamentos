@@ -84,13 +84,13 @@ function CotacaoCard({
         {editing ? (
           <>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Fornecedor</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Fornecedor</label>
               <input
                 value={form.fornecedor_nome || ""}
                 onChange={(e) => setForm({ ...form, fornecedor_nome: e.target.value.toUpperCase() })}
                 placeholder="Nome do fornecedor"
                 list={`fornecedores-list-${numero}`}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
               />
               <datalist id={`fornecedores-list-${numero}`}>
                 {fornecedores.map((f) => <option key={f.id} value={f.razao_social} />)}
@@ -98,54 +98,54 @@ function CotacaoCard({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Preço (R$)</label>
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Preço (R$)</label>
                 <input
                   type="number"
                   value={form.preco || ""}
                   onChange={(e) => setForm({ ...form, preco: e.target.value ? Number(e.target.value) : null })}
                   placeholder="0,00"
-                  className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                  className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Prazo</label>
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Prazo</label>
                 <select
                   value={form.prazo || ""}
                   onChange={(e) => setForm({ ...form, prazo: e.target.value })}
-                  className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                  className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
                 >
                   <option value="">Selecione...</option>
                   {PRAZOS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Cond. Pagamento</label>
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Cond. Pagamento</label>
                 <select
                   value={form.condicao_pagamento || ""}
                   onChange={(e) => setForm({ ...form, condicao_pagamento: e.target.value })}
-                  className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                  className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
                 >
                   <option value="">Selecione...</option>
                   {CONDICOES_PAGAMENTO.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Validade</label>
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Validade</label>
                 <input
                   type="date"
                   value={form.validade_cotacao || ""}
                   onChange={(e) => setForm({ ...form, validade_cotacao: e.target.value })}
-                  className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+                  className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
                 />
               </div>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Observações</label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Observações</label>
               <textarea
                 value={form.observacoes || ""}
                 onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
                 rows={2}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40 resize-none"
+                className="mt-1 w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40 resize-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -293,7 +293,7 @@ export default function TabCotacoes() {
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar processo ou produto..."
-          className="pl-9 pr-4 py-2 w-full border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
+          className="pl-9 pr-4 py-2 w-full border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0b7336]/40"
         />
       </div>
 
