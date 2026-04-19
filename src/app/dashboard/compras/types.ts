@@ -20,6 +20,9 @@ export const CATEGORIAS = [
   "ATIVO FIXO",
   "ANALISES LABORATORIAIS",
   "TREINAMENTOS",
+  "FERRAMENTAS",
+  "ALUGUEL MAQUINAS E EQUIP. - PJ",
+  "GRAFICA",
 ] as const;
 
 export const UNIDADES = ["UND", "SV", "MÊS", "KG", "L", "CX", "PCT"] as const;
@@ -27,6 +30,11 @@ export const UNIDADES = ["UND", "SV", "MÊS", "KG", "L", "CX", "PCT"] as const;
 export const STATUS_COMPRA = [
   "EM COTAÇÃO",
   "EM APROVAÇÃO",
+  "PCBS EM APROVAÇÃO",
+  "PENDENTE APROVAÇÃO",
+  "COMPARATIVO",
+  "ABRIR REQUISIÇÃO",
+  "CONVERTER REQUISIÇÃO",
   "PROCESSO COM RJ",
   "LIBERADO",
   "PEDIDO EMITIDO",
@@ -132,6 +140,41 @@ export const STATUS_CONFIG: Record<StatusCompra, { label: string; color: string;
     bg: "bg-amber-50 dark:bg-amber-500/10",
     border: "border-amber-200 dark:border-amber-500/30",
     dot: "bg-amber-400",
+  },
+  "PCBS EM APROVAÇÃO": {
+    label: "PCBS Em Aprovação",
+    color: "text-orange-700 dark:text-orange-300",
+    bg: "bg-orange-50 dark:bg-orange-500/10",
+    border: "border-orange-200 dark:border-orange-500/30",
+    dot: "bg-orange-400",
+  },
+  "PENDENTE APROVAÇÃO": {
+    label: "Pendente Aprovação",
+    color: "text-yellow-700 dark:text-yellow-300",
+    bg: "bg-yellow-50 dark:bg-yellow-500/10",
+    border: "border-yellow-200 dark:border-yellow-500/30",
+    dot: "bg-yellow-400",
+  },
+  "COMPARATIVO": {
+    label: "Comparativo",
+    color: "text-violet-700 dark:text-violet-300",
+    bg: "bg-violet-50 dark:bg-violet-500/10",
+    border: "border-violet-200 dark:border-violet-500/30",
+    dot: "bg-violet-400",
+  },
+  "ABRIR REQUISIÇÃO": {
+    label: "Abrir Requisição",
+    color: "text-sky-700 dark:text-sky-300",
+    bg: "bg-sky-50 dark:bg-sky-500/10",
+    border: "border-sky-200 dark:border-sky-500/30",
+    dot: "bg-sky-400",
+  },
+  "CONVERTER REQUISIÇÃO": {
+    label: "Converter Requisição",
+    color: "text-cyan-700 dark:text-cyan-300",
+    bg: "bg-cyan-50 dark:bg-cyan-500/10",
+    border: "border-cyan-200 dark:border-cyan-500/30",
+    dot: "bg-cyan-400",
   },
   "PROCESSO COM RJ": {
     label: "Processo c/ RJ",
