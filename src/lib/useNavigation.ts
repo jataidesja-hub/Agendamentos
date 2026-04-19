@@ -26,6 +26,7 @@ const DEFAULT_NAV: NavItem[] = [
   { id: "projetos", name: "Projetos", href: "/dashboard/fazendas", iconName: "MapIcon" },
   { id: "abastecimentos", name: "Abastecimentos", href: "/dashboard/abastecimentos", iconName: "ChartBarIcon2" },
   { id: "manutencao", name: "Manutenção", href: "/dashboard/manutencao", iconName: "TruckIcon2" },
+  { id: "compras", name: "Gestão de Compras", href: "/dashboard/compras", iconName: "ShoppingCartIcon" },
 ];
 
 // Nomes curtos para mobile
@@ -42,6 +43,7 @@ export const MOBILE_NAMES: Record<string, string> = {
   projetos: "Projetos",
   abastecimentos: "Abastec.",
   manutencao: "Manut.",
+  compras: "Compras",
 };
 
 function getSavedOrder(): string[] | null {
@@ -81,7 +83,7 @@ export function useNavigation() {
               setPermissões([
                 "agenda", "alertas", "relatorios", "configuracoes",
                 "chaves", "perfis", "veiculos", "projetos",
-                "abastecimentos", "sustentabilidade", "manutencao",
+                "abastecimentos", "sustentabilidade", "manutencao", "compras",
               ]);
             }
           });
