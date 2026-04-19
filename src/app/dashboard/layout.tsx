@@ -9,7 +9,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-[#f4f7f5] dark:bg-[#0a0a0a] overflow-hidden selection:bg-[#0b7336] selection:text-white">
+    <div className="flex min-h-screen w-screen bg-[#f4f7f5] dark:bg-[#0a0a0a] overflow-x-hidden selection:bg-[#0b7336] selection:text-white">
       {/* Decorative background blobs */}
       <div className="absolute top-[-10%] left-[-5%] w-96 h-96 bg-[#0b7336]/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-5%] w-96 h-96 bg-[#298d4a]/10 rounded-full blur-3xl pointer-events-none" />
@@ -61,7 +61,7 @@ export default function DashboardLayout({
         </header>
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 pt-4 pb-28 md:pb-8">
-          <div className="max-w-7xl mx-auto h-full">
+          <div className="w-full h-full">
             {children}
           </div>
         </main>
