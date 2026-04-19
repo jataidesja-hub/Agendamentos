@@ -29,6 +29,7 @@ export default function UsuariosPage() {
     { id: 'abastecimentos', nome: 'Abastecimentos' },
     { id: 'sustentabilidade', nome: 'Sustentabilidade/Ambiente' },
     { id: 'manutencao', nome: 'Manutenção' },
+    { id: 'compras', nome: 'Gestão de Compras' },
   ];
 
   useEffect(() => {
