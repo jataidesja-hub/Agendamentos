@@ -492,19 +492,19 @@ export default function TabCompras() {
 
       {/* Tabela */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-sm" style={{ minWidth: "1100px" }}>
             <thead>
               <tr className="bg-gradient-to-r from-[#0b7336]/10 to-transparent border-b border-gray-200 dark:border-gray-700">
-                <th className="text-left px-4 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Processo</th>
-                <th className="text-left px-4 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Produto</th>
-                <th className="text-left px-4 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Centro Custo</th>
-                <th className="text-center px-4 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Qtd</th>
-                <th className="text-left px-4 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Fornecedor</th>
-                <th className="text-right px-4 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Valor</th>
-                <th className="text-left px-4 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Responsável</th>
-                <th className="text-center px-4 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Status</th>
-                <th className="text-center px-4 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Ações</th>
+                <th className="text-left px-3 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide w-28">Processo</th>
+                <th className="text-left px-3 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Produto</th>
+                <th className="text-left px-3 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide w-32">Centro Custo</th>
+                <th className="text-center px-3 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide w-16">Qtd</th>
+                <th className="text-left px-3 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide">Fornecedor</th>
+                <th className="text-right px-3 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide w-28">Valor</th>
+                <th className="text-left px-3 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide w-28">Responsável</th>
+                <th className="text-center px-3 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide w-36">Status</th>
+                <th className="text-center px-3 py-3 font-bold text-gray-700 dark:text-gray-300 uppercase text-xs tracking-wide w-40">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -521,37 +521,37 @@ export default function TabCompras() {
                 const prox = proximoStatus[p.status];
                 return (
                   <tr key={p.id} className={`border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${i % 2 === 0 ? "" : "bg-gray-50/40 dark:bg-gray-900/20"}`}>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <div className="font-mono text-xs font-bold text-gray-700 dark:text-gray-300">{p.numero_processo || "—"}</div>
                       {p.numero_pedido && <div className="text-xs text-gray-400">{p.numero_pedido}</div>}
                       <div className="text-xs text-gray-400">{new Date(p.data_pedido + "T00:00:00").toLocaleDateString("pt-BR")}</div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <div className="font-medium text-gray-800 dark:text-gray-200 max-w-48 truncate">{p.produto_nome}</div>
                       <span className="px-1.5 py-0.5 bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400 rounded text-xs">{p.categoria}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-32 truncate">
+                    <td className="px-3 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-32 truncate">
                       <div>{p.centro_custo}</div>
                       {p.projeto && <div className="text-gray-400">{p.projeto}</div>}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-3 py-3 text-center">
                       <span className="font-semibold text-gray-700 dark:text-gray-300">{p.quantidade}</span>
                       <span className="text-xs text-gray-400 ml-1">{p.unidade}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-400 max-w-40 truncate">
+                    <td className="px-3 py-3 text-xs text-gray-600 dark:text-gray-400 max-w-40 truncate">
                       {p.fornecedor_escolhido_nome || <span className="text-gray-300 dark:text-gray-600">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-300 text-xs">
+                    <td className="px-3 py-3 text-right font-semibold text-gray-700 dark:text-gray-300 text-xs">
                       {formatBRL(p.preco_escolhido)}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-400">
+                    <td className="px-3 py-3 text-xs text-gray-600 dark:text-gray-400">
                       <div>{p.responsavel_compra}</div>
                       {p.solicitante && <div className="text-gray-400">{p.solicitante}</div>}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-3 py-3 text-center">
                       <StatusBadge status={p.status} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <div className="flex items-center justify-center gap-1">
                         {prox && (
                           <button
@@ -577,10 +577,10 @@ export default function TabCompras() {
             {filtrados.length > 0 && (
               <tfoot>
                 <tr className="bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
-                  <td colSpan={5} className="px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400">
+                  <td colSpan={5} className="px-3 py-3 text-xs font-bold text-gray-500 dark:text-gray-400">
                     {filtrados.length} processo(s)
                   </td>
-                  <td className="px-4 py-3 text-right font-black text-gray-800 dark:text-white text-sm">
+                  <td className="px-3 py-3 text-right font-black text-gray-800 dark:text-white text-sm">
                     {formatBRL(filtrados.reduce((acc, p) => acc + (p.preco_escolhido || 0), 0))}
                   </td>
                   <td colSpan={3} />

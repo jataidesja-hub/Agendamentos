@@ -26,7 +26,7 @@ export default function ComprasPage() {
   const [activeTab, setActiveTab] = useState<TabId>("compras");
 
   return (
-    <div className="min-h-full bg-gray-50 dark:bg-gray-950 p-4 md:p-6">
+    <div className="w-full">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3">
