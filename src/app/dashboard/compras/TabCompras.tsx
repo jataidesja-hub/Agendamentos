@@ -225,6 +225,11 @@ export default function TabCompras() {
   const proximoStatus: Record<StatusCompra, string | null> = {
     "EM COTAÇÃO": "Mover p/ Aprovação",
     "EM APROVAÇÃO": "Liberar",
+    "PCBS EM APROVAÇÃO": "Liberar",
+    "PENDENTE APROVAÇÃO": "Aprovar",
+    "COMPARATIVO": "Mover p/ Aprovação",
+    "ABRIR REQUISIÇÃO": "Criar Requisição",
+    "CONVERTER REQUISIÇÃO": "Converter",
     "LIBERADO": "Emitir Pedido",
     "PEDIDO EMITIDO": "Marcar Recebido",
     "RECEBIDO": null,
