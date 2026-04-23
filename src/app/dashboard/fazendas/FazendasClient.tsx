@@ -117,7 +117,7 @@ export default function ProjetosList() {
       if (error) { toast.error(error.message); setSaving(false); return; }
       toast.success('Projeto atualizado!');
     } else {
-      const { error } = await supabase.from('projetos').insert({ nome: projetoNome.trim() });
+      const { error } = await supabase.from('projetos').insert({ nome: projetoNome.trim(), endereco: '' });
       if (error) { toast.error(error.message); setSaving(false); return; }
       toast.success('Projeto criado!');
     }
