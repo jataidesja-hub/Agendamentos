@@ -208,7 +208,6 @@ export default function ProjetosList() {
   /* ── Send Email via mailto ── */
   function openMailto() {
     if (emailProjetos.length === 0) return toast.error('Selecione ao menos um projeto');
-    if (!emailAssunto.trim() || !emailCorpo.trim()) return toast.error('Preencha assunto e mensagem');
 
     const contatosDoProjeto = links
       .filter(l => emailProjetos.includes(l.projeto_id))
