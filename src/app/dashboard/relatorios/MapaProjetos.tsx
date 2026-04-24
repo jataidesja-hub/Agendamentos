@@ -2,16 +2,18 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
-  ChevronDownIcon, 
+import {
+  ChevronDownIcon,
   ChevronUpIcon,
   FunnelIcon,
   TruckIcon,
   ArrowUpIcon,
   ArrowDownIcon,
-  MinusIcon
+  MinusIcon,
+  EnvelopeIcon
 } from '@heroicons/react/24/outline';
 import { dataCache } from '@/lib/cache';
+import toast from 'react-hot-toast';
 
 const RelatorioProjetos = () => {
     const [abastecimentos, setAbastecimentos] = useState<any[]>([]);
@@ -20,6 +22,39 @@ const RelatorioProjetos = () => {
     const [selectedMonth, setSelectedMonth] = useState('');
     const [expandedProject, setExpandedProject] = useState<string | null>(null);
     const [expandedVehicle, setExpandedVehicle] = useState<string | null>(null);
+    const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
+
+    const toggleProject = (proj: string) => {
+      setSelectedProjects(prev => {
+        const next = new Set(prev);
+        next.has(proj) ? next.delete(proj) : next.add(proj);
+        return next;
+      });
+    };
+
+    const handleGerarEmail = () => {
+      if (selectedProjects.size === 0) {
+        toast.error("Selecione ao menos um projeto.");
+        return;
+      }
+      const projetosList = Array.from(selectedProjects).join(", ");
+      const mesAno = new Date(selectedMonth + "-02").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      const mesCapital = mesAno.charAt(0).toUpperCase() + mesAno.slice(1);
+
+      const body = `Boa tarde,
+
+@Wildislane Costa.
+
+Segue protocolo para análise e aprovação.
+
+Por favor Projetos: ${projetosList}, incluir custo na planilha orçamentária do projeto para ${mesCapital}.
+
+Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodrigo Faria → Financeiro → Pagamento Rio de Janeiro.`;
+
+      const subject = encodeURIComponent(`PROTOCOLO PARA ANÁLISE E APROVAÇÃO - ${mesCapital.toUpperCase()}`);
+      window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(body)}`;
+      toast.success("Gerando e-mail...");
+    };
 
     useEffect(() => {
       fetchDadosCompletos();
@@ -206,19 +241,32 @@ const RelatorioProjetos = () => {
             <p className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest mt-1">Exibindo apenas frota ativa • {veiculosAtivos.size} veículos</p>
           </div>
 
-          <div className="flex items-center px-6 py-4 bg-white/5 rounded-2xl border border-white/10 hover:border-[#0b7336] transition-all cursor-pointer">
-            <FunnelIcon className="w-4 h-4 text-emerald-500 mr-3" />
-            <select 
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent text-white font-black text-sm outline-none uppercase tracking-widest"
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            <div className="flex items-center px-6 py-4 bg-white/5 rounded-2xl border border-white/10 hover:border-[#0b7336] transition-all cursor-pointer">
+              <FunnelIcon className="w-4 h-4 text-emerald-500 mr-3" />
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="bg-transparent text-white font-black text-sm outline-none uppercase tracking-widest"
+              >
+                {availableMonths.map(m => (
+                  <option key={m} value={m} className="bg-[#1a1c23]">
+                    {new Date(m + "-02").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={handleGerarEmail}
+              className={`flex items-center gap-2 px-5 py-3.5 rounded-2xl text-sm font-black transition-all ${
+                selectedProjects.size > 0
+                  ? "bg-[#0b7336] hover:bg-[#09602c] text-white shadow-lg shadow-green-500/20"
+                  : "bg-white/10 text-white/40 cursor-not-allowed"
+              }`}
             >
-              {availableMonths.map(m => (
-                <option key={m} value={m} className="bg-[#1a1c23]">
-                  {new Date(m + "-02").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                </option>
-              ))}
-            </select>
+              <EnvelopeIcon className="w-4 h-4" />
+              GERAR E-MAIL {selectedProjects.size > 0 && `(${selectedProjects.size})`}
+            </button>
           </div>
         </div>
 
@@ -231,19 +279,27 @@ const RelatorioProjetos = () => {
             </div>
           ) : (
             Object.keys(groupedData).sort().map(projName => (
-              <div key={projName} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden transition-all">
-                <button 
-                  onClick={() => setExpandedProject(expandedProject === projName ? null : projName)}
-                  className="w-full px-8 py-6 flex flex-col md:flex-row justify-between items-start md:items-center hover:bg-gray-50/50 transition-colors gap-4"
-                >
-                  <div className="flex items-center">
-                    <div className="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center mr-5 shadow-lg">
+              <div key={projName} className={`bg-white rounded-[2.5rem] shadow-sm border overflow-hidden transition-all ${selectedProjects.has(projName) ? 'border-[#0b7336] ring-1 ring-[#0b7336]/30' : 'border-gray-100'}`}>
+                <div className="w-full px-8 py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="flex items-center gap-4 flex-1">
+                    <input
+                      type="checkbox"
+                      checked={selectedProjects.has(projName)}
+                      onChange={() => toggleProject(projName)}
+                      className="w-5 h-5 rounded accent-[#0b7336] cursor-pointer flex-shrink-0"
+                    />
+                    <button
+                      onClick={() => setExpandedProject(expandedProject === projName ? null : projName)}
+                      className="flex items-center gap-4 flex-1 text-left hover:opacity-80 transition-opacity"
+                    >
+                    <div className="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
                       <span className="text-white font-black text-xs">{projName.substring(0, 2)}</span>
                     </div>
-                    <div className="text-left">
+                    <div>
                       <p className="text-xs font-black text-[#0b7336] uppercase tracking-widest mb-0.5">Projeto</p>
                       <h3 className="text-xl font-black text-gray-900 tracking-tight">{projName}</h3>
                     </div>
+                    </button>
                   </div>
 
                   <div className="flex gap-8 items-center">
@@ -257,7 +313,7 @@ const RelatorioProjetos = () => {
                     </div>
                     {expandedProject === projName ? <ChevronUpIcon className="w-5 h-5 text-gray-400" /> : <ChevronDownIcon className="w-5 h-5 text-gray-400" />}
                   </div>
-                </button>
+                </div>
 
                 {expandedProject === projName && (
                   <div className="px-8 pb-8 space-y-3 bg-gray-50/30">
