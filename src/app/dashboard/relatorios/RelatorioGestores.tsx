@@ -360,6 +360,7 @@ const RelatorioGestores = () => {
                                   <div className="text-right">
                                      <p className="text-[8px] font-black text-red-500 uppercase tracking-widest">Posto Mais Barato na Cidade</p>
                                      <p className="text-[10px] font-black text-gray-900 truncate max-w-[200px]">{f.bestPost}</p>
+                                     <p className="text-[8px] font-bold text-gray-500 uppercase">{f.fuel} • {f.city}</p>
                                      <p className="text-xs font-black text-emerald-600">{formatBRL(f.bestPrice)} / L</p>
                                      {f.bestDate && <p className="text-[8px] font-medium text-gray-400">último registro: {new Date(f.bestDate).toLocaleDateString('pt-BR')}</p>}
                                   </div>
