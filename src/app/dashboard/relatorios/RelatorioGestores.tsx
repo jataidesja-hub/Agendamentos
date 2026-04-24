@@ -105,6 +105,7 @@ const RelatorioGestores = () => {
 
     const managersData = useMemo(() => {
       const data: Record<string, { vehicles: Record<string, { placa: string; fuelings: any[] }>; totalSpent: number; alerts: number }> = {};
+      const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
       // Pré-filtra por mês para performance
       const monthFiltered = abastecimentos.filter((a: any) => {
@@ -157,8 +158,8 @@ const RelatorioGestores = () => {
         let best: any = null;
 
         pool.forEach(p => {
-            // Compara com o último preço registrado de cada posto diferente
-            if (p.post !== post && p.price > 0) {
+            // Último preço do posto, dentro de 5 dias e mesma cidade (já garantido pela chave)
+            if (p.post !== post && p.price > 0 && p.date >= (date - FIVE_DAYS_MS) && p.date <= date) {
                 if (!best || p.price < best.price) {
                     best = p;
                 }
