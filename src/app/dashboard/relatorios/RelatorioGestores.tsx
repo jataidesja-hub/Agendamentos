@@ -164,7 +164,7 @@ const RelatorioGestores = () => {
             }
         });
 
-        const isExpensive = !!(best && price > 0 && best.price < (price - 0.05));
+        const cheaperExists = !!(best && price > 0 && best.price < (price - 0.05));
 
         data[gestorEmail].vehicles[normPlaca].fuelings.push({
             city,
@@ -174,11 +174,34 @@ const RelatorioGestores = () => {
             date: a.data_transacao,
             bestPrice: best?.price ?? 0,
             bestPost: best?.post ?? "N/A",
-            isExpensive
+            bestDate: best?.date ?? null,
+            isExpensive: cheaperExists
         });
 
         data[gestorEmail].totalSpent += (Number(a.valor_total || a.valor_abastecimento || a.valor_emissao) || 0);
-        if (isExpensive) data[gestorEmail].alerts += 1;
+      });
+
+      // Só mostra alerta no ÚLTIMO abastecimento de cada veículo por posto+combustível
+      Object.values(data).forEach((gestorData: any) => {
+        Object.values(gestorData.vehicles).forEach((vehicle: any) => {
+          const groups: Record<string, number[]> = {};
+          vehicle.fuelings.forEach((f: any, idx: number) => {
+            const key = `${f.estabelecimento}|${f.fuel}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(idx);
+          });
+          Object.values(groups).forEach((indices: number[]) => {
+            const latestIdx = indices.reduce((best, idx) =>
+              new Date(vehicle.fuelings[idx].date) > new Date(vehicle.fuelings[best].date) ? idx : best
+            , indices[0]);
+            indices.forEach(idx => {
+              if (idx !== latestIdx) vehicle.fuelings[idx].isExpensive = false;
+            });
+          });
+          vehicle.fuelings.forEach((f: any) => {
+            if (f.isExpensive) gestorData.alerts += 1;
+          });
+        });
       });
 
       return data;
@@ -339,6 +362,7 @@ const RelatorioGestores = () => {
                                      <p className="text-[8px] font-black text-red-500 uppercase tracking-widest">Posto Mais Barato na Cidade</p>
                                      <p className="text-[10px] font-black text-gray-900 truncate max-w-[200px]">{f.bestPost}</p>
                                      <p className="text-xs font-black text-emerald-600">{formatBRL(f.bestPrice)} / L</p>
+                                     {f.bestDate && <p className="text-[8px] font-medium text-gray-400">último registro: {new Date(f.bestDate).toLocaleDateString('pt-BR')}</p>}
                                   </div>
                                   <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
                                      <ArrowDownIcon className="w-4 h-4 text-red-600" />
