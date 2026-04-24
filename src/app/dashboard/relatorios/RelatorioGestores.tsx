@@ -105,7 +105,6 @@ const RelatorioGestores = () => {
 
     const managersData = useMemo(() => {
       const data: Record<string, { vehicles: Record<string, { placa: string; fuelings: any[] }>; totalSpent: number; alerts: number }> = {};
-      const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
       // Pré-filtra por mês para performance
       const monthFiltered = abastecimentos.filter((a: any) => {
@@ -147,7 +146,6 @@ const RelatorioGestores = () => {
         const fuel = normalizeFuel(a.tipo_combustivel);
         const post = String(a.estabelecimento || "POSTO").toUpperCase().trim();
         const price = Number(a.valor_litro) || 0;
-        const date = new Date(a.data_transacao).getTime();
         
         if (!data[gestorEmail].vehicles[normPlaca]) {
           data[gestorEmail].vehicles[normPlaca] = { placa: a.placa, fuelings: [] };
@@ -159,7 +157,7 @@ const RelatorioGestores = () => {
 
         pool.forEach(p => {
             // Último preço do posto, dentro de 5 dias e mesma cidade (já garantido pela chave)
-            if (p.post !== post && p.price > 0 && p.date >= (date - FIVE_DAYS_MS) && p.date <= date) {
+            if (p.post !== post && p.price > 0) {
                 if (!best || p.price < best.price) {
                     best = p;
                 }
@@ -327,6 +325,7 @@ const RelatorioGestores = () => {
                                 <div className="flex items-center gap-2 mb-1">
                                    <MapPinIcon className="w-3.5 h-3.5 text-gray-400" />
                                    <span className="text-[10px] font-black text-gray-500 uppercase">{f.city} • {f.estabelecimento}</span>
+                                   <span className="text-[10px] font-medium text-gray-400">{new Date(f.date).toLocaleDateString('pt-BR')}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
                                    <span className="text-xs font-bold text-gray-700">{f.fuel}</span>
