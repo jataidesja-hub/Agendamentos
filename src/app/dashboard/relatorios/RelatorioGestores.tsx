@@ -103,10 +103,8 @@ const RelatorioGestores = () => {
         return fuel;
     };
 
-    // Agrupamento por Gestor com Regra de Janela de 5 Dias
     const managersData = useMemo(() => {
       const data: Record<string, { vehicles: Record<string, { placa: string; fuelings: any[] }>; totalSpent: number; alerts: number }> = {};
-      const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
       // Pré-filtra por mês para performance
       const monthFiltered = abastecimentos.filter((a: any) => {
@@ -114,19 +112,26 @@ const RelatorioGestores = () => {
         return String(a.data_transacao).slice(0, 7) === selectedMonth;
       });
 
-      // Indexa todos os abastecimentos por Cidade|Fuel para busca rápida
+      // Indexa o ÚLTIMO preço de cada posto por Cidade|Fuel
+      // (sem duplicatas: cada posto aparece uma vez com seu preço mais recente)
       const cityFuelPool: Record<string, any[]> = {};
-      abastecimentos.forEach(a => {
+      const sortedAbs = [...abastecimentos].sort(
+          (a, b) => new Date(a.data_transacao).getTime() - new Date(b.data_transacao).getTime()
+      );
+      sortedAbs.forEach(a => {
           if (!a.data_transacao) return;
           const city = String(a.cidade || a.municipio || "NÃO INFORMADA").toUpperCase().trim();
           const fuel = normalizeFuel(a.tipo_combustivel);
-          const key = `${city}|${fuel}`;
-          if (!cityFuelPool[key]) cityFuelPool[key] = [];
-          cityFuelPool[key].push({
-              price: Number(a.valor_litro) || 0,
-              post: String(a.estabelecimento || "POSTO").toUpperCase().trim(),
-              date: new Date(a.data_transacao).getTime()
-          });
+          const post = String(a.estabelecimento || "POSTO").toUpperCase().trim();
+          const poolKey = `${city}|${fuel}`;
+          const price = Number(a.valor_litro) || 0;
+          const date = new Date(a.data_transacao).getTime();
+          if (!cityFuelPool[poolKey]) cityFuelPool[poolKey] = [];
+          // Remove entrada anterior deste posto e insere a nova (mais recente)
+          const idx = cityFuelPool[poolKey].findIndex(p => p.post === post);
+          const entry = { price, post, date };
+          if (idx >= 0) cityFuelPool[poolKey][idx] = entry;
+          else cityFuelPool[poolKey].push(entry);
       });
 
       monthFiltered.forEach((a: any) => {
@@ -152,11 +157,8 @@ const RelatorioGestores = () => {
         let best: any = null;
 
         pool.forEach(p => {
-            // Regras:
-            // 1. Deve ser do passado ou mesmo dia, dentro da janela de 5 dias
-            // 2. Não pode ser no mesmo posto
-            // 3. O preço deve ser válido (>0)
-            if (p.date <= date && p.date >= (date - FIVE_DAYS_MS) && p.post !== post && p.price > 0) {
+            // Compara com o último preço registrado de cada posto diferente
+            if (p.post !== post && p.price > 0) {
                 if (!best || p.price < best.price) {
                     best = p;
                 }
