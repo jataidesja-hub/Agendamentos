@@ -112,12 +112,11 @@ const RelatorioGestores = () => {
         return String(a.data_transacao).slice(0, 7) === selectedMonth;
       });
 
-      // Indexa o ÚLTIMO preço de cada posto por Cidade|Fuel
-      // (sem duplicatas: cada posto aparece uma vez com seu preço mais recente)
+      // Pool apenas do mês selecionado: último preço de cada posto por Cidade|Fuel
       const cityFuelPool: Record<string, any[]> = {};
-      const sortedAbs = [...abastecimentos].sort(
-          (a, b) => new Date(a.data_transacao).getTime() - new Date(b.data_transacao).getTime()
-      );
+      const sortedAbs = [...abastecimentos]
+          .filter(a => a.data_transacao && String(a.data_transacao).slice(0, 7) === selectedMonth)
+          .sort((a, b) => new Date(a.data_transacao).getTime() - new Date(b.data_transacao).getTime());
       sortedAbs.forEach(a => {
           if (!a.data_transacao) return;
           const city = String(a.cidade || a.municipio || "NÃO INFORMADA").toUpperCase().trim();
