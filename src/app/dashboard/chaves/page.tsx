@@ -147,13 +147,17 @@ export default function ControleChaves() {
     }]).select();
     
     if (error) {
-      toast.error("Erro: " + error.message);
+      if (error.message.includes("unique") || error.message.includes("duplicate") || error.message.includes("placa_key")) {
+        toast.error("Essa placa já está cadastrada na frota!");
+      } else {
+        toast.error("Erro: " + error.message);
+      }
     } else {
       setVeiculos([...veiculos, data[0]]);
       toast.success("Veículo/Chave adicionado à frota!");
+      setNovaChaveInfo("");
+      setNovaPlaca("");
     }
-    setNovaChaveInfo("");
-    setNovaPlaca("");
   };
 
   const excluirVeiculo = async (id: string) => {
