@@ -374,17 +374,17 @@ export default function ControleChaves() {
                 <div className="w-2 h-8 bg-[#0b7336] rounded-full"></div>
                 <h2 className="text-2xl font-black dark:text-white uppercase tracking-tight">Disponíveis</h2>
                 <span className="px-3 py-1 bg-green-100 text-[#0b7336] dark:bg-green-500/10 text-xs font-black rounded-xl border border-green-100 dark:border-green-500/20">
-                  {veiculos.filter(v => v.status === "Disponível").length}
+                  {veiculos.filter(v => v.status !== "Em Uso").length}
                 </span>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {veiculos.filter(v => v.status === "Disponível").length === 0 ? (
+                {veiculos.filter(v => v.status !== "Em Uso").length === 0 ? (
                   <div className="col-span-1 md:col-span-2 text-center py-8 bg-gray-50/50 dark:bg-gray-800/30 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700 text-gray-400 text-sm">
                     Nenhum veículo disponível no momento.
                   </div>
                 ) : (
-                  veiculos.filter(v => v.status === "Disponível").map(item => (
+                  veiculos.filter(v => v.status !== "Em Uso").map(item => (
                     <div key={item.id} className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                       <div className="absolute left-0 top-0 w-2 h-full bg-[#0b7336]"></div>
                       <div className="pl-4">
