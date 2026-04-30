@@ -54,8 +54,8 @@ export default function ControleChaves() {
 
     // REALTIME: escuta mudanças na frota e funcionários
     const channelFrota = supabase
-      .channel('realtime-frota')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'frota_veiculos' }, () => {
+      .channel('realtime-chaves-veiculos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chaves_veiculos' }, () => {
         fetchVeiculos();
       })
       .subscribe();
@@ -75,9 +75,9 @@ export default function ControleChaves() {
 
   const fetchVeiculos = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("frota_veiculos").select("*").order("identificacao");
+    const { data, error } = await supabase.from("chaves_veiculos").select("*").order("identificacao");
     if (error) {
-      toast.error("Erro ao carregar frota. Verifique se rodou o SQL no Supabase.");
+      toast.error("Erro ao carregar chaves. Verifique se rodou o SQL no Supabase.");
       console.error(error);
     } else {
       setVeiculos(data || []);
@@ -140,7 +140,7 @@ export default function ControleChaves() {
     e.preventDefault();
     if (!novaChaveInfo || !novaPlaca) return;
 
-    const { data, error } = await supabase.from("frota_veiculos").insert([{
+    const { data, error } = await supabase.from("chaves_veiculos").insert([{
       identificacao: novaChaveInfo,
       placa: novaPlaca,
       status: "Disponível",
@@ -162,7 +162,7 @@ export default function ControleChaves() {
 
   const excluirVeiculo = async (id: string) => {
     if (confirm("Remover permanentemente este veículo da frota?")) {
-      const { error } = await supabase.from("frota_veiculos").delete().eq("id", id);
+      const { error } = await supabase.from("chaves_veiculos").delete().eq("id", id);
       if (error) {
         toast.error("Erro: " + error.message);
       } else {
@@ -179,7 +179,7 @@ export default function ControleChaves() {
     const agora = new Date().toISOString();
     
     // Atualiza o veículo
-    const { error } = await supabase.from("frota_veiculos").update({
+    const { error } = await supabase.from("chaves_veiculos").update({
       status: "Em Uso",
       funcionario_atual: funcionarioSelecionado,
       pegou_em: agora,
@@ -209,7 +209,7 @@ export default function ControleChaves() {
   const registrarDevolucao = async (id: string, funcionarioNome: string) => {
     const agora = new Date().toISOString();
 
-    const { error } = await supabase.from("frota_veiculos").update({
+    const { error } = await supabase.from("chaves_veiculos").update({
       status: "Disponível",
       funcionario_atual: null,
       pegou_em: null,
