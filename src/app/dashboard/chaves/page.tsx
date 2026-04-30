@@ -26,6 +26,7 @@ interface HistoricoItem {
   funcionario: string;
   tipo: string;
   data_hora: string;
+  descricao?: string | null;
 }
 
 export default function ControleChaves() {
@@ -39,6 +40,7 @@ export default function ControleChaves() {
 
   const [veiculoParaSaida, setVeiculoParaSaida] = useState<VeiculoChave | null>(null);
   const [funcionarioSelecionado, setFuncionarioSelecionado] = useState("");
+  const [descricaoRetirada, setDescricaoRetirada] = useState("");
 
   // Histórico
   const [historicoAberto, setHistoricoAberto] = useState<string | null>(null);
@@ -189,11 +191,13 @@ export default function ControleChaves() {
       funcionario: funcionarioSelecionado,
       tipo: "RETIRADA",
       data_hora: agora,
+      descricao: descricaoRetirada || null,
     }]);
-    
+
     toast.success(`Chave entregue para ${funcionarioSelecionado}!`);
     setVeiculoParaSaida(null);
     setFuncionarioSelecionado("");
+    setDescricaoRetirada("");
     fetchVeiculos();
   };
 
@@ -440,10 +444,10 @@ export default function ControleChaves() {
             <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Entregar Chave</h2>
             <p className="text-gray-500 mb-6">Para quem você está entregando a <strong className="text-gray-900 dark:text-gray-200">{veiculoParaSaida.identificacao}</strong>?</p>
 
-            <form onSubmit={registrarRetirada} className="space-y-6">
+            <form onSubmit={registrarRetirada} className="space-y-4">
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Selecione o Funcionário</label>
-                <select 
+                <select
                   required
                   value={funcionarioSelecionado}
                   onChange={(e) => setFuncionarioSelecionado(e.target.value)}
@@ -454,6 +458,17 @@ export default function ControleChaves() {
                     <option key={f.id} value={f.nome}>{f.nome}</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Descrição / Motivo <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <textarea
+                  rows={3}
+                  value={descricaoRetirada}
+                  onChange={(e) => setDescricaoRetirada(e.target.value)}
+                  placeholder="Ex: Viagem para obra em Campina Grande, entrega de materiais..."
+                  className="w-full px-4 py-3 border-0 bg-gray-50 dark:bg-gray-900 rounded-2xl focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white transition-all resize-none text-sm"
+                />
               </div>
 
               <button type="submit" className="w-full flex items-center justify-center py-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl shadow-lg shadow-orange-500/30 transition-all hover:shadow-orange-500/50 hover:-translate-y-0.5">
@@ -491,7 +506,7 @@ export default function ControleChaves() {
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-4 ${h.tipo === 'RETIRADA' ? 'bg-orange-200 text-orange-600' : 'bg-green-200 text-green-600'}`}>
                       {h.tipo === 'RETIRADA' ? <KeyIcon className="w-5 h-5" /> : <ArrowPathIcon className="w-5 h-5" />}
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className="font-bold text-gray-900 dark:text-white text-sm">
                         {h.tipo === 'RETIRADA' ? 'Retirada' : 'Devolução'}
                       </p>
@@ -499,6 +514,11 @@ export default function ControleChaves() {
                         <UserIcon className="w-3.5 h-3.5 inline mr-1" />
                         {h.funcionario}
                       </p>
+                      {h.descricao && (
+                        <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 italic bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-lg">
+                          {h.descricao}
+                        </p>
+                      )}
                       <p className="text-gray-400 text-xs mt-1">
                         <ClockIcon className="w-3 h-3 inline mr-1" />
                         {formatarDataHora(h.data_hora)}
