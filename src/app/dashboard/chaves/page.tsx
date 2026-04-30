@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { KeyIcon, UserIcon, TruckIcon, ClockIcon, ArrowPathIcon, TrashIcon, XMarkIcon, EyeIcon } from "@heroicons/react/24/outline";
+import { KeyIcon, UserIcon, TruckIcon, ClockIcon, ArrowPathIcon, TrashIcon, XMarkIcon, EyeIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { toast } from "react-hot-toast";
 
 interface VeiculoChave {
@@ -46,6 +46,7 @@ export default function ControleChaves() {
   const [historicoAberto, setHistoricoAberto] = useState<string | null>(null);
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [expandedHistoricoId, setExpandedHistoricoId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchVeiculos();
@@ -501,31 +502,57 @@ export default function ControleChaves() {
                   Nenhum registro encontrado para este veículo.
                 </div>
               ) : (
-                historico.map((h) => (
-                  <div key={h.id} className={`flex items-start p-4 rounded-2xl border ${h.tipo === 'RETIRADA' ? 'bg-orange-50 border-orange-200 dark:bg-orange-500/10 dark:border-orange-500/20' : 'bg-green-50 border-green-200 dark:bg-green-500/10 dark:border-green-500/20'}`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mr-4 ${h.tipo === 'RETIRADA' ? 'bg-orange-200 text-orange-600' : 'bg-green-200 text-green-600'}`}>
-                      {h.tipo === 'RETIRADA' ? <KeyIcon className="w-5 h-5" /> : <ArrowPathIcon className="w-5 h-5" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-gray-900 dark:text-white text-sm">
-                        {h.tipo === 'RETIRADA' ? 'Retirada' : 'Devolução'}
-                      </p>
-                      <p className="text-gray-600 dark:text-gray-300 text-sm">
-                        <UserIcon className="w-3.5 h-3.5 inline mr-1" />
-                        {h.funcionario}
-                      </p>
-                      {h.descricao && (
-                        <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 italic bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-lg">
-                          {h.descricao}
-                        </p>
+                historico.map((h) => {
+                  const isExpanded = expandedHistoricoId === h.id;
+                  const isRetirada = h.tipo === 'RETIRADA';
+                  return (
+                    <div key={h.id} className={`rounded-2xl border overflow-hidden transition-all ${isRetirada ? 'bg-orange-50 border-orange-200 dark:bg-orange-500/10 dark:border-orange-500/20' : 'bg-green-50 border-green-200 dark:bg-green-500/10 dark:border-green-500/20'}`}>
+                      <button
+                        onClick={() => setExpandedHistoricoId(isExpanded ? null : h.id)}
+                        className="w-full flex items-center p-4 text-left gap-4"
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isRetirada ? 'bg-orange-200 text-orange-600' : 'bg-green-200 text-green-600'}`}>
+                          {isRetirada ? <KeyIcon className="w-5 h-5" /> : <ArrowPathIcon className="w-5 h-5" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-gray-900 dark:text-white text-sm">
+                              {isRetirada ? 'Retirada' : 'Devolução'}
+                            </p>
+                            {h.descricao && (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isRetirada ? 'bg-orange-200 text-orange-700' : 'bg-green-200 text-green-700'}`}>
+                                + descrição
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-600 dark:text-gray-300 text-sm">
+                            <UserIcon className="w-3.5 h-3.5 inline mr-1" />
+                            {h.funcionario}
+                          </p>
+                          <p className="text-gray-400 text-xs mt-0.5">
+                            <ClockIcon className="w-3 h-3 inline mr-1" />
+                            {formatarDataHora(h.data_hora)}
+                          </p>
+                        </div>
+                        <ChevronDownIcon className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-4 pb-4 pt-0">
+                          <div className="border-t border-black/5 pt-3">
+                            {h.descricao ? (
+                              <p className="text-sm text-gray-700 dark:text-gray-300 italic leading-relaxed">
+                                {h.descricao}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-400 italic">Sem descrição registrada.</p>
+                            )}
+                          </div>
+                        </div>
                       )}
-                      <p className="text-gray-400 text-xs mt-1">
-                        <ClockIcon className="w-3 h-3 inline mr-1" />
-                        {formatarDataHora(h.data_hora)}
-                      </p>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
