@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "Ônibus CYMI – Motorista",
@@ -17,5 +18,16 @@ export const viewport: Viewport = {
 };
 
 export default function MotoristaLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return (
+    <>
+      <Script id="pwa-capture" strategy="afterInteractive">{`
+        window.addEventListener('beforeinstallprompt', function(e) {
+          e.preventDefault();
+          window.__pwaPrompt = e;
+          window.dispatchEvent(new Event('pwaPromptReady'));
+        });
+      `}</Script>
+      {children}
+    </>
+  );
 }

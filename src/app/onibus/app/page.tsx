@@ -8,12 +8,7 @@ import InstallPWA from "../components/InstallPWA";
 
 const MapaLeaflet = dynamic(() => import("../components/MapaLeaflet"), { ssr: false });
 
-interface Viagem {
-  id: string;
-  rota_id: string;
-  onibus_rotas: { nome: string; cor: string };
-}
-
+interface Viagem { id: string; rota_id: string; onibus_rotas: { nome: string; cor: string }; }
 interface Ponto { lat: number; lng: number; nome: string; ordem: number; }
 
 export default function AppPassageiro() {
@@ -21,9 +16,30 @@ export default function AppPassageiro() {
   const [user, setUser] = useState<any>(null);
   const [posicoes, setPosicoes] = useState<PosicaoMapa[]>([]);
   const [viagemAtiva, setViagemAtiva] = useState<Viagem | null>(null);
-  const [pontos, setPontos] = useState<Ponto[]>([]);
+  const [rotaGeometria, setRotaGeometria] = useState<{ lat: number; lng: number }[]>([]);
+  const [rotaCor, setRotaCor] = useState("#0b7336");
   const [minhaPos, setMinhaPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [canInstall, setCanInstall] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Refs para evitar closures velhas na subscription realtime
+  const minhaPosRef = useRef<{ lat: number; lng: number } | null>(null);
+  const userRef = useRef<any>(null);
+  useEffect(() => { minhaPosRef.current = minhaPos; }, [minhaPos]);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  // Detecta se pode instalar o PWA
+  useEffect(() => {
+    const win = window as any;
+    const check = () => { if (win.__pwaPrompt) setCanInstall(true); };
+    check();
+    window.addEventListener("pwaPromptReady", check);
+    window.addEventListener("beforeinstallprompt", check);
+    return () => {
+      window.removeEventListener("pwaPromptReady", check);
+      window.removeEventListener("beforeinstallprompt", check);
+    };
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -34,6 +50,7 @@ export default function AppPassageiro() {
     });
   }, []);
 
+  // GPS — envia a cada 5s sem recriar subscription
   const enviarLocalizacao = useCallback(async (userId: string, nome: string) => {
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude: lat, longitude: lng, speed } = pos.coords;
@@ -53,34 +70,71 @@ export default function AppPassageiro() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [user]);
 
+  // Carrega geometria OSRM da rota ativa
+  const carregarGeometria = useCallback(async (rotaId: string, cor: string) => {
+    setRotaCor(cor);
+    const { data: wps } = await supabase.from("onibus_pontos")
+      .select("lat, lng, ordem").eq("rota_id", rotaId).eq("tipo", "waypoint").order("ordem");
+    if (!wps || wps.length < 2) {
+      // fallback: paradas como linha
+      const { data: pds } = await supabase.from("onibus_pontos")
+        .select("lat, lng, ordem").eq("rota_id", rotaId).eq("tipo", "parada").order("ordem");
+      setRotaGeometria((pds || []).map((p: any) => ({ lat: p.lat, lng: p.lng })));
+      return;
+    }
+    try {
+      const coords = wps.map((p: any) => `${p.lng},${p.lat}`).join(";");
+      const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`);
+      const data = await res.json();
+      if (data.routes?.[0]) {
+        setRotaGeometria(data.routes[0].geometry.coordinates.map(([lng, lat]: number[]) => ({ lat, lng })));
+      }
+    } catch {
+      setRotaGeometria(wps.map((p: any) => ({ lat: p.lat, lng: p.lng })));
+    }
+  }, []);
+
+  // Realtime — subscription criada UMA VEZ quando user carrega
   useEffect(() => {
+    if (!user) return;
+
     const carregarDados = async () => {
+      const u = userRef.current;
+      const mp = minhaPosRef.current;
+
       const { data: viagem } = await supabase
         .from("onibus_viagens").select("id, rota_id, onibus_rotas(nome, cor)")
         .eq("ativa", true).limit(1).maybeSingle();
+
       setViagemAtiva(viagem as any);
+
       if (viagem) {
-        const { data: pts } = await supabase.from("onibus_pontos")
-          .select("lat, lng, nome, ordem").eq("rota_id", viagem.rota_id)
-          .eq("tipo", "parada").order("ordem");
-        setPontos(pts || []);
+        const cor = (viagem.onibus_rotas as any)?.cor || "#0b7336";
+        carregarGeometria(viagem.rota_id, cor);
+      } else {
+        // Rota encerrou — limpa tudo imediatamente
+        setRotaGeometria([]);
+        setRotaCor("#0b7336");
       }
+
       const { data: pos } = await supabase.from("onibus_posicoes").select("*");
       const mapped: PosicaoMapa[] = (pos || []).map((p: any) => ({
         id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: p.tipo, velocidade: p.velocidade,
       }));
-      if (user && minhaPos) {
-        mapped.push({ id: "minha", lat: minhaPos.lat, lng: minhaPos.lng, nome: "Você", tipo: "minha" });
-      }
+      if (u && mp) mapped.push({ id: "minha", lat: mp.lat, lng: mp.lng, nome: "Você", tipo: "minha" });
       setPosicoes(mapped);
     };
+
     carregarDados();
-    const sub = supabase.channel("posicoes-passageiro")
+
+    // Canal estável — não é recriado quando minhaPos muda
+    const sub = supabase.channel("passageiro-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "onibus_posicoes" }, carregarDados)
       .on("postgres_changes", { event: "*", schema: "public", table: "onibus_viagens" }, carregarDados)
       .subscribe();
+
     return () => { supabase.removeChannel(sub); };
-  }, [user, minhaPos]);
+  }, [user?.id]); // só recria quando o user muda, NÃO quando minhaPos muda
 
   const handleSair = async () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -101,21 +155,28 @@ export default function AppPassageiro() {
     <div className="h-[100dvh] flex flex-col bg-gray-950 overflow-hidden select-none">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gray-950 z-10 flex-shrink-0">
-        <button
-          onClick={() => router.push("/onibus/app/perfil")}
-          className="flex items-center gap-2.5 active:opacity-70 transition-opacity"
-        >
+        <button onClick={() => router.push("/onibus/app/perfil")}
+          className="flex items-center gap-2.5 active:opacity-70 transition-opacity">
           <div className="w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center text-base flex-shrink-0">🧍</div>
           <div className="text-left">
             <p className="text-white font-black text-sm leading-none">{user.nome}</p>
             <p className={`text-[10px] font-bold mt-0.5 ${viagemAtiva ? "text-green-400" : "text-gray-500"}`}>
-              {viagemAtiva ? `🟢 ${(viagemAtiva.onibus_rotas as any)?.nome}` : "⚪ Nenhuma rota ativa"}
+              {viagemAtiva ? `🟢 ${(viagemAtiva.onibus_rotas as any)?.nome}` : "⚪ Aguardando rota"}
             </p>
           </div>
         </button>
-        <button onClick={handleSair} className="text-gray-500 text-xs px-3 py-2 rounded-xl bg-gray-800 active:bg-gray-700 font-bold">
-          Sair
-        </button>
+        <div className="flex items-center gap-2">
+          {canInstall && (
+            <button
+              onClick={() => { const w = window as any; if (w.__pwaPrompt) { w.__pwaPrompt.prompt(); } }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 text-xs font-bold active:bg-blue-600/30">
+              ⬇ Instalar
+            </button>
+          )}
+          <button onClick={handleSair} className="text-gray-500 text-xs px-3 py-2 rounded-xl bg-gray-800 active:bg-gray-700 font-bold">
+            Sair
+          </button>
+        </div>
       </div>
 
       {/* Mapa */}
@@ -123,11 +184,10 @@ export default function AppPassageiro() {
         <MapaLeaflet
           posicoes={posicoes}
           centro={minhaPos ? [minhaPos.lat, minhaPos.lng] : undefined}
-          rotaPontos={pontos}
-          rotaCor={(viagemAtiva?.onibus_rotas as any)?.cor || "#0b7336"}
+          rotaPontos={rotaGeometria.length > 0 ? rotaGeometria : undefined}
+          rotaCor={rotaCor}
         />
 
-        {/* Card ônibus */}
         {motorista && (
           <div className="absolute bottom-safe bottom-4 left-4 right-4 bg-gray-900/96 backdrop-blur-md rounded-3xl p-4 shadow-2xl z-[1000] border border-gray-800/50">
             <div className="flex items-center gap-3">
@@ -137,7 +197,7 @@ export default function AppPassageiro() {
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-amber-400 text-xs font-bold">{motorista.velocidade?.toFixed(0) || 0} km/h</span>
                   <span className="text-gray-600 text-xs">·</span>
-                  <span className="text-gray-500 text-xs">Em rota</span>
+                  <span className="text-gray-500 text-xs">{(viagemAtiva?.onibus_rotas as any)?.nome || "Em rota"}</span>
                 </div>
               </div>
               <div className="flex flex-col items-center gap-1">
@@ -161,7 +221,6 @@ export default function AppPassageiro() {
         )}
       </div>
 
-      {/* Prompt instalação PWA */}
       <InstallPWA tema="blue" />
     </div>
   );
