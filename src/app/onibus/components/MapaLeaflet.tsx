@@ -55,6 +55,9 @@ export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, r
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const polylineRef = useRef<L.Polyline | null>(null);
   const waypointMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  // Ref keeps onMapClick current without re-registering the leaflet listener
+  const onMapClickRef = useRef(onMapClick);
+  useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -67,23 +70,19 @@ export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, r
       attributionControl: false,
     });
 
-    // Satélite ESRI (gratuito, sem chave)
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
       { maxZoom: 19, attribution: "© Esri" }
     ).addTo(mapRef.current);
 
-    // Labels de ruas sobre o satélite
     L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
       { maxZoom: 19, opacity: 0.7 }
     ).addTo(mapRef.current);
 
-    if (onMapClick) {
-      mapRef.current.on("click", (e: L.LeafletMouseEvent) => {
-        onMapClick(e.latlng.lat, e.latlng.lng);
-      });
-    }
+    mapRef.current.on("click", (e: L.LeafletMouseEvent) => {
+      onMapClickRef.current?.(e.latlng.lat, e.latlng.lng);
+    });
 
     return () => {
       mapRef.current?.remove();
@@ -110,7 +109,6 @@ export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, r
       }
     });
 
-    // Remove marcadores que sumiram
     markersRef.current.forEach((marker, id) => {
       if (!seen.has(id)) { marker.remove(); markersRef.current.delete(id); }
     });
@@ -156,7 +154,7 @@ export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, r
     });
   }, [waypoints]);
 
-  // Centraliza no primeiro motorista ou centro dado
+  // Centraliza quando centro muda
   useEffect(() => {
     if (!mapRef.current) return;
     if (centro) { mapRef.current.setView(centro, zoom); return; }

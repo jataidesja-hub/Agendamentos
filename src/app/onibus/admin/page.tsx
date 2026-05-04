@@ -32,16 +32,22 @@ export default function AdminOnibus() {
   const [nomePonto, setNomePonto] = useState("");
   const [pendingLatLng, setPendingLatLng] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Modo mover ponto
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const movingIdRef = useRef<string | null>(null);
+  useEffect(() => { movingIdRef.current = movingId; }, [movingId]);
+
+  // Painel lista de pontos
+  const [painelPontos, setPainelPontos] = useState(false);
+
   const [rotaGeometria, setRotaGeometria] = useState<{ lat: number; lng: number }[]>([]);
   const [distanciaKm, setDistanciaKm] = useState<number | null>(null);
   const [carregandoRota, setCarregandoRota] = useState(false);
 
-  // Form nova rota
   const [nomeRota, setNomeRota] = useState("");
   const [corRota, setCorRota] = useState(CORES[0]);
   const [descRota, setDescRota] = useState("");
 
-  // Form motorista
   const [nomeMotorista, setNomeMotorista] = useState("");
   const [emailMotorista, setEmailMotorista] = useState("");
   const [senhaMotorista, setSenhaMotorista] = useState("");
@@ -65,7 +71,6 @@ export default function AdminOnibus() {
     setPosicoes((pos || []).map((p: any) => ({ id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: p.tipo, velocidade: p.velocidade })));
   };
 
-  // Carrega pontos da rota selecionada
   useEffect(() => {
     if (!rotaSelecionada) {
       setWaypoints([]); setParadas([]); setRotaGeometria([]); setDistanciaKm(null);
@@ -81,7 +86,6 @@ export default function AdminOnibus() {
     });
   }, [rotaSelecionada]);
 
-  // Recalcula rota OSRM quando waypoints mudam
   useEffect(() => {
     if (waypoints.length >= 2) calcularOSRM(waypoints);
     else setRotaGeometria([]);
@@ -102,8 +106,19 @@ export default function AdminOnibus() {
     finally { setCarregandoRota(false); }
   };
 
-  // Clique no mapa
   const handleMapClick = useCallback((lat: number, lng: number) => {
+    // Usa ref para sempre ter o valor atual sem recriar o callback
+    const mid = movingIdRef.current;
+    if (mid) {
+      supabase.from("onibus_pontos").update({ lat, lng }).eq("id", mid).then(({ error }) => {
+        if (error) { toast.error("Erro ao mover."); return; }
+        setWaypoints(prev => prev.map(w => w.id === mid ? { ...w, lat, lng } : w));
+        setParadas(prev => prev.map(p => p.id === mid ? { ...p, lat, lng } : p));
+        setMovingId(null);
+        toast.success("Ponto movido!");
+      });
+      return;
+    }
     if (!adicionando) return;
     setPendingLatLng({ lat, lng });
   }, [adicionando]);
@@ -141,10 +156,16 @@ export default function AdminOnibus() {
       for (const p of restantes) await supabase.from("onibus_pontos").update({ ordem: p.ordem }).eq("id", p.id);
       setParadas(restantes);
     }
+    toast.success("Ponto removido.");
   };
 
-  // Import GPX / GeoJSON / KML
-  const importRef2 = useRef<HTMLInputElement>(null);
+  const renomearParada = async (id: string, novoNome: string) => {
+    if (!novoNome.trim()) return;
+    await supabase.from("onibus_pontos").update({ nome: novoNome }).eq("id", id);
+    setParadas(prev => prev.map(p => p.id === id ? { ...p, nome: novoNome } : p));
+    toast.success("Parada renomeada!");
+  };
+
   const importarArquivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !rotaSelecionada) return;
@@ -233,13 +254,14 @@ export default function AdminOnibus() {
     carregarTudo(); setCriandoMotorista(false);
   };
 
-  // Monta posições para o mapa: paradas como "ponto", posições em tempo real
   const posicoesNaMapa: PosicaoMapa[] = [
     ...posicoes,
     ...paradas.map(p => ({ id: p.id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "ponto" as const })),
   ];
 
   const waypointsNaMapa: Waypoint[] = waypoints.map((w, i) => ({ id: w.id, lat: w.lat, lng: w.lng, ordem: i }));
+
+  const listaCamadaAtual = camada === "rota" ? waypoints : paradas;
 
   return (
     <div className="h-screen flex flex-col bg-gray-950 overflow-hidden">
@@ -275,7 +297,7 @@ export default function AdminOnibus() {
 
           {/* Toolbar flutuante */}
           <div className="absolute top-3 left-3 right-3 z-[1000] space-y-2">
-            {/* Seletor de rota */}
+            {/* Seletor de rota + importar */}
             <div className="flex gap-2">
               <select value={rotaSelecionada?.id || ""} onChange={e => setRotaSelecionada(rotas.find(r => r.id === e.target.value) || null)}
                 className="flex-1 px-3 py-2 bg-gray-900/95 border border-gray-700 rounded-xl text-white text-xs focus:outline-none">
@@ -283,7 +305,7 @@ export default function AdminOnibus() {
                 {rotas.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
               </select>
               {rotaSelecionada && (
-                <button onClick={() => { importRef.current?.click(); }} className="px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white">📂</button>
+                <button onClick={() => importRef.current?.click()} className="px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white">📂</button>
               )}
               <input ref={importRef} type="file" accept=".gpx,.geojson,.json,.kml" className="hidden" onChange={importarArquivo} />
             </div>
@@ -292,13 +314,13 @@ export default function AdminOnibus() {
             {rotaSelecionada && (
               <div className="flex gap-1 bg-gray-900/95 p-1 rounded-2xl border border-gray-700">
                 <button
-                  onClick={() => { setCamada("rota"); setAdicionando(false); setPendingLatLng(null); }}
+                  onClick={() => { setCamada("rota"); setAdicionando(false); setPendingLatLng(null); setMovingId(null); }}
                   className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${camada === "rota" ? "bg-gray-500 text-white" : "text-gray-400"}`}>
                   <div className="w-3 h-3 rounded-full bg-gray-400 border-2 border-white" />
                   Camada: Rota
                 </button>
                 <button
-                  onClick={() => { setCamada("paradas"); setAdicionando(false); setPendingLatLng(null); }}
+                  onClick={() => { setCamada("paradas"); setAdicionando(false); setPendingLatLng(null); setMovingId(null); }}
                   className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${camada === "paradas" ? "bg-green-700 text-white" : "text-gray-400"}`}>
                   <div className="text-sm">🚏</div>
                   Camada: Paradas
@@ -306,21 +328,28 @@ export default function AdminOnibus() {
               </div>
             )}
 
-            {/* Botão adicionar + stats */}
+            {/* Botões ação + lista */}
             {rotaSelecionada && (
               <div className="flex items-center gap-2">
-                <button onClick={() => { setAdicionando(v => !v); setPendingLatLng(null); }}
+                <button
+                  onClick={() => { setAdicionando(v => !v); setMovingId(null); setPendingLatLng(null); }}
                   className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${adicionando
                     ? (camada === "rota" ? "bg-gray-500 text-white animate-pulse" : "bg-green-600 text-white animate-pulse")
                     : "bg-gray-800 text-gray-300"}`}>
                   {adicionando
-                    ? `🖱️ Clique no mapa para adicionar ${camada === "rota" ? "waypoint" : "parada"}`
-                    : `➕ Adicionar ${camada === "rota" ? "waypoint" : "parada"}`}
+                    ? `🖱️ Clique no mapa para ${camada === "rota" ? "waypoint" : "parada"}`
+                    : `➕ ${camada === "rota" ? "Waypoint" : "Parada"}`}
+                </button>
+                {/* Botão abrir lista */}
+                <button
+                  onClick={() => setPainelPontos(v => !v)}
+                  className={`py-2 px-3 rounded-xl text-xs font-black transition-all ${painelPontos ? "bg-gray-600 text-white" : "bg-gray-800 text-gray-300"}`}>
+                  📋 {listaCamadaAtual.length}
                 </button>
               </div>
             )}
 
-            {/* Info distância */}
+            {/* Stats */}
             {rotaSelecionada && (
               <div className="flex gap-2 flex-wrap">
                 {carregandoRota && (
@@ -341,8 +370,21 @@ export default function AdminOnibus() {
             )}
           </div>
 
-          {/* Form confirmação de ponto */}
-          {pendingLatLng && (
+          {/* Banner modo mover */}
+          {movingId && (
+            <div className="absolute top-[220px] left-4 right-4 z-[1002] bg-blue-600/97 backdrop-blur rounded-2xl px-4 py-3 flex items-center gap-3 shadow-2xl border border-blue-400/30">
+              <div className="flex-1">
+                <p className="text-white text-xs font-black">🎯 Modo mover ativo</p>
+                <p className="text-blue-200 text-[10px]">Toque no mapa para reposicionar o ponto</p>
+              </div>
+              <button onClick={() => setMovingId(null)} className="text-white bg-blue-800 px-3 py-1.5 rounded-xl text-xs font-bold active:bg-blue-900">
+                Cancelar
+              </button>
+            </div>
+          )}
+
+          {/* Form confirmação novo ponto */}
+          {pendingLatLng && !movingId && (
             <div className="absolute bottom-4 left-4 right-4 z-[1000] bg-gray-900/98 backdrop-blur rounded-3xl p-4 space-y-3 border border-gray-700">
               <div className="flex items-center gap-2">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${camada === "rota" ? "bg-gray-500" : "bg-green-600"}`}>
@@ -363,6 +405,35 @@ export default function AdminOnibus() {
                   className={`flex-1 py-2.5 rounded-2xl text-white text-sm font-black disabled:opacity-40 ${camada === "rota" ? "bg-gray-500" : "bg-green-600"}`}>
                   Salvar
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Painel lista de pontos */}
+          {rotaSelecionada && painelPontos && (
+            <div className="absolute bottom-0 left-0 right-0 z-[1001] bg-gray-900/99 backdrop-blur rounded-t-3xl border-t border-gray-700 flex flex-col max-h-[60vh]">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+                <p className="text-white font-black text-sm">
+                  {camada === "rota" ? `Waypoints (${waypoints.length})` : `Paradas (${paradas.length})`}
+                </p>
+                <button onClick={() => setPainelPontos(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 bg-gray-800 rounded-full text-lg leading-none">×</button>
+              </div>
+              <div className="overflow-y-auto flex-1 px-4 py-2 space-y-1">
+                {listaCamadaAtual.length === 0 && (
+                  <p className="text-gray-500 text-xs py-6 text-center">Nenhum ponto adicionado ainda.</p>
+                )}
+                {listaCamadaAtual.map((p, i) => (
+                  <PontoListItem
+                    key={p.id}
+                    ponto={p}
+                    index={i}
+                    camada={camada}
+                    isMoving={movingId === p.id}
+                    onMover={() => { setMovingId(p.id); setAdicionando(false); setPendingLatLng(null); setPainelPontos(false); toast("🎯 Toque no mapa para reposicionar"); }}
+                    onExcluir={() => excluirPonto(p.id, camada === "rota" ? "waypoint" : "parada")}
+                    onRenomear={camada === "paradas" ? (nome) => renomearParada(p.id, nome) : undefined}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -455,6 +526,67 @@ export default function AdminOnibus() {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// Componente separado para evitar re-renders excessivos na lista
+function PontoListItem({
+  ponto, index, camada, isMoving, onMover, onExcluir, onRenomear,
+}: {
+  ponto: Ponto;
+  index: number;
+  camada: Camada;
+  isMoving: boolean;
+  onMover: () => void;
+  onExcluir: () => void;
+  onRenomear?: (nome: string) => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [nomeEdit, setNomeEdit] = useState(ponto.nome);
+
+  const salvar = () => {
+    onRenomear?.(nomeEdit);
+    setEditando(false);
+  };
+
+  return (
+    <div className={`flex items-center gap-2 py-2.5 px-1 rounded-2xl transition-all ${isMoving ? "bg-blue-900/40 border border-blue-600/50" : ""}`}>
+      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0 ${camada === "rota" ? "bg-gray-600 text-white" : "bg-green-700 text-white"}`}>
+        {index + 1}
+      </div>
+
+      {editando ? (
+        <input
+          autoFocus
+          value={nomeEdit}
+          onChange={e => setNomeEdit(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") salvar(); if (e.key === "Escape") setEditando(false); }}
+          className="flex-1 bg-gray-700 text-white text-xs px-3 py-1.5 rounded-xl border border-gray-500 focus:outline-none focus:border-green-500"
+        />
+      ) : (
+        <span
+          className={`flex-1 text-sm truncate ${camada === "paradas" ? "text-white cursor-pointer active:text-green-400" : "text-gray-300"}`}
+          onClick={() => camada === "paradas" && setEditando(true)}
+        >
+          {ponto.nome}
+          {camada === "paradas" && <span className="text-gray-600 text-[9px] ml-1">✎</span>}
+        </span>
+      )}
+
+      {editando ? (
+        <button onClick={salvar} className="text-green-400 text-xs px-2 py-1 rounded-lg bg-green-500/10 font-bold">✓</button>
+      ) : (
+        <button onClick={onMover} className="text-blue-400 text-[11px] px-2 py-1 rounded-lg bg-blue-500/10 font-bold flex-shrink-0">
+          ↕
+        </button>
+      )}
+
+      {!editando && (
+        <button onClick={onExcluir} className="text-red-400 text-[11px] px-2 py-1 rounded-lg bg-red-500/10 font-bold flex-shrink-0">
+          ✕
+        </button>
       )}
     </div>
   );

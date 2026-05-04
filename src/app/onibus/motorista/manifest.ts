@@ -11,7 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#d97706",
     orientation: "portrait",
     icons: [
-      { src: "/icon-motorista.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
+      { src: "/icon-motorista.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
     ],
   };
 }
