@@ -103,6 +103,9 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Adiciona coluna tipo em onibus_pontos (waypoint = ponto de controle da rota, parada = onde passageiros embarcam)
+ALTER TABLE onibus_pontos ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'parada' CHECK (tipo IN ('waypoint', 'parada'));
+
 -- Habilita Realtime nas tabelas de posição e viagens
 ALTER PUBLICATION supabase_realtime ADD TABLE onibus_posicoes;
 ALTER PUBLICATION supabase_realtime ADD TABLE onibus_viagens;
