@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import type { PosicaoMapa } from "../components/MapaLeaflet";
+import InstallPWA from "../components/InstallPWA";
 
 const MapaLeaflet = dynamic(() => import("../components/MapaLeaflet"), { ssr: false });
 
@@ -35,7 +36,8 @@ export default function AppMotorista() {
 
   useEffect(() => {
     if (!rotaSelecionada) return;
-    supabase.from("onibus_pontos").select("*").eq("rota_id", rotaSelecionada.id).order("ordem").then(({ data }) => setPontos(data || []));
+    supabase.from("onibus_pontos").select("*").eq("rota_id", rotaSelecionada.id)
+      .eq("tipo", "parada").order("ordem").then(({ data }) => setPontos(data || []));
   }, [rotaSelecionada]);
 
   const enviarLocalizacao = useCallback(async (userId: string, nome: string) => {
@@ -43,10 +45,7 @@ export default function AppMotorista() {
       const { latitude: lat, longitude: lng, speed } = pos.coords;
       setMinhaPos({ lat, lng });
       await supabase.from("onibus_posicoes").upsert({
-        referencia_id: userId,
-        tipo: "motorista",
-        nome,
-        lat, lng,
+        referencia_id: userId, tipo: "motorista", nome, lat, lng,
         velocidade: speed ? speed * 3.6 : 0,
         rota_ativa_id: rotaSelecionada?.id || null,
         atualizado_em: new Date().toISOString(),
@@ -61,22 +60,13 @@ export default function AppMotorista() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [emRota, user]);
 
-  // Posições dos passageiros
   useEffect(() => {
     if (!emRota) return;
     const carregar = async () => {
       const { data } = await supabase.from("onibus_posicoes").select("*").eq("tipo", "passageiro");
-      const { data: usuarios } = await supabase.from("onibus_usuarios").select("id, lat, lng, endereco");
-      const pos: PosicaoMapa[] = [];
-      (data || []).forEach((p: any) => {
-        pos.push({ id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "passageiro", velocidade: p.velocidade });
-      });
-      // Casas dos passageiros cadastrados
-      (usuarios || []).forEach((u: any) => {
-        if (u.lat && u.lng && !pos.find(p => p.id === u.id)) {
-          pos.push({ id: `home_${u.id}`, lat: u.lat, lng: u.lng, nome: u.endereco || "Passageiro", tipo: "passageiro" });
-        }
-      });
+      const pos: PosicaoMapa[] = (data || []).map((p: any) => ({
+        id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "passageiro", velocidade: p.velocidade,
+      }));
       if (minhaPos) pos.push({ id: user.id, lat: minhaPos.lat, lng: minhaPos.lng, nome: "Você", tipo: "motorista" });
       pontos.forEach(p => pos.push({ id: p.id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "ponto" }));
       setPosicoes(pos);
@@ -101,9 +91,7 @@ export default function AppMotorista() {
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (viagemId) await supabase.from("onibus_viagens").update({ ativa: false, encerrada_em: new Date().toISOString() }).eq("id", viagemId);
     await supabase.from("onibus_posicoes").delete().eq("referencia_id", user.id);
-    setEmRota(false);
-    setViagemId(null);
-    setPosicoes([]);
+    setEmRota(false); setViagemId(null); setPosicoes([]);
   };
 
   const handleSair = async () => {
@@ -114,58 +102,68 @@ export default function AppMotorista() {
 
   const passageirosOnline = posicoes.filter(p => p.tipo === "passageiro");
 
-  if (!user) return <div className="h-screen bg-gray-950 flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" /></div>;
+  if (!user) return (
+    <div className="h-screen bg-gray-950 flex items-center justify-center">
+      <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+    </div>
+  );
 
   return (
-    <div className="h-screen flex flex-col bg-gray-950 overflow-hidden">
+    <div className="h-[100dvh] flex flex-col bg-gray-950 overflow-hidden select-none">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center text-sm">🚌</div>
-          <div>
+      <div className="flex items-center justify-between px-4 pt-safe pt-4 pb-3 flex-shrink-0">
+        <button
+          onClick={() => router.push("/onibus/motorista/perfil")}
+          className="flex items-center gap-2.5 active:opacity-70 transition-opacity"
+        >
+          <div className="w-9 h-9 rounded-2xl bg-amber-500 flex items-center justify-center text-base flex-shrink-0">🚌</div>
+          <div className="text-left">
             <p className="text-white font-black text-sm leading-none">{user.nome}</p>
-            <p className={`text-[10px] font-bold ${emRota ? 'text-green-400' : 'text-gray-500'}`}>
+            <p className={`text-[10px] font-bold mt-0.5 ${emRota ? "text-green-400" : "text-gray-500"}`}>
               {emRota ? `🟢 Em rota: ${rotaSelecionada?.nome}` : "⚪ Aguardando"}
             </p>
           </div>
-        </div>
-        <button onClick={handleSair} className="text-gray-500 text-xs px-3 py-1.5 rounded-xl bg-gray-800">Sair</button>
+        </button>
+        <button onClick={handleSair} className="text-gray-500 text-xs px-3 py-2 rounded-xl bg-gray-800 active:bg-gray-700 font-bold">
+          Sair
+        </button>
       </div>
 
-      {/* Seleção de rota (antes de iniciar) */}
+      {/* Seleção de rota */}
       {!emRota && (
-        <div className="px-4 pb-3 space-y-3">
-          <select
-            value={rotaSelecionada?.id || ""}
+        <div className="px-4 pb-3 space-y-3 flex-shrink-0">
+          <select value={rotaSelecionada?.id || ""}
             onChange={e => setRotaSelecionada(rotas.find(r => r.id === e.target.value) || null)}
-            className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-2xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          >
+            className="w-full px-4 py-3.5 bg-gray-800 border border-gray-700 rounded-2xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none">
             <option value="">Selecionar rota...</option>
             {rotas.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
           </select>
-          <button
-            onClick={iniciarRota}
-            disabled={!rotaSelecionada}
-            className="w-full py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 rounded-2xl font-black text-white transition-all active:scale-95"
-          >
+          <button onClick={iniciarRota} disabled={!rotaSelecionada}
+            className="w-full py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 rounded-2xl font-black text-white text-base transition-all active:scale-95 shadow-lg shadow-amber-500/20">
             🚀 Iniciar Rota
           </button>
         </div>
       )}
 
-      {/* Tabs (em rota) */}
+      {/* Tabs em rota */}
       {emRota && (
-        <div className="flex mx-4 mb-2 bg-gray-800 rounded-2xl p-1">
-          <button onClick={() => setAba("mapa")} className={`flex-1 py-2 rounded-xl text-sm font-black transition-all ${aba === 'mapa' ? 'bg-amber-500 text-white' : 'text-gray-400'}`}>🗺️ Mapa</button>
-          <button onClick={() => setAba("passageiros")} className={`flex-1 py-2 rounded-xl text-sm font-black transition-all ${aba === 'passageiros' ? 'bg-amber-500 text-white' : 'text-gray-400'}`}>
-            🧍 Passageiros ({passageirosOnline.length})
+        <div className="flex mx-4 mb-3 bg-gray-800 rounded-2xl p-1 flex-shrink-0">
+          <button onClick={() => setAba("mapa")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-black transition-all ${aba === "mapa" ? "bg-amber-500 text-white" : "text-gray-400"}`}>
+            🗺️ Mapa
+          </button>
+          <button onClick={() => setAba("passageiros")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-black transition-all ${aba === "passageiros" ? "bg-amber-500 text-white" : "text-gray-400"}`}>
+            🧍 Passageiros {passageirosOnline.length > 0 && (
+              <span className="ml-1 bg-white/20 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">{passageirosOnline.length}</span>
+            )}
           </button>
         </div>
       )}
 
       {/* Mapa */}
       {(aba === "mapa" || !emRota) && (
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-hidden">
           <MapaLeaflet
             posicoes={emRota ? posicoes : pontos.map(p => ({ id: p.id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "ponto" as const }))}
             centro={minhaPos ? [minhaPos.lat, minhaPos.lng] : undefined}
@@ -174,7 +172,7 @@ export default function AppMotorista() {
           />
           {emRota && (
             <button onClick={encerrarRota}
-              className="absolute bottom-4 left-4 right-4 py-4 bg-red-600 hover:bg-red-500 rounded-3xl font-black text-white text-base z-[1000] shadow-2xl active:scale-95">
+              className="absolute bottom-safe bottom-4 left-4 right-4 py-4 bg-red-600 hover:bg-red-500 rounded-3xl font-black text-white text-base z-[1000] shadow-2xl shadow-red-600/30 active:scale-95 transition-all">
               ⏹ Encerrar Rota
             </button>
           )}
@@ -183,23 +181,28 @@ export default function AppMotorista() {
 
       {/* Lista passageiros */}
       {aba === "passageiros" && emRota && (
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+        <div className="flex-1 overflow-y-auto px-4 pb-safe pb-4 space-y-2">
           {passageirosOnline.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 text-sm">Nenhum passageiro online no momento.</div>
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-600">
+              <span className="text-4xl">🧍</span>
+              <p className="text-sm">Nenhum passageiro online</p>
+            </div>
           ) : (
             passageirosOnline.map(p => (
               <div key={p.id} className="bg-gray-800 rounded-2xl p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-lg flex-shrink-0">🧍</div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-white font-bold text-sm">{p.nome}</p>
                   <p className="text-gray-400 text-xs">{p.lat.toFixed(4)}, {p.lng.toFixed(4)}</p>
                 </div>
-                <div className="ml-auto w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
               </div>
             ))
           )}
         </div>
       )}
+
+      <InstallPWA tema="amber" />
     </div>
   );
 }

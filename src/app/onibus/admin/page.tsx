@@ -136,7 +136,7 @@ export default function AdminOnibus() {
       rota_id: rotaSelecionada.id, nome, lat: pendingLatLng.lat, lng: pendingLatLng.lng, ordem, tipo,
     }).select().single();
 
-    if (error) { toast.error("Erro ao salvar."); return; }
+    if (error) { toast.error(`Erro: ${error.message}`); console.error(error); return; }
 
     if (tipo === "waypoint") setWaypoints(prev => [...prev, data as Ponto]);
     else setParadas(prev => [...prev, data as Ponto]);
