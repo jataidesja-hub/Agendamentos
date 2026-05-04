@@ -4,16 +4,19 @@ import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import type { PosicaoMapa } from "../components/MapaLeaflet";
-import InstallPWA from "../components/InstallPWA";
+import InstallPWA, { useInstallPrompt } from "../components/InstallPWA";
 
 const MapaLeaflet = dynamic(() => import("../components/MapaLeaflet"), { ssr: false });
 
+interface Motorista { id: string; nome: string; }
 interface Rota { id: string; nome: string; cor: string; }
 interface Ponto { id: string; lat: number; lng: number; nome: string; ordem: number; tipo: string; }
 
 export default function AppMotorista() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const { canInstall, instalar: instalarPWA } = useInstallPrompt();
+  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
+  const [motorista, setMotorista] = useState<Motorista | null>(null);
   const [rotas, setRotas] = useState<Rota[]>([]);
   const [rotaSelecionada, setRotaSelecionada] = useState<Rota | null>(null);
   const [paradas, setParadas] = useState<Ponto[]>([]);
@@ -24,7 +27,7 @@ export default function AppMotorista() {
   const [emRota, setEmRota] = useState(false);
   const [minhaPos, setMinhaPos] = useState<{ lat: number; lng: number } | null>(null);
   const [aba, setAba] = useState<"mapa" | "passageiros">("mapa");
-  const [canInstall, setCanInstall] = useState(false);
+  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refs para closures estáveis no realtime
@@ -33,114 +36,92 @@ export default function AppMotorista() {
   useEffect(() => { minhaPosRef.current = minhaPos; }, [minhaPos]);
   useEffect(() => { paradasRef.current = paradas; }, [paradas]);
 
-  // Detecta PWA instalável
   useEffect(() => {
-    const win = window as any;
-    const check = () => { if (win.__pwaPrompt) setCanInstall(true); };
-    check();
-    window.addEventListener("pwaPromptReady", check);
-    window.addEventListener("beforeinstallprompt", check);
-    return () => {
-      window.removeEventListener("pwaPromptReady", check);
-      window.removeEventListener("beforeinstallprompt", check);
-    };
+    supabase.from("onibus_perfis").select("id, nome").eq("tipo", "motorista").order("nome")
+      .then(({ data }) => setMotoristas(data || []));
+    supabase.from("onibus_rotas").select("id, nome, cor").eq("ativa", true)
+      .then(({ data }) => setRotas(data || []));
   }, []);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { router.push("/onibus/login?tipo=motorista"); return; }
-      const { data: perfil } = await supabase.from("onibus_perfis").select("*").eq("id", session.user.id).single();
-      if (!perfil || perfil.tipo !== "motorista") { router.push("/onibus/login?tipo=motorista"); return; }
-      setUser({ ...session.user, nome: perfil.nome });
-    });
-    supabase.from("onibus_rotas").select("id, nome, cor").eq("ativa", true).then(({ data }) => setRotas(data || []));
-  }, []);
-
-  // Ao selecionar rota: carrega paradas + calcula OSRM pelos waypoints
+  // Ao selecionar rota: busca paradas + calcula OSRM pelos waypoints
   useEffect(() => {
     if (!rotaSelecionada) { setParadas([]); setRotaGeometria([]); return; }
-
     const carregar = async () => {
       setCarregandoRota(true);
       const { data: todos } = await supabase.from("onibus_pontos")
         .select("*").eq("rota_id", rotaSelecionada.id).order("ordem");
-
       const wps = (todos || []).filter((p: Ponto) => p.tipo === "waypoint");
       const pds = (todos || []).filter((p: Ponto) => p.tipo === "parada");
       setParadas(pds);
-
-      const pontosPorOSRM = wps.length >= 2 ? wps : pds;
-
-      if (pontosPorOSRM.length >= 2) {
+      const base = wps.length >= 2 ? wps : pds;
+      if (base.length >= 2) {
         try {
-          const coords = pontosPorOSRM.map((p: Ponto) => `${p.lng},${p.lat}`).join(";");
+          const coords = base.map((p: Ponto) => `${p.lng},${p.lat}`).join(";");
           const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`);
           const data = await res.json();
           if (data.routes?.[0]) {
             setRotaGeometria(data.routes[0].geometry.coordinates.map(([lng, lat]: number[]) => ({ lat, lng })));
           }
         } catch {
-          setRotaGeometria(pontosPorOSRM.map((p: Ponto) => ({ lat: p.lat, lng: p.lng })));
+          setRotaGeometria(base.map((p: Ponto) => ({ lat: p.lat, lng: p.lng })));
         }
-      } else {
-        setRotaGeometria([]);
       }
       setCarregandoRota(false);
     };
-
     carregar();
   }, [rotaSelecionada?.id]);
 
-  // GPS — intervalo estável sem recriar subscription
-  const enviarLocalizacao = useCallback(async (userId: string, nome: string) => {
+  const enviarLocalizacao = useCallback(async () => {
+    if (!motorista) return;
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude: lat, longitude: lng, speed } = pos.coords;
       setMinhaPos({ lat, lng });
       await supabase.from("onibus_posicoes").upsert({
-        referencia_id: userId, tipo: "motorista", nome, lat, lng,
+        referencia_id: motorista.id,
+        tipo: "motorista",
+        nome: motorista.nome,
+        lat, lng,
         velocidade: speed ? speed * 3.6 : 0,
         rota_ativa_id: rotaSelecionada?.id || null,
         atualizado_em: new Date().toISOString(),
       }, { onConflict: "referencia_id" });
     }, undefined, { enableHighAccuracy: true });
-  }, [rotaSelecionada?.id]);
+  }, [motorista?.id, rotaSelecionada?.id]);
 
   useEffect(() => {
-    if (!emRota || !user) return;
-    enviarLocalizacao(user.id, user.nome);
-    intervalRef.current = setInterval(() => enviarLocalizacao(user.id, user.nome), 5000);
+    if (!emRota || !motorista) return;
+    enviarLocalizacao();
+    intervalRef.current = setInterval(enviarLocalizacao, 5000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [emRota, user?.id]);
+  }, [emRota, motorista?.id]);
 
   // Realtime passageiros — subscription estável
   useEffect(() => {
-    if (!emRota || !user) return;
-
+    if (!emRota || !motorista) return;
     const carregar = async () => {
       const mp = minhaPosRef.current;
       const pds = paradasRef.current;
-
       const { data } = await supabase.from("onibus_posicoes").select("*").eq("tipo", "passageiro");
       const pos: PosicaoMapa[] = (data || []).map((p: any) => ({
-        id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "passageiro" as const, velocidade: p.velocidade,
+        id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "passageiro" as const,
       }));
-      if (mp) pos.push({ id: user.id, lat: mp.lat, lng: mp.lng, nome: "Você", tipo: "motorista" });
+      if (mp) pos.push({ id: motorista.id, lat: mp.lat, lng: mp.lng, nome: "Você", tipo: "motorista" });
       pds.forEach(p => pos.push({ id: p.id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "ponto" }));
       setPosicoes(pos);
     };
-
     carregar();
     const sub = supabase.channel("motorista-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "onibus_posicoes" }, carregar)
       .subscribe();
-
     return () => { supabase.removeChannel(sub); };
-  }, [emRota, user?.id]); // não recria quando minhaPos ou paradas mudam
+  }, [emRota, motorista?.id]);
 
   const iniciarRota = async () => {
-    if (!rotaSelecionada || !user) return;
+    if (!rotaSelecionada || !motorista) return;
     const { data } = await supabase.from("onibus_viagens").insert({
-      rota_id: rotaSelecionada.id, motorista_id: user.id, ativa: true,
+      rota_id: rotaSelecionada.id,
+      motorista_id: motorista.id,
+      ativa: true,
     }).select().single();
     setViagemId(data.id);
     setEmRota(true);
@@ -149,63 +130,129 @@ export default function AppMotorista() {
   const encerrarRota = async () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (viagemId) await supabase.from("onibus_viagens").update({ ativa: false, encerrada_em: new Date().toISOString() }).eq("id", viagemId);
-    await supabase.from("onibus_posicoes").delete().eq("referencia_id", user.id);
+    if (motorista) await supabase.from("onibus_posicoes").delete().eq("referencia_id", motorista.id);
     setEmRota(false); setViagemId(null); setPosicoes([]);
-  };
-
-  const handleSair = async () => {
-    if (emRota) await encerrarRota();
-    await supabase.auth.signOut();
-    router.push("/onibus");
   };
 
   const passageirosOnline = posicoes.filter(p => p.tipo === "passageiro");
 
-  if (!user) return (
-    <div className="h-screen bg-gray-950 flex items-center justify-center">
-      <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
-    </div>
-  );
-
-  // Posições no mapa: passageiros + paradas + minha posição (já incluída em posicoes quando emRota)
   const posicoesNaMapa: PosicaoMapa[] = emRota
     ? posicoes
     : paradas.map(p => ({ id: p.id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "ponto" as const }));
 
+  // ── Tela 1: Selecionar motorista ──────────────────────────────────────────
+  if (!motorista) {
+    return (
+      <div className="h-[100dvh] flex flex-col bg-gray-950 overflow-hidden">
+        <div className="px-6 pt-safe pt-10 pb-6 flex-shrink-0">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500 flex items-center justify-center text-3xl mx-auto mb-4 shadow-xl shadow-amber-500/30">🚌</div>
+          <h1 className="text-white font-black text-2xl text-center">Quem é você?</h1>
+          <p className="text-gray-500 text-sm text-center mt-1">Selecione seu nome para iniciar</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-safe pb-6 space-y-3">
+          {motoristas.length === 0 && (
+            <div className="text-center py-12 text-gray-600 text-sm">
+              <p className="text-3xl mb-3">🚌</p>
+              <p>Nenhum motorista cadastrado.</p>
+              <p className="text-xs mt-1">Peça ao administrador para cadastrar.</p>
+            </div>
+          )}
+          {motoristas.map(m => (
+            <button
+              key={m.id}
+              onClick={() => setMotorista(m)}
+              className="w-full bg-gray-800 hover:bg-gray-750 active:bg-gray-700 rounded-2xl p-4 flex items-center gap-4 transition-all active:scale-95 border border-gray-700"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-2xl flex-shrink-0">🚌</div>
+              <div className="text-left">
+                <p className="text-white font-black text-base">{m.nome}</p>
+                <p className="text-gray-500 text-xs">Motorista</p>
+              </div>
+              <div className="ml-auto text-gray-600 text-lg">›</div>
+            </button>
+          ))}
+        </div>
+
+        {/* Botão instalar na tela de seleção */}
+        {canInstall && (
+          <div className="px-4 pb-safe pb-4 flex-shrink-0">
+            <button
+              onClick={async () => {
+                const r = await instalarPWA();
+                if (r === "instructions") setShowInstallInstructions(true);
+              }}
+              className="w-full py-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-400 text-sm font-bold flex items-center justify-center gap-2"
+            >
+              ⬇ Instalar aplicativo
+            </button>
+          </div>
+        )}
+
+        <InstallPWA tema="amber" />
+
+        {showInstallInstructions && (
+          <div className="fixed inset-0 z-[3000] bg-black/80 flex items-end p-4" onClick={() => setShowInstallInstructions(false)}>
+            <div className="bg-gray-900 rounded-3xl p-6 w-full border border-gray-700 space-y-4" onClick={e => e.stopPropagation()}>
+              <p className="text-white font-black text-base text-center">Adicionar à tela inicial</p>
+              <div className="space-y-3">
+                {[["⎋","Toque no botão Compartilhar na barra do navegador"],["➕","Role e toque em 'Adicionar à Tela de Início'"],["✅","Confirme tocando em Adicionar"]].map(([icon, text], i) => (
+                  <div key={i} className="flex items-center gap-4 bg-gray-800 rounded-2xl p-3">
+                    <span className="text-2xl flex-shrink-0">{icon}</span>
+                    <p className="text-gray-300 text-sm">{text}</p>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setShowInstallInstructions(false)} className="w-full py-3 bg-gray-700 rounded-2xl text-white font-bold">Entendi</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Tela 2: App principal ──────────────────────────────────────────────────
   return (
     <div className="h-[100dvh] flex flex-col bg-gray-950 overflow-hidden select-none">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-safe pt-4 pb-3 flex-shrink-0">
-        <button onClick={() => router.push("/onibus/motorista/perfil")}
-          className="flex items-center gap-2.5 active:opacity-70 transition-opacity">
+        <button
+          onClick={() => !emRota && setMotorista(null)}
+          className="flex items-center gap-2.5 active:opacity-70 transition-opacity"
+        >
           <div className="w-9 h-9 rounded-2xl bg-amber-500 flex items-center justify-center text-base flex-shrink-0">🚌</div>
           <div className="text-left">
-            <p className="text-white font-black text-sm leading-none">{user.nome}</p>
+            <p className="text-white font-black text-sm leading-none">{motorista.nome}</p>
             <p className={`text-[10px] font-bold mt-0.5 ${emRota ? "text-green-400" : "text-gray-500"}`}>
-              {emRota ? `🟢 Em rota: ${rotaSelecionada?.nome}` : "⚪ Aguardando"}
+              {emRota ? `🟢 Em rota: ${rotaSelecionada?.nome}` : "⚪ Toque para trocar"}
             </p>
           </div>
         </button>
         <div className="flex items-center gap-2">
           {canInstall && !emRota && (
             <button
-              onClick={() => { const w = window as any; if (w.__pwaPrompt) w.__pwaPrompt.prompt(); }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold active:bg-amber-500/30">
+              onClick={async () => { const r = await instalarPWA(); if (r === "instructions") setShowInstallInstructions(true); }}
+              className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold"
+            >
               ⬇ Instalar
             </button>
           )}
-          <button onClick={handleSair} className="text-gray-500 text-xs px-3 py-2 rounded-xl bg-gray-800 active:bg-gray-700 font-bold">
-            Sair
-          </button>
+          {emRota && (
+            <button onClick={encerrarRota} className="text-red-400 text-xs px-3 py-2 rounded-xl bg-red-500/10 active:bg-red-500/20 font-bold border border-red-500/20">
+              ⏹ Encerrar
+            </button>
+          )}
         </div>
       </div>
 
       {/* Seleção de rota */}
       {!emRota && (
         <div className="px-4 pb-3 space-y-3 flex-shrink-0">
-          <select value={rotaSelecionada?.id || ""}
+          <select
+            value={rotaSelecionada?.id || ""}
             onChange={e => setRotaSelecionada(rotas.find(r => r.id === e.target.value) || null)}
-            className="w-full px-4 py-3.5 bg-gray-800 border border-gray-700 rounded-2xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none">
+            className="w-full px-4 py-3.5 bg-gray-800 border border-gray-700 rounded-2xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none"
+          >
             <option value="">Selecionar rota...</option>
             {rotas.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
           </select>
@@ -215,8 +262,11 @@ export default function AppMotorista() {
               Calculando rota por estradas...
             </div>
           )}
-          <button onClick={iniciarRota} disabled={!rotaSelecionada || carregandoRota}
-            className="w-full py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 rounded-2xl font-black text-white text-base transition-all active:scale-95 shadow-lg shadow-amber-500/20">
+          <button
+            onClick={iniciarRota}
+            disabled={!rotaSelecionada || carregandoRota}
+            className="w-full py-4 bg-amber-500 disabled:opacity-40 rounded-2xl font-black text-white text-base active:scale-95 transition-all shadow-lg shadow-amber-500/20"
+          >
             🚀 Iniciar Rota
           </button>
         </div>
@@ -248,12 +298,6 @@ export default function AppMotorista() {
             rotaPontos={rotaGeometria.length > 0 ? rotaGeometria : undefined}
             rotaCor={rotaSelecionada?.cor}
           />
-          {emRota && (
-            <button onClick={encerrarRota}
-              className="absolute bottom-safe bottom-4 left-4 right-4 py-4 bg-red-600 hover:bg-red-500 rounded-3xl font-black text-white text-base z-[1000] shadow-2xl shadow-red-600/30 active:scale-95 transition-all">
-              ⏹ Encerrar Rota
-            </button>
-          )}
         </div>
       )}
 

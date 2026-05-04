@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import type { PosicaoMapa } from "../components/MapaLeaflet";
-import InstallPWA from "../components/InstallPWA";
+import InstallPWA, { useInstallPrompt } from "../components/InstallPWA";
 
 const MapaLeaflet = dynamic(() => import("../components/MapaLeaflet"), { ssr: false });
 
@@ -19,7 +19,8 @@ export default function AppPassageiro() {
   const [rotaGeometria, setRotaGeometria] = useState<{ lat: number; lng: number }[]>([]);
   const [rotaCor, setRotaCor] = useState("#0b7336");
   const [minhaPos, setMinhaPos] = useState<{ lat: number; lng: number } | null>(null);
-  const [canInstall, setCanInstall] = useState(false);
+  const { canInstall, instalar: instalarPWA } = useInstallPrompt();
+  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refs para evitar closures velhas na subscription realtime
@@ -28,18 +29,6 @@ export default function AppPassageiro() {
   useEffect(() => { minhaPosRef.current = minhaPos; }, [minhaPos]);
   useEffect(() => { userRef.current = user; }, [user]);
 
-  // Detecta se pode instalar o PWA
-  useEffect(() => {
-    const win = window as any;
-    const check = () => { if (win.__pwaPrompt) setCanInstall(true); };
-    check();
-    window.addEventListener("pwaPromptReady", check);
-    window.addEventListener("beforeinstallprompt", check);
-    return () => {
-      window.removeEventListener("pwaPromptReady", check);
-      window.removeEventListener("beforeinstallprompt", check);
-    };
-  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -168,7 +157,7 @@ export default function AppPassageiro() {
         <div className="flex items-center gap-2">
           {canInstall && (
             <button
-              onClick={() => { const w = window as any; if (w.__pwaPrompt) { w.__pwaPrompt.prompt(); } }}
+              onClick={async () => { const r = await instalarPWA(); if (r === "instructions") setShowInstallInstructions(true); }}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 text-xs font-bold active:bg-blue-600/30">
               ⬇ Instalar
             </button>
@@ -222,6 +211,23 @@ export default function AppPassageiro() {
       </div>
 
       <InstallPWA tema="blue" />
+
+      {showInstallInstructions && (
+        <div className="fixed inset-0 z-[3000] bg-black/80 flex items-end p-4" onClick={() => setShowInstallInstructions(false)}>
+          <div className="bg-gray-900 rounded-3xl p-6 w-full border border-gray-700 space-y-4" onClick={e => e.stopPropagation()}>
+            <p className="text-white font-black text-base text-center">Adicionar à tela inicial</p>
+            <div className="space-y-3">
+              {[["⎋","Toque no botão Compartilhar na barra do navegador"],["➕","Role e toque em 'Adicionar à Tela de Início'"],["✅","Confirme tocando em Adicionar"]].map(([icon, text], i) => (
+                <div key={i} className="flex items-center gap-4 bg-gray-800 rounded-2xl p-3">
+                  <span className="text-2xl flex-shrink-0">{icon}</span>
+                  <p className="text-gray-300 text-sm">{text}</p>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowInstallInstructions(false)} className="w-full py-3 bg-gray-700 rounded-2xl text-white font-bold">Entendi</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
