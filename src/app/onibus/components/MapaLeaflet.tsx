@@ -12,6 +12,13 @@ export interface PosicaoMapa {
   velocidade?: number;
 }
 
+export interface Waypoint {
+  id: string;
+  lat: number;
+  lng: number;
+  ordem: number;
+}
+
 interface Props {
   posicoes: PosicaoMapa[];
   centro?: [number, number];
@@ -19,6 +26,7 @@ interface Props {
   onMapClick?: (lat: number, lng: number) => void;
   rotaPontos?: { lat: number; lng: number }[];
   rotaCor?: string;
+  waypoints?: Waypoint[];
 }
 
 const ICONES: Record<string, L.DivIcon> = {};
@@ -41,11 +49,12 @@ function getIcone(tipo: PosicaoMapa["tipo"]) {
   return ICONES[tipo];
 }
 
-export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, rotaPontos, rotaCor = "#0b7336" }: Props) {
+export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, rotaPontos, rotaCor = "#0b7336", waypoints = [] }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const polylineRef = useRef<L.Polyline | null>(null);
+  const waypointMarkersRef = useRef<Map<string, L.Marker>>(new Map());
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -118,6 +127,34 @@ export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, r
       ).addTo(mapRef.current);
     }
   }, [rotaPontos, rotaCor]);
+
+  // Renderiza waypoints como marcadores numerados pequenos
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    const seen = new Set<string>();
+
+    waypoints.forEach((wp, idx) => {
+      seen.add(wp.id);
+      const latlng: [number, number] = [wp.lat, wp.lng];
+      const icon = L.divIcon({
+        html: `<div style="width:22px;height:22px;background:#6b7280;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:white;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5)">${idx + 1}</div>`,
+        className: "",
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+      });
+      if (waypointMarkersRef.current.has(wp.id)) {
+        waypointMarkersRef.current.get(wp.id)!.setLatLng(latlng);
+      } else {
+        const m = L.marker(latlng, { icon }).addTo(map);
+        waypointMarkersRef.current.set(wp.id, m);
+      }
+    });
+
+    waypointMarkersRef.current.forEach((m, id) => {
+      if (!seen.has(id)) { m.remove(); waypointMarkersRef.current.delete(id); }
+    });
+  }, [waypoints]);
 
   // Centraliza no primeiro motorista ou centro dado
   useEffect(() => {

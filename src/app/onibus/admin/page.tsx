@@ -4,28 +4,34 @@ import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import type { PosicaoMapa } from "../components/MapaLeaflet";
+import type { PosicaoMapa, Waypoint } from "../components/MapaLeaflet";
 
 const MapaLeaflet = dynamic(() => import("../components/MapaLeaflet"), { ssr: false });
 
 interface Rota { id: string; nome: string; cor: string; ativa: boolean; }
-interface Ponto { id: string; rota_id: string; nome: string; lat: number; lng: number; ordem: number; }
+interface Ponto { id: string; rota_id: string; nome: string; lat: number; lng: number; ordem: number; tipo: "waypoint" | "parada"; }
 interface Perfil { id: string; nome: string; tipo: string; telefone: string; onibus_usuarios?: { endereco: string } }
 
 const CORES = ["#0b7336", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
+type Camada = "rota" | "paradas";
 
 export default function AdminOnibus() {
   const router = useRouter();
   const importRef = useRef<HTMLInputElement>(null);
   const [aba, setAba] = useState<"mapa" | "rotas" | "usuarios" | "motoristas">("mapa");
+  const [camada, setCamada] = useState<Camada>("rota");
+
   const [rotas, setRotas] = useState<Rota[]>([]);
   const [rotaSelecionada, setRotaSelecionada] = useState<Rota | null>(null);
-  const [pontos, setPontos] = useState<Ponto[]>([]);
+  const [waypoints, setWaypoints] = useState<Ponto[]>([]);
+  const [paradas, setParadas] = useState<Ponto[]>([]);
   const [posicoes, setPosicoes] = useState<PosicaoMapa[]>([]);
   const [usuarios, setUsuarios] = useState<Perfil[]>([]);
-  const [adicionandoPonto, setAdicionandoPonto] = useState(false);
+
+  const [adicionando, setAdicionando] = useState(false);
   const [nomePonto, setNomePonto] = useState("");
   const [pendingLatLng, setPendingLatLng] = useState<{ lat: number; lng: number } | null>(null);
+
   const [rotaGeometria, setRotaGeometria] = useState<{ lat: number; lng: number }[]>([]);
   const [distanciaKm, setDistanciaKm] = useState<number | null>(null);
   const [carregandoRota, setCarregandoRota] = useState(false);
@@ -35,7 +41,7 @@ export default function AdminOnibus() {
   const [corRota, setCorRota] = useState(CORES[0]);
   const [descRota, setDescRota] = useState("");
 
-  // Form novo motorista
+  // Form motorista
   const [nomeMotorista, setNomeMotorista] = useState("");
   const [emailMotorista, setEmailMotorista] = useState("");
   const [senhaMotorista, setSenhaMotorista] = useState("");
@@ -59,198 +65,181 @@ export default function AdminOnibus() {
     setPosicoes((pos || []).map((p: any) => ({ id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: p.tipo, velocidade: p.velocidade })));
   };
 
+  // Carrega pontos da rota selecionada
   useEffect(() => {
-    if (!rotaSelecionada) { setPontos([]); setRotaGeometria([]); setDistanciaKm(null); return; }
+    if (!rotaSelecionada) {
+      setWaypoints([]); setParadas([]); setRotaGeometria([]); setDistanciaKm(null);
+      return;
+    }
     supabase.from("onibus_pontos").select("*").eq("rota_id", rotaSelecionada.id).order("ordem").then(({ data }) => {
-      const pts = data || [];
-      setPontos(pts);
-      if (pts.length >= 2) buscarRotaOSRM(pts);
+      const todos = (data || []) as Ponto[];
+      const wps = todos.filter(p => p.tipo === "waypoint");
+      const pds = todos.filter(p => p.tipo === "parada");
+      setWaypoints(wps);
+      setParadas(pds);
+      if (wps.length >= 2) calcularOSRM(wps);
     });
   }, [rotaSelecionada]);
 
-  // Recalcula rota quando pontos mudam
+  // Recalcula rota OSRM quando waypoints mudam
   useEffect(() => {
-    if (pontos.length >= 2) buscarRotaOSRM(pontos);
+    if (waypoints.length >= 2) calcularOSRM(waypoints);
     else setRotaGeometria([]);
-  }, [pontos]);
+  }, [waypoints]);
 
-  const buscarRotaOSRM = async (pts: Ponto[]) => {
+  const calcularOSRM = async (wps: Ponto[]) => {
     setCarregandoRota(true);
     try {
-      const ordenados = [...pts].sort((a, b) => a.ordem - b.ordem);
+      const ordenados = [...wps].sort((a, b) => a.ordem - b.ordem);
       const coords = ordenados.map(p => `${p.lng},${p.lat}`).join(";");
-      const res = await fetch(
-        `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`
-      );
+      const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`);
       const data = await res.json();
       if (data.routes?.[0]) {
-        const geom = data.routes[0].geometry.coordinates.map(([lng, lat]: [number, number]) => ({ lat, lng }));
-        setRotaGeometria(geom);
+        setRotaGeometria(data.routes[0].geometry.coordinates.map(([lng, lat]: [number, number]) => ({ lat, lng })));
         setDistanciaKm(data.routes[0].distance / 1000);
       }
-    } catch {
-      toast.error("Erro ao calcular rota. Verifique sua conexão.");
-    } finally {
-      setCarregandoRota(false);
+    } catch { toast.error("Erro ao calcular rota por estradas."); }
+    finally { setCarregandoRota(false); }
+  };
+
+  // Clique no mapa
+  const handleMapClick = useCallback((lat: number, lng: number) => {
+    if (!adicionando) return;
+    setPendingLatLng({ lat, lng });
+  }, [adicionando]);
+
+  const confirmarPonto = async () => {
+    if (!pendingLatLng || !rotaSelecionada) return;
+    if (camada === "paradas" && !nomePonto) return;
+
+    const tipo = camada === "rota" ? "waypoint" : "parada";
+    const lista = camada === "rota" ? waypoints : paradas;
+    const ordem = lista.length;
+    const nome = camada === "rota" ? `W${ordem + 1}` : nomePonto;
+
+    const { data, error } = await supabase.from("onibus_pontos").insert({
+      rota_id: rotaSelecionada.id, nome, lat: pendingLatLng.lat, lng: pendingLatLng.lng, ordem, tipo,
+    }).select().single();
+
+    if (error) { toast.error("Erro ao salvar."); return; }
+
+    if (tipo === "waypoint") setWaypoints(prev => [...prev, data as Ponto]);
+    else setParadas(prev => [...prev, data as Ponto]);
+
+    setNomePonto(""); setPendingLatLng(null);
+    toast.success(tipo === "waypoint" ? "Waypoint adicionado!" : `Parada "${nome}" adicionada!`);
+  };
+
+  const excluirPonto = async (id: string, tipo: "waypoint" | "parada") => {
+    await supabase.from("onibus_pontos").delete().eq("id", id);
+    if (tipo === "waypoint") {
+      const restantes = waypoints.filter(p => p.id !== id).map((p, i) => ({ ...p, ordem: i }));
+      for (const p of restantes) await supabase.from("onibus_pontos").update({ ordem: p.ordem }).eq("id", p.id);
+      setWaypoints(restantes);
+    } else {
+      const restantes = paradas.filter(p => p.id !== id).map((p, i) => ({ ...p, ordem: i }));
+      for (const p of restantes) await supabase.from("onibus_pontos").update({ ordem: p.ordem }).eq("id", p.id);
+      setParadas(restantes);
     }
+  };
+
+  // Import GPX / GeoJSON / KML
+  const importRef2 = useRef<HTMLInputElement>(null);
+  const importarArquivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !rotaSelecionada) return;
+    e.target.value = "";
+    const text = await file.text();
+    let pts: { lat: number; lng: number; nome: string }[] = [];
+    try {
+      if (file.name.endsWith(".gpx")) pts = parsearGPX(text);
+      else if (file.name.endsWith(".geojson") || file.name.endsWith(".json")) pts = parsearGeoJSON(text);
+      else if (file.name.endsWith(".kml")) pts = parsearKML(text);
+      else { toast.error("Use GPX, GeoJSON ou KML."); return; }
+    } catch { toast.error("Erro ao ler arquivo."); return; }
+    if (!pts.length) { toast.error("Nenhum ponto encontrado."); return; }
+
+    const step = Math.max(1, Math.floor(pts.length / 100));
+    const amostrados = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
+    const tipo = camada === "rota" ? "waypoint" : "parada";
+    const listaAtual = camada === "rota" ? waypoints : paradas;
+
+    if (!confirm(`Importar ${amostrados.length} pontos como ${tipo === "waypoint" ? "waypoints de rota" : "paradas"}?`)) return;
+
+    const toInsert = amostrados.map((p, i) => ({
+      rota_id: rotaSelecionada.id,
+      nome: p.nome || (tipo === "waypoint" ? `W${listaAtual.length + i + 1}` : `Parada ${listaAtual.length + i + 1}`),
+      lat: p.lat, lng: p.lng, ordem: listaAtual.length + i, tipo,
+    }));
+
+    const { data, error } = await supabase.from("onibus_pontos").insert(toInsert).select();
+    if (error) { toast.error("Erro ao salvar pontos."); return; }
+    if (tipo === "waypoint") setWaypoints(prev => [...prev, ...(data as Ponto[])]);
+    else setParadas(prev => [...prev, ...(data as Ponto[])]);
+    toast.success(`${amostrados.length} pontos importados!`);
+  };
+
+  const parsearGPX = (text: string) => {
+    const xml = new DOMParser().parseFromString(text, "text/xml");
+    const wpts = xml.querySelectorAll("wpt"); const trkpts = xml.querySelectorAll("trkpt");
+    const nodes = wpts.length > 0 ? wpts : trkpts;
+    return Array.from(nodes).map(n => ({ lat: parseFloat(n.getAttribute("lat") || "0"), lng: parseFloat(n.getAttribute("lon") || "0"), nome: n.querySelector("name")?.textContent || "" })).filter(p => p.lat !== 0);
+  };
+  const parsearGeoJSON = (text: string) => {
+    const geo = JSON.parse(text); const result: { lat: number; lng: number; nome: string }[] = [];
+    const features = geo.type === "FeatureCollection" ? geo.features : [geo];
+    features.forEach((f: any) => {
+      const geom = f.geometry || f; const nome = f.properties?.name || "";
+      if (geom.type === "Point") result.push({ lng: geom.coordinates[0], lat: geom.coordinates[1], nome });
+      else if (geom.type === "LineString") geom.coordinates.forEach(([lng, lat]: number[]) => result.push({ lat, lng, nome }));
+      else if (geom.type === "MultiLineString") geom.coordinates.forEach((l: number[][]) => l.forEach(([lng, lat]) => result.push({ lat, lng, nome })));
+    });
+    return result;
+  };
+  const parsearKML = (text: string) => {
+    const xml = new DOMParser().parseFromString(text, "text/xml"); const result: { lat: number; lng: number; nome: string }[] = [];
+    xml.querySelectorAll("Placemark").forEach(pm => {
+      const nome = pm.querySelector("name")?.textContent || "";
+      pm.querySelectorAll("coordinates").forEach(c => c.textContent?.trim().split(/\s+/).forEach(coord => { const [lng, lat] = coord.split(",").map(Number); if (lat && lng) result.push({ lat, lng, nome }); }));
+    });
+    return result;
   };
 
   const criarRota = async (e: React.FormEvent) => {
     e.preventDefault();
     const { data, error } = await supabase.from("onibus_rotas").insert({ nome: nomeRota, cor: corRota, descricao: descRota }).select().single();
-    if (error) { toast.error("Erro ao criar rota."); return; }
-    setRotas(prev => [...prev, data]);
-    setNomeRota(""); setDescRota("");
+    if (error) { toast.error("Erro."); return; }
+    setRotas(prev => [...prev, data]); setNomeRota(""); setDescRota("");
     toast.success("Rota criada!");
   };
 
   const excluirRota = async (id: string) => {
-    if (!confirm("Excluir rota e todos os pontos?")) return;
+    if (!confirm("Excluir rota?")) return;
     await supabase.from("onibus_rotas").delete().eq("id", id);
     setRotas(prev => prev.filter(r => r.id !== id));
-    if (rotaSelecionada?.id === id) { setRotaSelecionada(null); setPontos([]); setRotaGeometria([]); }
-    toast.success("Rota excluída.");
+    if (rotaSelecionada?.id === id) setRotaSelecionada(null);
   };
-
-  const handleMapClick = useCallback((lat: number, lng: number) => {
-    if (!adicionandoPonto) return;
-    setPendingLatLng({ lat, lng });
-  }, [adicionandoPonto]);
-
-  const confirmarPonto = async () => {
-    if (!pendingLatLng || !rotaSelecionada || !nomePonto) return;
-    const ordem = pontos.length;
-    const { data, error } = await supabase.from("onibus_pontos").insert({
-      rota_id: rotaSelecionada.id, nome: nomePonto,
-      lat: pendingLatLng.lat, lng: pendingLatLng.lng, ordem,
-    }).select().single();
-    if (error) { toast.error("Erro ao adicionar ponto."); return; }
-    setPontos(prev => [...prev, data]);
-    setNomePonto(""); setPendingLatLng(null);
-    toast.success("Ponto adicionado!");
-  };
-
-  const excluirPonto = async (id: string) => {
-    await supabase.from("onibus_pontos").delete().eq("id", id);
-    const restantes = pontos.filter(p => p.id !== id).map((p, i) => ({ ...p, ordem: i }));
-    // Reordena no banco
-    for (const p of restantes) await supabase.from("onibus_pontos").update({ ordem: p.ordem }).eq("id", p.id);
-    setPontos(restantes);
-  };
-
-  // ─── Import GPX / GeoJSON ────────────────────────────────────────────────
-  const importarArquivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !rotaSelecionada) return;
-    e.target.value = "";
-
-    const text = await file.text();
-    let importados: { lat: number; lng: number; nome: string }[] = [];
-
-    try {
-      if (file.name.endsWith(".gpx")) {
-        importados = parsearGPX(text);
-      } else if (file.name.endsWith(".geojson") || file.name.endsWith(".json")) {
-        importados = parsearGeoJSON(text);
-      } else if (file.name.endsWith(".kml")) {
-        importados = parsearKML(text);
-      } else {
-        toast.error("Formato não suportado. Use GPX, GeoJSON ou KML.");
-        return;
-      }
-    } catch {
-      toast.error("Erro ao ler o arquivo.");
-      return;
-    }
-
-    if (importados.length === 0) { toast.error("Nenhum ponto encontrado no arquivo."); return; }
-
-    // Limita a 100 pontos (amostragem)
-    const step = Math.max(1, Math.floor(importados.length / 100));
-    const amostrados = importados.filter((_, i) => i % step === 0 || i === importados.length - 1);
-
-    if (!confirm(`Importar ${amostrados.length} pontos para a rota "${rotaSelecionada.nome}"? Os pontos existentes serão mantidos.`)) return;
-
-    const toInsert = amostrados.map((p, i) => ({
-      rota_id: rotaSelecionada.id,
-      nome: p.nome || `Ponto ${pontos.length + i + 1}`,
-      lat: p.lat, lng: p.lng,
-      ordem: pontos.length + i,
-    }));
-
-    const { data, error } = await supabase.from("onibus_pontos").insert(toInsert).select();
-    if (error) { toast.error("Erro ao salvar pontos."); return; }
-    setPontos(prev => [...prev, ...(data || [])]);
-    toast.success(`${amostrados.length} pontos importados!`);
-  };
-
-  const parsearGPX = (text: string): { lat: number; lng: number; nome: string }[] => {
-    const xml = new DOMParser().parseFromString(text, "text/xml");
-    const wpts = xml.querySelectorAll("wpt");
-    const trkpts = xml.querySelectorAll("trkpt");
-    const nodes = wpts.length > 0 ? wpts : trkpts;
-    return Array.from(nodes).map(n => ({
-      lat: parseFloat(n.getAttribute("lat") || "0"),
-      lng: parseFloat(n.getAttribute("lon") || "0"),
-      nome: n.querySelector("name")?.textContent || "",
-    })).filter(p => p.lat !== 0);
-  };
-
-  const parsearGeoJSON = (text: string): { lat: number; lng: number; nome: string }[] => {
-    const geo = JSON.parse(text);
-    const result: { lat: number; lng: number; nome: string }[] = [];
-    const features = geo.type === "FeatureCollection" ? geo.features : [geo];
-    features.forEach((f: any) => {
-      const geom = f.geometry || f;
-      const nome = f.properties?.name || f.properties?.nome || "";
-      if (geom.type === "Point") {
-        result.push({ lng: geom.coordinates[0], lat: geom.coordinates[1], nome });
-      } else if (geom.type === "LineString") {
-        geom.coordinates.forEach(([lng, lat]: [number, number]) => result.push({ lat, lng, nome }));
-      } else if (geom.type === "MultiLineString") {
-        geom.coordinates.forEach((line: [number, number][]) =>
-          line.forEach(([lng, lat]) => result.push({ lat, lng, nome }))
-        );
-      }
-    });
-    return result;
-  };
-
-  const parsearKML = (text: string): { lat: number; lng: number; nome: string }[] => {
-    const xml = new DOMParser().parseFromString(text, "text/xml");
-    const result: { lat: number; lng: number; nome: string }[] = [];
-    xml.querySelectorAll("Placemark").forEach(pm => {
-      const nome = pm.querySelector("name")?.textContent || "";
-      pm.querySelectorAll("coordinates").forEach(c => {
-        c.textContent?.trim().split(/\s+/).forEach(coord => {
-          const [lng, lat] = coord.split(",").map(Number);
-          if (lat && lng) result.push({ lat, lng, nome });
-        });
-      });
-    });
-    return result;
-  };
-  // ────────────────────────────────────────────────────────────────────────
 
   const criarMotorista = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCriandoMotorista(true);
+    e.preventDefault(); setCriandoMotorista(true);
     const { data, error } = await supabase.auth.signUp({ email: emailMotorista, password: senhaMotorista });
-    if (error) { toast.error("Erro: " + error.message); setCriandoMotorista(false); return; }
+    if (error) { toast.error(error.message); setCriandoMotorista(false); return; }
     const uid = data.user?.id;
-    if (!uid) { toast.error("Erro ao criar conta."); setCriandoMotorista(false); return; }
+    if (!uid) { setCriandoMotorista(false); return; }
     await supabase.from("onibus_perfis").insert({ id: uid, tipo: "motorista", nome: nomeMotorista, telefone: telefMotorista });
     await supabase.from("onibus_motoristas").insert({ id: uid, veiculo: veiculoMotorista });
     toast.success(`Motorista ${nomeMotorista} criado!`);
     setNomeMotorista(""); setEmailMotorista(""); setSenhaMotorista(""); setTelefMotorista(""); setVeiculoMotorista("");
-    carregarTudo();
-    setCriandoMotorista(false);
+    carregarTudo(); setCriandoMotorista(false);
   };
 
-  const todasPosicoesNaMapa: PosicaoMapa[] = [
+  // Monta posições para o mapa: paradas como "ponto", posições em tempo real
+  const posicoesNaMapa: PosicaoMapa[] = [
     ...posicoes,
-    ...pontos.map(p => ({ id: p.id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "ponto" as const })),
+    ...paradas.map(p => ({ id: p.id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "ponto" as const })),
   ];
+
+  const waypointsNaMapa: Waypoint[] = waypoints.map((w, i) => ({ id: w.id, lat: w.lat, lng: w.lng, ordem: i }));
 
   return (
     <div className="h-screen flex flex-col bg-gray-950 overflow-hidden">
@@ -263,7 +252,7 @@ export default function AdminOnibus() {
         <button onClick={() => router.push("/dashboard")} className="text-gray-500 text-xs px-3 py-1.5 rounded-xl bg-gray-800">Dashboard</button>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs principais */}
       <div className="flex mx-4 mb-3 bg-gray-800 rounded-2xl p-1 gap-1">
         {[["mapa","🗺️","Mapa"],["rotas","🛣️","Rotas"],["usuarios","🧍","Usuários"],["motoristas","🚌","Motoristas"]].map(([id, emoji, label]) => (
           <button key={id} onClick={() => setAba(id as any)}
@@ -275,67 +264,105 @@ export default function AdminOnibus() {
 
       {/* MAPA */}
       {aba === "mapa" && (
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-hidden">
           <MapaLeaflet
-            posicoes={todasPosicoesNaMapa}
+            posicoes={posicoesNaMapa}
+            waypoints={waypointsNaMapa}
             onMapClick={handleMapClick}
             rotaPontos={rotaGeometria.length > 0 ? rotaGeometria : undefined}
             rotaCor={rotaSelecionada?.cor}
           />
 
-          {/* Toolbar topo */}
+          {/* Toolbar flutuante */}
           <div className="absolute top-3 left-3 right-3 z-[1000] space-y-2">
+            {/* Seletor de rota */}
             <div className="flex gap-2">
-              <select
-                value={rotaSelecionada?.id || ""}
-                onChange={e => setRotaSelecionada(rotas.find(r => r.id === e.target.value) || null)}
-                className="flex-1 px-3 py-2 bg-gray-900/95 border border-gray-700 rounded-xl text-white text-xs focus:outline-none"
-              >
-                <option value="">Ver todas as posições</option>
+              <select value={rotaSelecionada?.id || ""} onChange={e => setRotaSelecionada(rotas.find(r => r.id === e.target.value) || null)}
+                className="flex-1 px-3 py-2 bg-gray-900/95 border border-gray-700 rounded-xl text-white text-xs focus:outline-none">
+                <option value="">Selecionar rota...</option>
                 {rotas.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
               </select>
               {rotaSelecionada && (
-                <>
-                  <button onClick={() => setAdicionandoPonto(v => !v)}
-                    className={`px-3 py-2 rounded-xl text-xs font-black transition-all ${adicionandoPonto ? 'bg-amber-500 text-white' : 'bg-gray-800 text-gray-400'}`}>
-                    {adicionandoPonto ? "🖱️ Clicando..." : "➕ Ponto"}
-                  </button>
-                  <button onClick={() => importRef.current?.click()}
-                    className="px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white">
-                    📂 Importar
-                  </button>
-                  <input ref={importRef} type="file" accept=".gpx,.geojson,.json,.kml" className="hidden" onChange={importarArquivo} />
-                </>
+                <button onClick={() => { importRef.current?.click(); }} className="px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white">📂</button>
               )}
+              <input ref={importRef} type="file" accept=".gpx,.geojson,.json,.kml" className="hidden" onChange={importarArquivo} />
             </div>
 
-            {/* Info distância + loading */}
+            {/* Seletor de camada */}
+            {rotaSelecionada && (
+              <div className="flex gap-1 bg-gray-900/95 p-1 rounded-2xl border border-gray-700">
+                <button
+                  onClick={() => { setCamada("rota"); setAdicionando(false); setPendingLatLng(null); }}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${camada === "rota" ? "bg-gray-500 text-white" : "text-gray-400"}`}>
+                  <div className="w-3 h-3 rounded-full bg-gray-400 border-2 border-white" />
+                  Camada: Rota
+                </button>
+                <button
+                  onClick={() => { setCamada("paradas"); setAdicionando(false); setPendingLatLng(null); }}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${camada === "paradas" ? "bg-green-700 text-white" : "text-gray-400"}`}>
+                  <div className="text-sm">🚏</div>
+                  Camada: Paradas
+                </button>
+              </div>
+            )}
+
+            {/* Botão adicionar + stats */}
             {rotaSelecionada && (
               <div className="flex items-center gap-2">
+                <button onClick={() => { setAdicionando(v => !v); setPendingLatLng(null); }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${adicionando
+                    ? (camada === "rota" ? "bg-gray-500 text-white animate-pulse" : "bg-green-600 text-white animate-pulse")
+                    : "bg-gray-800 text-gray-300"}`}>
+                  {adicionando
+                    ? `🖱️ Clique no mapa para adicionar ${camada === "rota" ? "waypoint" : "parada"}`
+                    : `➕ Adicionar ${camada === "rota" ? "waypoint" : "parada"}`}
+                </button>
+              </div>
+            )}
+
+            {/* Info distância */}
+            {rotaSelecionada && (
+              <div className="flex gap-2 flex-wrap">
                 {carregandoRota && (
-                  <div className="flex items-center gap-1.5 bg-gray-900/90 px-3 py-1.5 rounded-xl">
+                  <div className="flex items-center gap-1.5 bg-gray-900/90 px-3 py-1 rounded-xl">
                     <div className="w-3 h-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
-                    <span className="text-amber-400 text-[10px] font-bold">Calculando rota por estradas...</span>
+                    <span className="text-amber-400 text-[10px] font-bold">Calculando por estradas...</span>
                   </div>
                 )}
-                {distanciaKm !== null && !carregandoRota && (
-                  <div className="bg-gray-900/90 px-3 py-1.5 rounded-xl text-[10px] font-black text-green-400">
-                    📏 {distanciaKm.toFixed(1)} km · {pontos.length} paradas
+                {!carregandoRota && distanciaKm !== null && (
+                  <div className="bg-gray-900/90 px-3 py-1 rounded-xl text-[10px] font-black text-green-400">
+                    📏 {distanciaKm.toFixed(1)} km
                   </div>
                 )}
+                <div className="bg-gray-900/90 px-3 py-1 rounded-xl text-[10px] font-bold text-gray-400">
+                  {waypoints.length} waypoints · {paradas.length} paradas
+                </div>
               </div>
             )}
           </div>
 
-          {/* Form nome do ponto */}
+          {/* Form confirmação de ponto */}
           {pendingLatLng && (
-            <div className="absolute bottom-4 left-4 right-4 z-[1000] bg-gray-900/95 backdrop-blur rounded-3xl p-4 space-y-3">
-              <p className="text-white text-sm font-bold">📍 {pendingLatLng.lat.toFixed(5)}, {pendingLatLng.lng.toFixed(5)}</p>
-              <input value={nomePonto} onChange={e => setNomePonto(e.target.value)} placeholder="Nome da parada..."
-                className="w-full px-4 py-3 bg-gray-800 rounded-2xl text-white text-sm focus:outline-none border border-gray-700" />
+            <div className="absolute bottom-4 left-4 right-4 z-[1000] bg-gray-900/98 backdrop-blur rounded-3xl p-4 space-y-3 border border-gray-700">
+              <div className="flex items-center gap-2">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${camada === "rota" ? "bg-gray-500" : "bg-green-600"}`}>
+                  {camada === "rota" ? "•" : "🚏"}
+                </div>
+                <p className="text-white text-xs font-bold">
+                  {camada === "rota" ? `Waypoint ${waypoints.length + 1}` : "Nova Parada"} — {pendingLatLng.lat.toFixed(5)}, {pendingLatLng.lng.toFixed(5)}
+                </p>
+              </div>
+              {camada === "paradas" && (
+                <input value={nomePonto} onChange={e => setNomePonto(e.target.value)} placeholder="Nome da parada (ex: Terminal Centro)"
+                  autoFocus
+                  className="w-full px-4 py-3 bg-gray-800 rounded-2xl text-white text-sm focus:outline-none border border-gray-700" />
+              )}
               <div className="flex gap-2">
                 <button onClick={() => setPendingLatLng(null)} className="flex-1 py-2.5 bg-gray-700 rounded-2xl text-gray-300 text-sm font-bold">Cancelar</button>
-                <button onClick={confirmarPonto} disabled={!nomePonto} className="flex-1 py-2.5 bg-amber-500 rounded-2xl text-white text-sm font-black disabled:opacity-40">Salvar</button>
+                <button onClick={confirmarPonto} disabled={camada === "paradas" && !nomePonto}
+                  className={`flex-1 py-2.5 rounded-2xl text-white text-sm font-black disabled:opacity-40 ${camada === "rota" ? "bg-gray-500" : "bg-green-600"}`}>
+                  Salvar
+                </button>
               </div>
             </div>
           )}
@@ -352,55 +379,37 @@ export default function AdminOnibus() {
             <input value={descRota} onChange={e => setDescRota(e.target.value)} placeholder="Descrição (opcional)"
               className="w-full px-4 py-3 bg-gray-900 rounded-2xl text-white text-sm border border-gray-700 focus:outline-none" />
             <div className="flex gap-2">
-              {CORES.map(c => (
-                <button key={c} type="button" onClick={() => setCorRota(c)}
-                  style={{ background: c }}
-                  className={`w-8 h-8 rounded-full transition-all ${corRota === c ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-800 scale-110' : ''}`} />
-              ))}
+              {CORES.map(c => <button key={c} type="button" onClick={() => setCorRota(c)} style={{ background: c }} className={`w-8 h-8 rounded-full transition-all ${corRota === c ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-800 scale-110' : ''}`} />)}
             </div>
             <button type="submit" className="w-full py-3 bg-green-600 hover:bg-green-500 rounded-2xl font-black text-white text-sm">Criar Rota</button>
           </form>
 
-          <div className="space-y-2">
-            {rotas.map(r => (
-              <div key={r.id} className="bg-gray-800 rounded-2xl p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: r.cor }} />
-                  <div className="flex-1">
-                    <p className="text-white font-bold text-sm">{r.nome}</p>
-                    <div className="flex gap-3 mt-0.5">
-                      <button onClick={() => { setRotaSelecionada(r); setAba("mapa"); setAdicionandoPonto(true); }}
-                        className="text-amber-400 text-xs font-bold">➕ Adicionar paradas</button>
-                      <button onClick={() => { setRotaSelecionada(r); setAba("mapa"); setTimeout(() => importRef.current?.click(), 300); }}
-                        className="text-blue-400 text-xs font-bold">📂 Importar GPX/KML</button>
-                    </div>
-                  </div>
-                  <button onClick={() => excluirRota(r.id)} className="text-red-500 text-xs px-2 py-1 rounded-lg bg-red-500/10">Excluir</button>
-                </div>
-                {rotaSelecionada?.id === r.id && pontos.length > 0 && (
-                  <div className="mt-3 space-y-1">
-                    {distanciaKm && (
-                      <p className="text-green-400 text-[10px] font-black mb-2">📏 {distanciaKm.toFixed(1)} km por estradas</p>
-                    )}
-                    {pontos.sort((a,b) => a.ordem - b.ordem).map((p, i) => (
-                      <div key={p.id} className="flex items-center gap-2 pl-2">
-                        <span className="text-gray-500 text-[10px] w-4">{i+1}.</span>
-                        <span className="text-gray-300 text-xs flex-1">{p.nome}</span>
-                        <button onClick={() => excluirPonto(p.id)} className="text-red-500 text-[10px]">✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {rotas.map(r => (
+            <div key={r.id} className="bg-gray-800 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: r.cor }} />
+                <p className="text-white font-bold text-sm flex-1">{r.nome}</p>
+                <button onClick={() => excluirRota(r.id)} className="text-red-500 text-xs px-2 py-1 rounded-lg bg-red-500/10">Excluir</button>
               </div>
-            ))}
-          </div>
+              <div className="flex gap-2">
+                <button onClick={() => { setRotaSelecionada(r); setCamada("rota"); setAdicionando(true); setAba("mapa"); }}
+                  className="flex-1 py-2 bg-gray-700 rounded-xl text-gray-300 text-xs font-bold text-center">
+                  🛣️ Editar Rota
+                </button>
+                <button onClick={() => { setRotaSelecionada(r); setCamada("paradas"); setAdicionando(true); setAba("mapa"); }}
+                  className="flex-1 py-2 bg-green-900/50 rounded-xl text-green-400 text-xs font-bold text-center">
+                  🚏 Editar Paradas
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       {/* USUÁRIOS */}
       {aba === "usuarios" && (
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
-          <p className="text-gray-500 text-xs pb-1">{usuarios.filter(u => u.tipo === 'passageiro').length} passageiros cadastrados</p>
+          <p className="text-gray-500 text-xs pb-1">{usuarios.filter(u => u.tipo === 'passageiro').length} passageiros</p>
           {usuarios.filter(u => u.tipo === 'passageiro').map(u => (
             <div key={u.id} className="bg-gray-800 rounded-2xl p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-lg flex-shrink-0">🧍</div>
@@ -411,9 +420,6 @@ export default function AdminOnibus() {
               </div>
             </div>
           ))}
-          {usuarios.filter(u => u.tipo === 'passageiro').length === 0 && (
-            <div className="text-center py-12 text-gray-500 text-sm">Nenhum passageiro cadastrado.</div>
-          )}
         </div>
       )}
 
@@ -422,33 +428,32 @@ export default function AdminOnibus() {
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
           <form onSubmit={criarMotorista} className="bg-gray-800 rounded-3xl p-4 space-y-3">
             <p className="text-white font-black text-sm">Novo Motorista</p>
-            <input required value={nomeMotorista} onChange={e => setNomeMotorista(e.target.value)} placeholder="Nome completo"
-              className="w-full px-4 py-3 bg-gray-900 rounded-2xl text-white text-sm border border-gray-700 focus:outline-none" />
-            <input required type="email" value={emailMotorista} onChange={e => setEmailMotorista(e.target.value)} placeholder="E-mail"
-              className="w-full px-4 py-3 bg-gray-900 rounded-2xl text-white text-sm border border-gray-700 focus:outline-none" />
-            <input required type="password" minLength={6} value={senhaMotorista} onChange={e => setSenhaMotorista(e.target.value)} placeholder="Senha"
-              className="w-full px-4 py-3 bg-gray-900 rounded-2xl text-white text-sm border border-gray-700 focus:outline-none" />
-            <input value={telefMotorista} onChange={e => setTelefMotorista(e.target.value)} placeholder="Telefone"
-              className="w-full px-4 py-3 bg-gray-900 rounded-2xl text-white text-sm border border-gray-700 focus:outline-none" />
-            <input value={veiculoMotorista} onChange={e => setVeiculoMotorista(e.target.value)} placeholder="Veículo (modelo/placa)"
-              className="w-full px-4 py-3 bg-gray-900 rounded-2xl text-white text-sm border border-gray-700 focus:outline-none" />
-            <button type="submit" disabled={criandoMotorista} className="w-full py-3 bg-amber-500 hover:bg-amber-400 rounded-2xl font-black text-white text-sm disabled:opacity-50">
+            {[
+              [nomeMotorista, setNomeMotorista, "Nome completo", "text", false],
+              [emailMotorista, setEmailMotorista, "E-mail", "email", true],
+              [senhaMotorista, setSenhaMotorista, "Senha", "password", true],
+              [telefMotorista, setTelefMotorista, "Telefone", "tel", false],
+              [veiculoMotorista, setVeiculoMotorista, "Veículo (modelo/placa)", "text", false],
+            ].map(([val, setter, ph, type, req], i) => (
+              <input key={i} type={type as string} required={req as boolean} value={val as string}
+                onChange={e => (setter as any)(e.target.value)} placeholder={ph as string}
+                className="w-full px-4 py-3 bg-gray-900 rounded-2xl text-white text-sm border border-gray-700 focus:outline-none" />
+            ))}
+            <button type="submit" disabled={criandoMotorista} className="w-full py-3 bg-amber-500 rounded-2xl font-black text-white text-sm disabled:opacity-50">
               {criandoMotorista ? "Criando..." : "Criar Motorista"}
             </button>
           </form>
 
-          <div className="space-y-2">
-            {usuarios.filter(u => u.tipo === 'motorista').map(u => (
-              <div key={u.id} className="bg-gray-800 rounded-2xl p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-lg flex-shrink-0">🚌</div>
-                <div>
-                  <p className="text-white font-bold text-sm">{u.nome}</p>
-                  {u.telefone && <p className="text-gray-400 text-xs">📱 {u.telefone}</p>}
-                </div>
-                <div className={`ml-auto w-2 h-2 rounded-full ${posicoes.find(p => p.id === u.id) ? 'bg-green-400 animate-pulse' : 'bg-gray-600'}`} />
+          {usuarios.filter(u => u.tipo === 'motorista').map(u => (
+            <div key={u.id} className="bg-gray-800 rounded-2xl p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-lg flex-shrink-0">🚌</div>
+              <div>
+                <p className="text-white font-bold text-sm">{u.nome}</p>
+                {u.telefone && <p className="text-gray-400 text-xs">📱 {u.telefone}</p>}
               </div>
-            ))}
-          </div>
+              <div className={`ml-auto w-2 h-2 rounded-full ${posicoes.find(p => p.id === u.id) ? 'bg-green-400 animate-pulse' : 'bg-gray-600'}`} />
+            </div>
+          ))}
         </div>
       )}
     </div>
