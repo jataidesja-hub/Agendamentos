@@ -58,9 +58,17 @@ export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, r
       attributionControl: false,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-    }).addTo(mapRef.current);
+    // Satélite ESRI (gratuito, sem chave)
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, attribution: "© Esri" }
+    ).addTo(mapRef.current);
+
+    // Labels de ruas sobre o satélite
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, opacity: 0.7 }
+    ).addTo(mapRef.current);
 
     if (onMapClick) {
       mapRef.current.on("click", (e: L.LeafletMouseEvent) => {
