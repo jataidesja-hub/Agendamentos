@@ -14,6 +14,7 @@ import {
   Cog6ToothIcon,
   GlobeAmericasIcon,
   ShoppingCartIcon,
+  ClipboardDocumentCheckIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigation, MOBILE_NAMES } from "@/lib/useNavigation";
 
@@ -32,6 +33,7 @@ const iconMap: Record<string, any> = {
   ChartBarIcon2: ChartBarIcon,
   TruckIcon2: TruckIcon,
   ShoppingCartIcon,
+  ClipboardDocumentCheckIcon,
 };
 
 export default function MobileNav() {

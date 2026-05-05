@@ -27,6 +27,7 @@ const DEFAULT_NAV: NavItem[] = [
   { id: "abastecimentos", name: "Abastecimentos", href: "/dashboard/abastecimentos", iconName: "ChartBarIcon2" },
   { id: "manutencao", name: "Manutenção", href: "/dashboard/manutencao", iconName: "TruckIcon2" },
   { id: "compras", name: "Gestão de Compras", href: "/dashboard/compras", iconName: "ShoppingCartIcon" },
+  { id: "checklist", name: "Checklist Veículos", href: "/dashboard/checklist", iconName: "ClipboardDocumentCheckIcon" },
 ];
 
 // Nomes curtos para mobile
@@ -44,6 +45,7 @@ export const MOBILE_NAMES: Record<string, string> = {
   abastecimentos: "Abastec.",
   manutencao: "Manut.",
   compras: "Compras",
+  checklist: "Checklist",
 };
 
 function getSavedOrder(): string[] | null {
