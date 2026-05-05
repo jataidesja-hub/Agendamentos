@@ -489,12 +489,12 @@ export default function ManutencaoPage() {
     }
   };
 
-  // Enviar email 
-  const handleSendEmail = (item: ManutencaoVeiculo) => {
+  // Enviar email
+  const handleSendEmail = async (item: ManutencaoVeiculo) => {
     const to = item.emails_admin;
     const cc = item.emails_gerente;
     const subject = `Orçamento - ${item.placa}`;
-    
+
     const now = new Date();
     const hour = now.getHours();
     const saudacao = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
@@ -505,22 +505,39 @@ Por favor, solicita-se a assinatura do gestor do projeto no orçamento para que 
 
 Serviços: ${item.servicos || "N/A"}`;
 
+    if (item.pdf_url) {
+      try {
+        const res = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to,
+            cc,
+            subject,
+            html: body.replace(/\n/g, '<br>'),
+            pdf_url: item.pdf_url,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro ao enviar');
+        toast.success(data.hasAttachment ? 'E-mail enviado com PDF anexado!' : 'E-mail enviado!');
+        if (item.status === 'aguardando_envio') moveToEtapa(item.id, 'enviado');
+      } catch (err: any) {
+        toast.error(`Erro ao enviar: ${err.message}`);
+      }
+      return;
+    }
+
     let mailtoUrl = `mailto:${to}`;
     const params = [];
     if (cc) params.push(`cc=${cc}`);
     params.push(`subject=${encodeURIComponent(subject)}`);
     params.push(`body=${encodeURIComponent(body)}`);
-    
-    if (params.length > 0) {
-      mailtoUrl += "?" + params.join("&");
-    }
-    
+    if (params.length > 0) mailtoUrl += "?" + params.join("&");
+
     window.location.href = mailtoUrl;
 
-    // Mover para "enviado" automaticamente
-    if (item.status === 'aguardando_envio') {
-      moveToEtapa(item.id, 'enviado');
-    }
+    if (item.status === 'aguardando_envio') moveToEtapa(item.id, 'enviado');
   };
 
   // Veículos agrupados por etapa (kanban)
