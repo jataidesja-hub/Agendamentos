@@ -85,7 +85,7 @@ export function useNavigation() {
               setPermissões([
                 "agenda", "alertas", "relatorios", "configuracoes",
                 "chaves", "perfis", "veiculos", "projetos",
-                "abastecimentos", "sustentabilidade", "manutencao", "compras",
+                "abastecimentos", "sustentabilidade", "manutencao", "compras", "checklist",
               ]);
             }
           });
