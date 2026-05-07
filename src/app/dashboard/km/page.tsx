@@ -7,6 +7,7 @@ import { ChevronDownIcon, ChevronRightIcon, TruckIcon } from "@heroicons/react/2
 
 interface Abastecimento {
   placa: string;
+  projeto: string;
   data_transacao: string;
   km_rodados: number;
   km_litro: number;
@@ -21,6 +22,9 @@ interface Veiculo {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+const normalize = (s: string) =>
+  s?.toString().replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim() || "";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -285,15 +289,15 @@ export default function KmPage() {
   const load = async () => {
     setLoading(true);
 
-    // Busca frota para enriquecimento (projeto/modelo)
+    // Busca modelo dos veículos na frota (opcional)
     const { data: frota } = await supabase
       .from("frota_veiculos")
-      .select("placa, projeto, modelo_veiculo");
+      .select("placa, modelo_veiculo");
 
-    const frotaMap: Record<string, { projeto: string; modelo_veiculo?: string }> = {};
+    const modeloMap: Record<string, string> = {};
     (frota || []).forEach((v: any) => {
-      const p = v.placa?.toString().replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim();
-      if (p) frotaMap[p] = { projeto: v.projeto || "", modelo_veiculo: v.modelo_veiculo };
+      const p = normalize(v.placa);
+      if (p && v.modelo_veiculo) modeloMap[p] = v.modelo_veiculo;
     });
 
     // Busca todos os abastecimentos com paginação
@@ -303,7 +307,7 @@ export default function KmPage() {
     while (true) {
       const { data, error } = await supabase
         .from("abastecimentos")
-        .select("placa, data_transacao, km_rodados, km_litro, litros, hodometro_horimetro")
+        .select("placa, projeto, data_transacao, km_rodados, km_litro, litros, hodometro_horimetro")
         .order("data_transacao", { ascending: false })
         .range(from, from + PAGE - 1);
       if (error || !data || data.length === 0) break;
@@ -312,32 +316,35 @@ export default function KmPage() {
       from += PAGE;
     }
 
-    // Deriva lista de veículos a partir das placas presentes nos abastecimentos
+    // Apenas registros com hodômetro preenchido
+    const comHodometro = allAbasts.filter(a => a.hodometro_horimetro && a.hodometro_horimetro > 0);
+
+    // Deriva veículos únicos a partir dos abastecimentos com hodômetro
+    // Usa o projeto mais recente de cada placa
     const placasVistas = new Set<string>();
     const veiculosDerived: Veiculo[] = [];
-    allAbasts.forEach(a => {
-      const p = a.placa?.toString().replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim();
+    comHodometro.forEach(a => {
+      const p = normalize(a.placa);
       if (!p || placasVistas.has(p)) return;
       placasVistas.add(p);
-      const enrich = frotaMap[p];
       veiculosDerived.push({
         placa: p,
-        projeto: enrich?.projeto || "",
-        modelo_veiculo: enrich?.modelo_veiculo,
+        projeto: a.projeto || "",
+        modelo_veiculo: modeloMap[p],
       });
     });
     veiculosDerived.sort((a, b) => a.placa.localeCompare(b.placa));
 
     setVeiculos(veiculosDerived);
-    setAbastecimentos(allAbasts);
+    setAbastecimentos(comHodometro);
     setLoading(false);
   };
 
-  // Abastecimentos indexados por placa
+  // Abastecimentos indexados por placa normalizada
   const abastPorPlaca = useMemo(() => {
     const map: Record<string, Abastecimento[]> = {};
     abastecimentos.forEach(a => {
-      const p = a.placa?.toString().replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim();
+      const p = normalize(a.placa);
       if (!p) return;
       if (!map[p]) map[p] = [];
       map[p].push(a);
@@ -345,14 +352,8 @@ export default function KmPage() {
     return map;
   }, [abastecimentos]);
 
-  // Veículos normalizando placa
-  const veiculosNorm = useMemo(() =>
-    veiculos.map(v => ({
-      ...v,
-      placa: v.placa?.toString().replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim() || v.placa,
-    })),
-    [veiculos]
-  );
+  // Veículos já chegam normalizados do load()
+  const veiculosNorm = veiculos;
 
   // Projetos únicos
   const projetos = useMemo(() => {
