@@ -284,12 +284,52 @@ export default function KmPage() {
 
   const load = async () => {
     setLoading(true);
-    const [{ data: frota }, { data: abasts }] = await Promise.all([
-      supabase.from("frota_veiculos").select("placa, projeto, subprojeto, modelo_veiculo").order("placa"),
-      supabase.from("abastecimentos").select("placa, data_transacao, km_rodados, km_litro, litros, hodometro_horimetro").order("data_transacao", { ascending: false }),
-    ]);
-    setVeiculos((frota || []) as Veiculo[]);
-    setAbastecimentos((abasts || []) as Abastecimento[]);
+
+    // Busca frota para enriquecimento (projeto/modelo)
+    const { data: frota } = await supabase
+      .from("frota_veiculos")
+      .select("placa, projeto, modelo_veiculo");
+
+    const frotaMap: Record<string, { projeto: string; modelo_veiculo?: string }> = {};
+    (frota || []).forEach((v: any) => {
+      const p = v.placa?.toString().replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim();
+      if (p) frotaMap[p] = { projeto: v.projeto || "", modelo_veiculo: v.modelo_veiculo };
+    });
+
+    // Busca todos os abastecimentos com paginação
+    const allAbasts: Abastecimento[] = [];
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("abastecimentos")
+        .select("placa, data_transacao, km_rodados, km_litro, litros, hodometro_horimetro")
+        .order("data_transacao", { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      allAbasts.push(...(data as Abastecimento[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+
+    // Deriva lista de veículos a partir das placas presentes nos abastecimentos
+    const placasVistas = new Set<string>();
+    const veiculosDerived: Veiculo[] = [];
+    allAbasts.forEach(a => {
+      const p = a.placa?.toString().replace(/[^a-zA-Z0-9]/g, "").toUpperCase().trim();
+      if (!p || placasVistas.has(p)) return;
+      placasVistas.add(p);
+      const enrich = frotaMap[p];
+      veiculosDerived.push({
+        placa: p,
+        projeto: enrich?.projeto || "",
+        modelo_veiculo: enrich?.modelo_veiculo,
+      });
+    });
+    veiculosDerived.sort((a, b) => a.placa.localeCompare(b.placa));
+
+    setVeiculos(veiculosDerived);
+    setAbastecimentos(allAbasts);
     setLoading(false);
   };
 
