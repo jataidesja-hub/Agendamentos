@@ -31,6 +31,7 @@ export default function UsuariosPage() {
     { id: 'manutencao', nome: 'Manutenção' },
     { id: 'compras', nome: 'Gestão de Compras' },
     { id: 'checklist', nome: 'Checklist Veículos' },
+    { id: 'km', nome: 'Relatório de KM' },
   ];
 
   useEffect(() => {

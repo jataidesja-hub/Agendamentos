@@ -28,6 +28,7 @@ const DEFAULT_NAV: NavItem[] = [
   { id: "manutencao", name: "Manutenção", href: "/dashboard/manutencao", iconName: "TruckIcon2" },
   { id: "compras", name: "Gestão de Compras", href: "/dashboard/compras", iconName: "ShoppingCartIcon" },
   { id: "checklist", name: "Checklist Veículos", href: "/dashboard/checklist", iconName: "ClipboardDocumentCheckIcon" },
+  { id: "km", name: "Relatório de KM", href: "/dashboard/km", iconName: "MapPinIcon" },
 ];
 
 // Nomes curtos para mobile
@@ -46,6 +47,7 @@ export const MOBILE_NAMES: Record<string, string> = {
   manutencao: "Manut.",
   compras: "Compras",
   checklist: "Checklist",
+  km: "KM",
 };
 
 function getSavedOrder(): string[] | null {
@@ -85,7 +87,7 @@ export function useNavigation() {
               setPermissões([
                 "agenda", "alertas", "relatorios", "configuracoes",
                 "chaves", "perfis", "veiculos", "projetos",
-                "abastecimentos", "sustentabilidade", "manutencao", "compras", "checklist",
+                "abastecimentos", "sustentabilidade", "manutencao", "compras", "checklist", "km",
               ]);
             }
           });

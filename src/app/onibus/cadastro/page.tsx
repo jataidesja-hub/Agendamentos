@@ -59,7 +59,6 @@ export default function CadastroPassageiro() {
   }, [endereco]);
 
   const selecionarSugestao = (s: Sugestao) => {
-    // Preenche o endereço com o nome curto (antes da primeira vírgula)
     const nomeCurto = s.nome.split(",").slice(0, 3).join(",").trim();
     setEndereco(nomeCurto);
     setLat(s.lat);
@@ -79,7 +78,6 @@ export default function CadastroPassageiro() {
         setLng(longitude);
         setMapCentro([latitude, longitude]);
         setBuscandoLoc(false);
-        // Geocodificação reversa para preencher o campo de endereço
         try {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=pt-BR`
@@ -102,8 +100,6 @@ export default function CadastroPassageiro() {
   const handleMapClick = (clickLat: number, clickLng: number) => {
     setLat(clickLat);
     setLng(clickLng);
-    // Não atualiza mapCentro para o mapa não re-centralizar a cada clique
-    // Geocodificação reversa para atualizar o campo de endereço
     fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${clickLat}&lon=${clickLng}&format=json&accept-language=pt-BR`
     )
@@ -245,7 +241,6 @@ export default function CadastroPassageiro() {
                       zoom={17}
                       onMapClick={handleMapClick}
                     />
-                    {/* Hint clique no mapa */}
                     <div className="absolute bottom-2 left-2 right-2 bg-gray-900/85 backdrop-blur rounded-xl px-3 py-1.5 text-[10px] text-gray-300 text-center z-[1000] pointer-events-none">
                       Toque no mapa para ajustar o pino 📍
                     </div>

@@ -17,6 +17,7 @@ import {
   Bars3Icon,
   ShoppingCartIcon,
   ClipboardDocumentCheckIcon,
+  MapPinIcon,
 } from "@heroicons/react/24/outline";
 import { supabase } from "@/lib/supabase";
 import { useState, useRef } from "react";
@@ -38,6 +39,7 @@ const iconMap: Record<string, any> = {
   ShoppingCartIcon,
   TruckIcon2: TruckIcon,
   ClipboardDocumentCheckIcon,
+  MapPinIcon,
 };
 
 export default function Sidebar() {

@@ -15,6 +15,7 @@ import {
   GlobeAmericasIcon,
   ShoppingCartIcon,
   ClipboardDocumentCheckIcon,
+  MapPinIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigation, MOBILE_NAMES } from "@/lib/useNavigation";
 
@@ -34,6 +35,7 @@ const iconMap: Record<string, any> = {
   TruckIcon2: TruckIcon,
   ShoppingCartIcon,
   ClipboardDocumentCheckIcon,
+  MapPinIcon,
 };
 
 export default function MobileNav() {
