@@ -21,6 +21,10 @@ interface Veiculo {
   modelo_veiculo?: string;
 }
 
+// ── Cache de módulo (evita recarregar ao navegar) ─────────────────────────────
+
+let _cache: { veiculos: Veiculo[]; abastecimentos: Abastecimento[] } | null = null;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const normalize = (s: string) =>
@@ -286,18 +290,25 @@ export default function KmPage() {
     load();
   }, []);
 
-  const load = async () => {
+  const load = async (forceRefresh = false) => {
+    if (_cache && !forceRefresh) {
+      setVeiculos(_cache.veiculos);
+      setAbastecimentos(_cache.abastecimentos);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
-    // Busca modelo dos veículos na frota (opcional)
+    // frota_veiculos: projeto e modelo como fallback
     const { data: frota } = await supabase
       .from("frota_veiculos")
-      .select("placa, modelo_veiculo");
+      .select("placa, projeto, modelo_veiculo");
 
-    const modeloMap: Record<string, string> = {};
+    const frotaMap: Record<string, { projeto: string; modelo_veiculo?: string }> = {};
     (frota || []).forEach((v: any) => {
       const p = normalize(v.placa);
-      if (p && v.modelo_veiculo) modeloMap[p] = v.modelo_veiculo;
+      if (p) frotaMap[p] = { projeto: v.projeto || "", modelo_veiculo: v.modelo_veiculo };
     });
 
     // Busca todos os abastecimentos com paginação
@@ -319,22 +330,23 @@ export default function KmPage() {
     // Apenas registros com hodômetro preenchido
     const comHodometro = allAbasts.filter(a => a.hodometro_horimetro && a.hodometro_horimetro > 0);
 
-    // Deriva veículos únicos a partir dos abastecimentos com hodômetro
-    // Usa o projeto mais recente de cada placa
+    // Deriva veículos únicos — projeto vem do abastecimento ou da frota como fallback
     const placasVistas = new Set<string>();
     const veiculosDerived: Veiculo[] = [];
     comHodometro.forEach(a => {
       const p = normalize(a.placa);
       if (!p || placasVistas.has(p)) return;
       placasVistas.add(p);
+      const enrich = frotaMap[p];
       veiculosDerived.push({
         placa: p,
-        projeto: a.projeto || "",
-        modelo_veiculo: modeloMap[p],
+        projeto: a.projeto || enrich?.projeto || "",
+        modelo_veiculo: enrich?.modelo_veiculo,
       });
     });
     veiculosDerived.sort((a, b) => a.placa.localeCompare(b.placa));
 
+    _cache = { veiculos: veiculosDerived, abastecimentos: comHodometro };
     setVeiculos(veiculosDerived);
     setAbastecimentos(comHodometro);
     setLoading(false);
@@ -405,9 +417,17 @@ export default function KmPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white">Relatório de KM</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Desempenho por projeto e veículo</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white">Relatório de KM</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Desempenho por projeto e veículo</p>
+        </div>
+        <button
+          onClick={() => { _cache = null; load(true); }}
+          className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-[#0b7336] transition-colors px-3 py-2 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20"
+        >
+          ↺ Atualizar
+        </button>
       </div>
 
       {/* Cards de totais */}
