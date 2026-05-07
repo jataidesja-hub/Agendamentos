@@ -300,16 +300,23 @@ export default function KmPage() {
 
     setLoading(true);
 
-    // frota_veiculos: projeto e modelo como fallback
-    const { data: frota } = await supabase
+    // frota_veiculos: projeto e modelo como fallback (mesmo padrão do MapaProjetos)
+    let { data: frota, error: errFrota } = await supabase
       .from("frota_veiculos")
       .select("placa, projeto, modelo_veiculo");
+
+    if (errFrota) {
+      const res = await supabase.from("frota_veiculos").select("placa, projeto");
+      frota = res.data;
+    }
 
     const frotaMap: Record<string, { projeto: string; modelo_veiculo?: string }> = {};
     (frota || []).forEach((v: any) => {
       const p = normalize(v.placa);
       if (p) frotaMap[p] = { projeto: v.projeto || "", modelo_veiculo: v.modelo_veiculo };
     });
+
+    console.log("frota_veiculos carregada:", (frota || []).length, "registros");
 
     // Busca todos os abastecimentos com paginação
     const allAbasts: Abastecimento[] = [];
@@ -345,6 +352,10 @@ export default function KmPage() {
       });
     });
     veiculosDerived.sort((a, b) => a.placa.localeCompare(b.placa));
+
+    const projetosUnicos = new Set(veiculosDerived.map(v => v.projeto || ""));
+    console.log("Projetos encontrados:", Array.from(projetosUnicos));
+    console.log("Veículos derivados:", veiculosDerived.length, "| Com hodômetro:", comHodometro.length);
 
     _cache = { veiculos: veiculosDerived, abastecimentos: comHodometro };
     setVeiculos(veiculosDerived);
