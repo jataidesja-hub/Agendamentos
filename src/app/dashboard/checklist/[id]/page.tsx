@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { ChevronLeftIcon } from "@heroicons/react/24/outline";
+import { ChevronLeftIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 
 const STATUS_STYLE: Record<string, string> = {
   OK: "bg-green-500 text-white",
@@ -53,6 +53,39 @@ export default function VerChecklist() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadPdf = async () => {
+    if (!contentRef.current) return;
+    setGerandoPdf(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const jsPDF = (await import("jspdf")).jsPDF;
+      const canvas = await html2canvas(contentRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = (canvas.height * pdfW) / canvas.width;
+      const pageH = pdf.internal.pageSize.getHeight();
+      let yPos = 0;
+      while (yPos < pdfH) {
+        if (yPos > 0) pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, -yPos, pdfW, pdfH);
+        yPos += pageH;
+      }
+      pdf.save(`checklist_${data?.placa}_${data?.data_inspecao || "sem-data"}.pdf`);
+    } catch (e: any) {
+      alert("Erro ao gerar PDF: " + e.message);
+    } finally {
+      setGerandoPdf(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -82,7 +115,21 @@ export default function VerChecklist() {
           <h1 className="text-xl font-black text-gray-900 dark:text-white">Checklist — {data.placa}</h1>
           <p className="text-xs text-gray-500">{data.condutor} · {data.data_inspecao ? new Date(data.data_inspecao + "T12:00:00").toLocaleDateString("pt-BR") : ""}</p>
         </div>
+        <button
+          onClick={handleDownloadPdf}
+          disabled={gerandoPdf}
+          className="flex items-center gap-2 bg-[#0b7336] hover:bg-[#09602c] disabled:opacity-60 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95"
+        >
+          {gerandoPdf ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <ArrowDownTrayIcon className="w-4 h-4" />
+          )}
+          PDF
+        </button>
       </div>
+
+      <div ref={contentRef} className="space-y-4">
 
       {/* Dados */}
       <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-4">
@@ -158,6 +205,16 @@ export default function VerChecklist() {
           </div>
         </div>
       )}
+
+      {/* Observações Gerais */}
+      {data.observacao_geral && (
+        <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-4">
+          <p className="text-xs font-black text-gray-500 uppercase mb-2">Observações Gerais</p>
+          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{data.observacao_geral}</p>
+        </div>
+      )}
+
+      </div>{/* fim contentRef */}
 
       {/* Lightbox */}
       {fotoAmpliada && (

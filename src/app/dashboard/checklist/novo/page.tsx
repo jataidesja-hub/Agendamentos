@@ -197,6 +197,7 @@ export default function NovoChecklist() {
   const [respostas, setRespostas] = useState<Respostas>({});
   const [fotos, setFotos] = useState<FotoState>({});
   const [expandedObs, setExpandedObs] = useState<number | null>(null);
+  const [observacaoGeral, setObservacaoGeral] = useState("");
 
   // ── handlers ──────────────────────────────────────────────────────────────
 
@@ -256,6 +257,7 @@ export default function NovoChecklist() {
         ...dados,
         respostas,
         fotos: fotosJson,
+        observacao_geral: observacaoGeral.trim() || null,
       });
       if (error) throw error;
       toast.success("Checklist salvo!");
@@ -659,6 +661,20 @@ export default function NovoChecklist() {
                 <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400">Sem resp.</p>
               </div>
             </div>
+          </div>
+
+          {/* Observação Geral */}
+          <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-4">
+            <label className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-2">
+              Observações Gerais (opcional)
+            </label>
+            <textarea
+              value={observacaoGeral}
+              onChange={e => setObservacaoGeral(e.target.value)}
+              placeholder="Descreva aqui qualquer observação adicional sobre o veículo ou inspeção..."
+              rows={4}
+              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-800 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#0b7336] outline-none resize-none"
+            />
           </div>
 
           <div className="flex gap-3">
