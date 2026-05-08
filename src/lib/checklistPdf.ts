@@ -1,5 +1,43 @@
 // Geração de PDF do Informe de Controle de Veículos sem html2canvas
 
+const FOTO_SPOTS = [
+  { id: "farol_esq", label: "Farol Esquerdo" },
+  { id: "farol_dir", label: "Farol Direito" },
+  { id: "frente", label: "Frente" },
+  { id: "lanterna_esq", label: "Lanterna Esquerda" },
+  { id: "lanterna_dir", label: "Lanterna Direita" },
+  { id: "tras", label: "Traseira" },
+  { id: "lado_esq", label: "Lado Esquerdo" },
+  { id: "lado_dir", label: "Lado Direito" },
+  { id: "teto", label: "Teto" },
+  { id: "interna_esq", label: "Interna Esquerda" },
+  { id: "interna_meio", label: "Interna Meio" },
+  { id: "interna_dir", label: "Interna Direita" },
+  { id: "estepe", label: "Estepe" },
+  { id: "mala", label: "Mala / Carroceria / Baú" },
+  { id: "chave_roda", label: "Chave de Roda" },
+  { id: "documento", label: "Documento do Veículo" },
+  { id: "painel_km", label: "Painel com KM" },
+  { id: "som", label: "Som" },
+];
+
+// Converte URL de imagem para base64 via canvas (funciona com CORS)
+async function urlToBase64(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { mode: "cors" });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 const GRUPOS = [
   { nome: "Iluminação", itens: [{ id: 1, label: "Lanternas dianteiras / traseiras" }, { id: 2, label: "Seta direita / Esquerda" }, { id: 3, label: "Estado Lente farol Dianteiro" }, { id: 4, label: "Luz baixa" }, { id: 5, label: "Luz Alta" }, { id: 6, label: "Luz de Freio" }, { id: 7, label: "Lanterna Traseira" }, { id: 8, label: "Luz de Ré" }, { id: 9, label: "Luz Interna" }, { id: 10, label: "Luz do Painel" }, { id: 11, label: "Alarme de Ré" }] },
   { nome: "Vidros e Visibilidade", itens: [{ id: 12, label: "Aspersos / Limpador pára-brisa" }, { id: 13, label: "Palheta limpador do pára brisa" }, { id: 14, label: "Pára-brisa" }, { id: 15, label: "Velocímetro" }, { id: 16, label: "Desembaçador interno" }, { id: 17, label: "Aquecedor" }] },
@@ -137,6 +175,75 @@ export async function gerarChecklistPdf(data: any) {
       y += 6;
     }
     y += 2;
+  }
+
+  // ── Fotos ──
+  const fotos = data.fotos || {};
+  const spotsComFoto = FOTO_SPOTS.filter(s => fotos[s.id]);
+
+  if (spotsComFoto.length > 0) {
+    checkPage(12);
+    pdf.setFillColor(11, 115, 54);
+    pdf.rect(ML, y, CW, 6, "F");
+    pdf.setFontSize(7);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("FOTOS DO VEÍCULO", ML + 3, y + 4.2);
+    y += 8;
+
+    const COLS = 3;
+    const CELL_W = CW / COLS;
+    const CELL_H = 42; // label + imagem
+    const IMG_W = CELL_W - 4;
+    const IMG_H = 32;
+
+    let col = 0;
+    let rowY = y;
+
+    for (const spot of spotsComFoto) {
+      const foto = fotos[spot.id];
+      const x = ML + col * CELL_W;
+
+      // Label
+      pdf.setFontSize(6);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(80, 80, 80);
+      pdf.text(spot.label.substring(0, 22), x + 2, rowY + 4);
+
+      if (foto.sem_foto) {
+        pdf.setFillColor(240, 240, 240);
+        pdf.rect(x + 2, rowY + 5, IMG_W, IMG_H, "F");
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(160, 160, 160);
+        pdf.text("NÃO CONTEM", x + 2 + IMG_W / 2, rowY + 5 + IMG_H / 2, { align: "center" });
+      } else if (foto.url) {
+        const b64 = await urlToBase64(foto.url);
+        if (b64) {
+          try {
+            pdf.addImage(b64, "JPEG", x + 2, rowY + 5, IMG_W, IMG_H, undefined, "FAST");
+            pdf.setDrawColor(220, 220, 220);
+            pdf.rect(x + 2, rowY + 5, IMG_W, IMG_H, "S");
+          } catch {
+            pdf.setFillColor(240, 240, 240);
+            pdf.rect(x + 2, rowY + 5, IMG_W, IMG_H, "F");
+          }
+        }
+      }
+
+      col++;
+      if (col >= COLS) {
+        col = 0;
+        rowY += CELL_H;
+        y = rowY;
+        checkPage(CELL_H);
+        rowY = y;
+      }
+    }
+
+    // Avança y para o final da última linha incompleta
+    if (col > 0) y = rowY + CELL_H;
+    y += 4;
   }
 
   // ── Observações gerais ──
