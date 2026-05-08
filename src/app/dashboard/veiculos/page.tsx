@@ -284,16 +284,19 @@ export default function VeiculosPage() {
 
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-tighter ml-1">Status Operacional</label>
-              <select 
-                value={v.status || 'Ativo'} 
+              <select
+                value={v.status || 'Ativo'}
                 onChange={(e) => handleUpdateStatus(v.id, e.target.value)}
                 className={`w-full px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest border-0 focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer ${
-                  v.status === 'Ativo' ? 'bg-green-100 text-green-700' : 
-                  v.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                  v.status === 'Ativo' ? 'bg-green-100 text-green-700' :
+                  v.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' :
+                  v.status === 'Desmobilizado' ? 'bg-gray-200 text-gray-500' :
+                  'bg-red-100 text-red-700'
                 }`}
               >
                 <option value="Ativo" className="bg-white">✅ Ativo / Em Serviço</option>
                 <option value="Em Manutenção" className="bg-white">🛠 Em Manutenção</option>
+                <option value="Desmobilizado" className="bg-white">⬛ Desmobilizado</option>
                 <option value="Fora de Serviço" className="bg-white">🚫 Fora de Serviço</option>
               </select>
             </div>
