@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { UserGroupIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { UserGroupIcon, PlusIcon, PencilIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [projetosDisponiveis, setProjetosDisponiveis] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -15,6 +16,8 @@ export default function UsuariosPage() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [telas, setTelas] = useState<string[]>([]);
+  const [projetos, setProjetos] = useState<string[]>([]);
+  const [master, setMaster] = useState(false);
 
   const telasDisponiveis = [
     { id: 'agenda', nome: 'Agenda/Agendamentos' },
@@ -36,14 +39,25 @@ export default function UsuariosPage() {
 
   useEffect(() => {
     fetchUsuarios();
+    fetchProjetos();
   }, []);
+
+  async function fetchProjetos() {
+    const { data } = await supabase
+      .from('frota_veiculos')
+      .select('projeto')
+      .not('projeto', 'is', null)
+      .neq('projeto', '');
+    if (data) {
+      const unicos = Array.from(new Set(data.map((d: any) => String(d.projeto).trim()).filter(Boolean))).sort();
+      setProjetosDisponiveis(unicos as string[]);
+    }
+  }
 
   async function fetchUsuarios() {
     try {
-      // Usar uma tabela 'perfis' que guarda o email e as telas de acesso
       const { data, error } = await supabase.from('perfis_acesso').select('*');
       if (error) {
-        // Ignora o erro se a tabela não existir ainda no banco, cria MOCK
         console.warn('Tabela perfis_acesso talvez não exista', error);
         setUsuarios([]);
       } else {
@@ -56,53 +70,42 @@ export default function UsuariosPage() {
     }
   }
 
-  const toggleTela = (telaId: string) => {
-    if (telas.includes(telaId)) {
-      setTelas(telas.filter(t => t !== telaId));
-    } else {
-      setTelas([...telas, telaId]);
-    }
-  };
+  const toggleTela = (id: string) =>
+    setTelas(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
+
+  const toggleProjeto = (p: string) =>
+    setProjetos(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = {
+        email,
+        telas_acesso: telas,
+        projetos_acesso: master ? [] : projetos,
+        master,
+      };
+
       if (editId) {
-        // Atualizar
-        const { error } = await supabase.from('perfis_acesso')
-          .update({ email, telas_acesso: telas }) // Senha gerida pelo auth, mas o usuario pediu para mudar aqui. Como o auth é complexo de mudar pela API do lado do client, salvamos referências ou seria uma call API.
-          .eq('id', editId);
+        const { error } = await supabase.from('perfis_acesso').update(payload).eq('id', editId);
         if (!error) toast.success('Perfil atualizado!');
       } else {
-        // Criar
-        // Tenta criar Auth
-        const { data, error: authError } = await supabase.auth.signUp({
-          email,
-          password: senha,
-        });
+        const { error: authError } = await supabase.auth.signUp({ email, password: senha });
+        if (authError) toast.error('Erro na autenticação: ' + authError.message);
 
-        if (authError) {
-          toast.error('Erro ao criar na autenticação: ' + authError.message);
-        }
-
-        const { error } = await supabase.from('perfis_acesso')
-          .insert({ email, telas_acesso: telas });
-        
+        const { error } = await supabase.from('perfis_acesso').insert(payload);
         if (!error) toast.success('Perfil criado!');
       }
       setShowForm(false);
       fetchUsuarios();
       resetForm();
-    } catch (error) {
+    } catch {
       toast.error('Erro ao salvar');
     }
   };
 
   const resetForm = () => {
-    setEmail('');
-    setSenha('');
-    setTelas([]);
-    setEditId(null);
+    setEmail(''); setSenha(''); setTelas([]); setProjetos([]); setMaster(false); setEditId(null);
   };
 
   const handleEdit = (u: any) => {
@@ -110,6 +113,8 @@ export default function UsuariosPage() {
     setEmail(u.email);
     setSenha('');
     setTelas(u.telas_acesso || []);
+    setProjetos(u.projetos_acesso || []);
+    setMaster(u.master || false);
     setShowForm(true);
   };
 
@@ -124,15 +129,11 @@ export default function UsuariosPage() {
           </div>
           <div>
             <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Gerenciamento de Perfis</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Controle os usuários, senhas e permissões de telas</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Controle os usuários, senhas, telas e projetos de acesso</p>
           </div>
         </div>
-        
-        <button 
-          onClick={() => {
-            resetForm();
-            setShowForm(!showForm);
-          }}
+        <button
+          onClick={() => { resetForm(); setShowForm(!showForm); }}
           className="flex items-center gap-2 bg-[#0b7336] hover:bg-[#298d4a] text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg hover:scale-105 active:scale-95"
         >
           {showForm ? 'Cancelar' : <><PlusIcon className="w-5 h-5" /> Novo Perfil</>}
@@ -145,10 +146,11 @@ export default function UsuariosPage() {
             {editId ? 'Editar Perfil' : 'Criar Novo Perfil'}
           </h2>
 
+          {/* Email + Senha */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold text-gray-400 uppercase ml-1">E-mail</label>
-              <input 
+              <input
                 type="email" required
                 value={email} onChange={e => setEmail(e.target.value)}
                 className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none text-gray-900 dark:text-white"
@@ -156,7 +158,7 @@ export default function UsuariosPage() {
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold text-gray-400 uppercase ml-1">{editId ? 'Nova Senha (opcional)' : 'Senha'}</label>
-              <input 
+              <input
                 type="password" required={!editId}
                 value={senha} onChange={e => setSenha(e.target.value)}
                 className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#0b7336] outline-none text-gray-900 dark:text-white"
@@ -164,27 +166,53 @@ export default function UsuariosPage() {
             </div>
           </div>
 
+          {/* Telas */}
           <div className="mb-8">
             <label className="text-xs font-bold text-gray-400 uppercase ml-1 block mb-4">Permissões de Telas</label>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {telasDisponiveis.map(t => (
                 <label key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                  telas.includes(t.id) 
-                    ? 'border-[#0b7336] bg-green-50 dark:bg-[#0b7336]/10' 
-                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  telas.includes(t.id) ? 'border-[#0b7336] bg-green-50 dark:bg-[#0b7336]/10' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}>
-                  <input 
-                    type="checkbox" 
-                    checked={telas.includes(t.id)} 
-                    onChange={() => toggleTela(t.id)}
-                    className="w-4 h-4 text-[#0b7336] rounded focus:ring-[#0b7336]"
-                  />
-                  <span className={`text-sm font-semibold ${telas.includes(t.id) ? 'text-[#0b7336] dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
-                    {t.nome}
-                  </span>
+                  <input type="checkbox" checked={telas.includes(t.id)} onChange={() => toggleTela(t.id)} className="w-4 h-4 text-[#0b7336] rounded focus:ring-[#0b7336]" />
+                  <span className={`text-sm font-semibold ${telas.includes(t.id) ? 'text-[#0b7336] dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>{t.nome}</span>
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Projetos */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Acesso a Projetos (Relatórios)</label>
+              {/* Toggle Master */}
+              <label className={`flex items-center gap-2 px-4 py-2 rounded-xl border cursor-pointer transition-all select-none ${
+                master ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' : 'border-gray-200 dark:border-gray-700 text-gray-500'
+              }`}>
+                <input type="checkbox" checked={master} onChange={e => setMaster(e.target.checked)} className="w-4 h-4 rounded" />
+                <ShieldCheckIcon className="w-4 h-4" />
+                <span className="text-xs font-black uppercase tracking-wider">Master — todos os projetos</span>
+              </label>
+            </div>
+
+            {master ? (
+              <p className="text-sm text-amber-600 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-900/20 rounded-xl px-4 py-3">
+                Perfil Master visualiza todos os projetos automaticamente.
+              </p>
+            ) : projetosDisponiveis.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">Nenhum projeto encontrado na frota de veículos.</p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
+                {projetosDisponiveis.map(p => (
+                  <label key={p} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    projetos.includes(p) ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}>
+                    <input type="checkbox" checked={projetos.includes(p)} onChange={() => toggleProjeto(p)} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" />
+                    <span className={`text-xs font-bold truncate ${projetos.includes(p) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}>{p}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end">
@@ -197,18 +225,27 @@ export default function UsuariosPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {usuarios.map(u => (
-          <div key={u.id} className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
+          <div key={u.id} className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl p-6 shadow-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#0b7336]/10 to-transparent rounded-bl-full -z-10" />
-            <h3 className="text-xl font-black text-gray-800 dark:text-white mb-1 truncate">{u.email}</h3>
-            <p className="text-xs text-gray-500 font-semibold mb-4 bg-gray-100 dark:bg-gray-900 inline-block px-3 py-1 rounded-full uppercase tracking-wider">
-              {u.telas_acesso ? u.telas_acesso.length : 0} telas permitidas
-            </p>
-            
-            <div className="flex gap-2">
-              <button onClick={() => handleEdit(u)} className="flex-1 flex items-center justify-center gap-2 bg-gray-100/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 py-2 rounded-xl text-sm font-bold transition-all shadow-sm">
-                <PencilIcon className="w-4 h-4" /> Editar
-              </button>
+            <div className="flex items-start justify-between mb-2">
+              <h3 className="text-xl font-black text-gray-800 dark:text-white truncate flex-1">{u.email}</h3>
+              {u.master && (
+                <span className="ml-2 shrink-0 flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-black uppercase px-2 py-1 rounded-full">
+                  <ShieldCheckIcon className="w-3 h-3" /> Master
+                </span>
+              )}
             </div>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-900 px-3 py-1 rounded-full uppercase tracking-wider">
+                {u.telas_acesso ? u.telas_acesso.length : 0} telas
+              </span>
+              <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full uppercase tracking-wider">
+                {u.master ? 'Todos os projetos' : `${(u.projetos_acesso || []).length} projetos`}
+              </span>
+            </div>
+            <button onClick={() => handleEdit(u)} className="w-full flex items-center justify-center gap-2 bg-gray-100/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 py-2 rounded-xl text-sm font-bold transition-all shadow-sm">
+              <PencilIcon className="w-4 h-4" /> Editar
+            </button>
           </div>
         ))}
       </div>

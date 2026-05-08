@@ -148,12 +148,16 @@ export default function VeiculosPage() {
                     }
                     return "";
                   };
+                  const normalizeStatus = (s: string) => {
+                    const u = s.toUpperCase().trim();
+                    if (u.includes("DEMOB") || u.includes("DESMOB")) return "Desmobilizado";
+                    return "Ativo";
+                  };
                   const rawFormatted = rawData.map(row => {
                     const placa = String(getVExact(row, ["PLACA", "VEICULO"]) || "").trim().toUpperCase();
-                    // Para e-mails: buscar colunas que contenham "EMAIL_GERENTE" ou "EMAIL GERENTE"
-                    // e "EMAIL_ADM" ou "EMAIL ADM" ou "EMAIL_ADMINISTRATIVO"
                     const emailGerente = String(getV(row, ["EMAIL_GERENTE", "EMAIL GERENTE"]) || "").trim();
                     const emailAdmin = String(getV(row, ["EMAIL_ADM", "EMAIL ADM", "EMAIL_ADMINISTRATIVO", "EMAIL ADMINISTRATIVO"]) || "").trim();
+                    const rawStatus = String(getVExact(row, ["STATUS"]) || "Ativo").trim();
                     return {
                       placa: placa,
                       identificacao: placa,
@@ -161,7 +165,7 @@ export default function VeiculosPage() {
                       subprojeto: String(getVExact(row, ["BASE", "SUBPROJETO"]) || "").trim(),
                       email_gerente: emailGerente,
                       email_administrativo: emailAdmin,
-                      status: 'Ativo'
+                      status: normalizeStatus(rawStatus)
                     };
                   }).filter(x => x.placa !== "");
 

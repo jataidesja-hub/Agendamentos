@@ -23,6 +23,8 @@ const RelatorioProjetos = () => {
     const [expandedProject, setExpandedProject] = useState<string | null>(null);
     const [expandedVehicle, setExpandedVehicle] = useState<string | null>(null);
     const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
+    // null = sem restrição (master ou admin), array = projetos permitidos
+    const [projetosPermitidos, setProjetosPermitidos] = useState<string[] | null>(null);
 
     const toggleProject = (proj: string) => {
       setSelectedProjects(prev => {
@@ -57,8 +59,23 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
     };
 
     useEffect(() => {
+      fetchPerfil();
       fetchDadosCompletos();
     }, []);
+
+    const fetchPerfil = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data } = await supabase
+        .from('perfis_acesso')
+        .select('master, projetos_acesso')
+        .eq('email', session.user.email)
+        .single();
+      if (data && !data.master) {
+        setProjetosPermitidos(data.projetos_acesso || []);
+      }
+      // master ou sem perfil = null (sem restrição)
+    };
 
     const fetchDadosCompletos = async () => {
       // Tenta carregar do cache RAM (Instantâneo e sem limite de cota)
@@ -278,7 +295,9 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                <p className="text-gray-400 font-medium text-sm italic">Nenhum abastecimento de veículo ATIVO encontrado para {new Date(selectedMonth + "-02").toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}.</p>
             </div>
           ) : (
-            Object.keys(groupedData).sort().map(projName => (
+            Object.keys(groupedData).sort()
+            .filter(projName => !projetosPermitidos || projetosPermitidos.some(p => p.toUpperCase() === projName.toUpperCase()))
+            .map(projName => (
               <div key={projName} className={`bg-white rounded-[2.5rem] shadow-sm border overflow-hidden transition-all ${selectedProjects.has(projName) ? 'border-[#0b7336] ring-1 ring-[#0b7336]/30' : 'border-gray-100'}`}>
                 <div className="w-full px-8 py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="flex items-center gap-4 flex-1">
