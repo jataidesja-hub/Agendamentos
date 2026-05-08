@@ -18,6 +18,7 @@ export default function UsuariosPage() {
   const [telas, setTelas] = useState<string[]>([]);
   const [projetos, setProjetos] = useState<string[]>([]);
   const [master, setMaster] = useState(false);
+  const [abasRelatorio, setAbasRelatorio] = useState<string[]>(['projetos', 'postos', 'gestores']);
 
   const telasDisponiveis = [
     { id: 'agenda', nome: 'Agenda/Agendamentos' },
@@ -76,6 +77,9 @@ export default function UsuariosPage() {
   const toggleProjeto = (p: string) =>
     setProjetos(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
 
+  const toggleAba = (a: string) =>
+    setAbasRelatorio(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -84,6 +88,7 @@ export default function UsuariosPage() {
         telas_acesso: telas,
         projetos_acesso: master ? [] : projetos,
         master,
+        abas_relatorio: abasRelatorio,
       };
 
       if (editId) {
@@ -105,7 +110,8 @@ export default function UsuariosPage() {
   };
 
   const resetForm = () => {
-    setEmail(''); setSenha(''); setTelas([]); setProjetos([]); setMaster(false); setEditId(null);
+    setEmail(''); setSenha(''); setTelas([]); setProjetos([]); setMaster(false);
+    setAbasRelatorio(['projetos', 'postos', 'gestores']); setEditId(null);
   };
 
   const handleEdit = (u: any) => {
@@ -115,6 +121,7 @@ export default function UsuariosPage() {
     setTelas(u.telas_acesso || []);
     setProjetos(u.projetos_acesso || []);
     setMaster(u.master || false);
+    setAbasRelatorio(u.abas_relatorio || ['projetos', 'postos', 'gestores']);
     setShowForm(true);
   };
 
@@ -180,6 +187,27 @@ export default function UsuariosPage() {
               ))}
             </div>
           </div>
+
+          {/* Abas do Relatório */}
+          {telas.includes('relatorios') && (
+            <div className="mb-8">
+              <label className="text-xs font-bold text-gray-400 uppercase ml-1 block mb-4">Abas visíveis em Relatórios</label>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  { id: 'projetos', nome: 'Projetos', cor: 'border-[#0b7336] bg-green-50 dark:bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400' },
+                  { id: 'postos', nome: 'Postos', cor: 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' },
+                  { id: 'gestores', nome: 'Gestores', cor: 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400' },
+                ].map(a => (
+                  <label key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
+                    abasRelatorio.includes(a.id) ? a.cor : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}>
+                    <input type="checkbox" checked={abasRelatorio.includes(a.id)} onChange={() => toggleAba(a.id)} className="w-4 h-4 rounded" />
+                    <span className="text-sm font-black uppercase tracking-wider">{a.nome}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Projetos */}
           <div className="mb-8">

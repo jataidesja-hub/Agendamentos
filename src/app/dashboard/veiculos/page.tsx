@@ -11,6 +11,8 @@ export default function VeiculosPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [busca, setBusca] = useState('');
+  // null = sem restrição (master/admin), array = projetos permitidos
+  const [projetosPermitidos, setProjetosPermitidos] = useState<string[] | null>(null);
 
   // Form states
   const [placa, setPlaca] = useState('');
@@ -20,8 +22,22 @@ export default function VeiculosPage() {
   const [base, setBase] = useState('');
 
   useEffect(() => {
+    fetchPerfil();
     fetchVeiculos();
   }, []);
+
+  async function fetchPerfil() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { data } = await supabase
+      .from('perfis_acesso')
+      .select('master, projetos_acesso')
+      .eq('email', session.user.email)
+      .single();
+    if (data && !data.master) {
+      setProjetosPermitidos(data.projetos_acesso || []);
+    }
+  }
 
   async function fetchVeiculos() {
     try {
@@ -259,7 +275,10 @@ export default function VeiculosPage() {
 
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
         {veiculos
-          .filter(v => v.placa.includes(busca) || v.projeto?.includes(busca) || v.subprojeto?.includes(busca) || v.modelo?.toLowerCase().includes(busca.toLowerCase()))
+          .filter(v => {
+            if (projetosPermitidos !== null && !projetosPermitidos.some(p => p.toUpperCase() === String(v.projeto || '').toUpperCase())) return false;
+            return v.placa.includes(busca) || v.projeto?.includes(busca) || v.subprojeto?.includes(busca) || v.modelo?.toLowerCase().includes(busca.toLowerCase());
+          })
           .map(v => (
           <div key={v.id} className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border border-white/50 dark:border-gray-700/50 rounded-[2rem] p-7 shadow-[0_10px_40px_rgb(0,0,0,0.06)] flex flex-col justify-between group transition-all duration-300 hover:shadow-blue-500/10">
             <div className="flex items-start justify-between mb-6">
