@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { ChevronLeftIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
+import { gerarChecklistPdf } from "@/lib/checklistPdf";
 
 const STATUS_STYLE: Record<string, string> = {
   OK: "bg-green-500 text-white",
@@ -57,29 +58,10 @@ export default function VerChecklist() {
   const contentRef = useRef<HTMLDivElement>(null);
 
   const handleDownloadPdf = async () => {
-    if (!contentRef.current) return;
+    if (!data) return;
     setGerandoPdf(true);
     try {
-      const html2canvas = (await import("html2canvas")).default;
-      const jsPDF = (await import("jspdf")).jsPDF;
-      const canvas = await html2canvas(contentRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff",
-      });
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = (canvas.height * pdfW) / canvas.width;
-      const pageH = pdf.internal.pageSize.getHeight();
-      let yPos = 0;
-      while (yPos < pdfH) {
-        if (yPos > 0) pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, -yPos, pdfW, pdfH);
-        yPos += pageH;
-      }
-      pdf.save(`checklist_${data?.placa}_${data?.data_inspecao || "sem-data"}.pdf`);
+      await gerarChecklistPdf(data);
     } catch (e: any) {
       alert("Erro ao gerar PDF: " + e.message);
     } finally {

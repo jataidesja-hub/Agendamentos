@@ -2,8 +2,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { PlusIcon, ClipboardDocumentCheckIcon, EyeIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, ClipboardDocumentCheckIcon, EyeIcon, TrashIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
+import { gerarChecklistPdf } from "@/lib/checklistPdf";
 
 interface Checklist {
   id: string;
@@ -21,6 +22,19 @@ export default function ChecklistPage() {
   const [lista, setLista] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [gerandoPdfId, setGerandoPdfId] = useState<string | null>(null);
+
+  const handleDownloadPdf = async (id: string) => {
+    setGerandoPdfId(id);
+    try {
+      const { data } = await supabase.from("informe_checklist").select("*").eq("id", id).single();
+      if (data) await gerarChecklistPdf(data);
+    } catch (e: any) {
+      toast.error("Erro ao gerar PDF: " + e.message);
+    } finally {
+      setGerandoPdfId(null);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -115,6 +129,17 @@ export default function ChecklistPage() {
                     className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"
                   >
                     <EyeIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDownloadPdf(item.id)}
+                    disabled={gerandoPdfId === item.id}
+                    className="p-2 rounded-xl bg-green-50 dark:bg-green-900/30 text-[#0b7336] dark:text-green-400 hover:bg-green-100 transition-colors disabled:opacity-50"
+                    title="Baixar PDF"
+                  >
+                    {gerandoPdfId === item.id
+                      ? <div className="w-4 h-4 border-2 border-[#0b7336] border-t-transparent rounded-full animate-spin" />
+                      : <ArrowDownTrayIcon className="w-4 h-4" />
+                    }
                   </button>
                   <button
                     onClick={() => handleDelete(item.id)}
