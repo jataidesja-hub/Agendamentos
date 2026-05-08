@@ -13,6 +13,7 @@ export default function VeiculosPage() {
   const [busca, setBusca] = useState('');
   // null = sem restrição (master/admin), array = projetos permitidos
   const [projetosPermitidos, setProjetosPermitidos] = useState<string[] | null>(null);
+  const [isMaster, setIsMaster] = useState(false);
 
   // Form states
   const [placa, setPlaca] = useState('');
@@ -34,7 +35,9 @@ export default function VeiculosPage() {
       .select('master, projetos_acesso')
       .eq('email', session.user.email)
       .single();
-    if (data && !data.master) {
+    if (data?.master) {
+      setIsMaster(true);
+    } else if (data) {
       setProjetosPermitidos(data.projetos_acesso || []);
     }
   }
@@ -137,6 +140,7 @@ export default function VeiculosPage() {
               className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
+          {isMaster && (
           <label className="flex items-center gap-2 bg-gray-800 hover:bg-black text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg cursor-pointer whitespace-nowrap">
             <DocumentArrowUpIcon className="w-5 h-5" /> Importar Planilha
             <input type="file" accept=".xlsx, .xls" className="hidden" onChange={async (e) => {
@@ -208,7 +212,8 @@ export default function VeiculosPage() {
               reader.readAsBinaryString(file);
             }} />
           </label>
-          <button 
+          )}
+          <button
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg hover:scale-105 active:scale-95 whitespace-nowrap"
           >

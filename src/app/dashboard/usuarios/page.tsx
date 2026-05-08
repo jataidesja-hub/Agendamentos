@@ -93,19 +93,21 @@ export default function UsuariosPage() {
 
       if (editId) {
         const { error } = await supabase.from('perfis_acesso').update(payload).eq('id', editId);
-        if (!error) toast.success('Perfil atualizado!');
+        if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
+        toast.success('Perfil atualizado!');
       } else {
         const { error: authError } = await supabase.auth.signUp({ email, password: senha });
         if (authError) toast.error('Erro na autenticação: ' + authError.message);
 
         const { error } = await supabase.from('perfis_acesso').insert(payload);
-        if (!error) toast.success('Perfil criado!');
+        if (error) { toast.error('Erro ao criar: ' + error.message); return; }
+        toast.success('Perfil criado!');
       }
       setShowForm(false);
       fetchUsuarios();
       resetForm();
-    } catch {
-      toast.error('Erro ao salvar');
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + (err?.message || err));
     }
   };
 
