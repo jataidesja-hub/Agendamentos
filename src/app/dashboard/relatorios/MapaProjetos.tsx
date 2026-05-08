@@ -25,6 +25,7 @@ const RelatorioProjetos = () => {
     const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
     // null = sem restrição (master ou admin), array = projetos permitidos
     const [projetosPermitidos, setProjetosPermitidos] = useState<string[] | null>(null);
+    const [isMaster, setIsMaster] = useState(false);
 
     const toggleProject = (proj: string) => {
       setSelectedProjects(prev => {
@@ -71,10 +72,11 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
         .select('master, projetos_acesso')
         .eq('email', session.user.email)
         .single();
-      if (data && !data.master) {
+      if (data?.master) {
+        setIsMaster(true);
+      } else if (data) {
         setProjetosPermitidos(data.projetos_acesso || []);
       }
-      // master ou sem perfil = null (sem restrição)
     };
 
     const fetchDadosCompletos = async () => {
@@ -109,7 +111,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
             .from('frota_veiculos')
             .select('placa, projeto')
             .eq('status', 'Ativo');
-          frota = resFallback.data;
+          frota = resFallback.data as typeof frota;
           errFrota = resFallback.error;
         }
         
@@ -195,8 +197,6 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
 
     // Aplica o filtro de Mês
     const filteredData = useMemo(() => {
-      const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
-      
       return abastecimentos.filter((a: any) => {
         if (!a.data_transacao || !selectedMonth) return false;
         
@@ -273,17 +273,19 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                 ))}
               </select>
             </div>
-            <button
-              onClick={handleGerarEmail}
-              className={`flex items-center gap-2 px-5 py-3.5 rounded-2xl text-sm font-black transition-all ${
-                selectedProjects.size > 0
-                  ? "bg-[#0b7336] hover:bg-[#09602c] text-white shadow-lg shadow-green-500/20"
-                  : "bg-white/10 text-white/40 cursor-not-allowed"
-              }`}
-            >
-              <EnvelopeIcon className="w-4 h-4" />
-              GERAR E-MAIL {selectedProjects.size > 0 && `(${selectedProjects.size})`}
-            </button>
+            {isMaster && (
+              <button
+                onClick={handleGerarEmail}
+                className={`flex items-center gap-2 px-5 py-3.5 rounded-2xl text-sm font-black transition-all ${
+                  selectedProjects.size > 0
+                    ? "bg-[#0b7336] hover:bg-[#09602c] text-white shadow-lg shadow-green-500/20"
+                    : "bg-white/10 text-white/40 cursor-not-allowed"
+                }`}
+              >
+                <EnvelopeIcon className="w-4 h-4" />
+                GERAR E-MAIL {selectedProjects.size > 0 && `(${selectedProjects.size})`}
+              </button>
+            )}
           </div>
         </div>
 
