@@ -11,6 +11,16 @@ const MapaLeaflet = dynamic(() => import("../components/MapaLeaflet"), { ssr: fa
 interface Viagem { id: string; rota_id: string; onibus_rotas: { nome: string; cor: string }; }
 interface Ponto { lat: number; lng: number; nome: string; ordem: number; }
 
+const LIMIAR_CHEGANDO_METROS = 500;
+
+function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export default function AppPassageiro() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -19,15 +29,47 @@ export default function AppPassageiro() {
   const [rotaGeometria, setRotaGeometria] = useState<{ lat: number; lng: number }[]>([]);
   const [rotaCor, setRotaCor] = useState("#0b7336");
   const [minhaPos, setMinhaPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [distanciaMotorista, setDistanciaMotorista] = useState<number | null>(null);
   const { canInstall, instalar: instalarPWA } = useInstallPrompt();
   const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const notificacaoEnviadaRef = useRef(false);
 
   // Refs para evitar closures velhas na subscription realtime
   const minhaPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const userRef = useRef<any>(null);
   useEffect(() => { minhaPosRef.current = minhaPos; }, [minhaPos]);
   useEffect(() => { userRef.current = user; }, [user]);
+
+  // Pede permissão de notificação ao carregar
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Calcula distância até o motorista e dispara notificação quando próximo
+  useEffect(() => {
+    const motoristaPosicao = posicoes.find(p => p.tipo === "motorista");
+    if (!motoristaPosicao || !minhaPos) {
+      setDistanciaMotorista(null);
+      return;
+    }
+    const dist = haversine(minhaPos.lat, minhaPos.lng, motoristaPosicao.lat, motoristaPosicao.lng);
+    setDistanciaMotorista(dist);
+
+    if (dist > LIMIAR_CHEGANDO_METROS) {
+      notificacaoEnviadaRef.current = false;
+      return;
+    }
+    if (!notificacaoEnviadaRef.current && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      notificacaoEnviadaRef.current = true;
+      new Notification("🚌 Ônibus chegando!", {
+        body: `O ônibus está a ${Math.round(dist)}m de você. Prepare-se!`,
+        icon: "/icon-192.png",
+      });
+    }
+  }, [posicoes, minhaPos]);
 
 
   useEffect(() => {
@@ -134,6 +176,19 @@ export default function AppPassageiro() {
 
   const motorista = posicoes.find(p => p.tipo === "motorista");
 
+  const etaMinutos = (() => {
+    if (!distanciaMotorista || !motorista?.velocidade || motorista.velocidade < 2) return null;
+    const speedMs = motorista.velocidade * 1000 / 3600;
+    return Math.ceil(distanciaMotorista / speedMs / 60);
+  })();
+
+  const distanciaTexto = (() => {
+    if (distanciaMotorista === null) return null;
+    return distanciaMotorista >= 1000
+      ? `${(distanciaMotorista / 1000).toFixed(1)} km`
+      : `${Math.round(distanciaMotorista)} m`;
+  })();
+
   if (!user) return (
     <div className="h-screen bg-gray-950 flex items-center justify-center">
       <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
@@ -178,16 +233,31 @@ export default function AppPassageiro() {
         />
 
         {motorista && (
-          <div className="absolute bottom-safe bottom-4 left-4 right-4 bg-gray-900/96 backdrop-blur-md rounded-3xl p-4 shadow-2xl z-[1000] border border-gray-800/50">
+          <div className={`absolute bottom-safe bottom-4 left-4 right-4 backdrop-blur-md rounded-3xl p-4 shadow-2xl z-[1000] border transition-colors duration-500 ${distanciaMotorista !== null && distanciaMotorista <= LIMIAR_CHEGANDO_METROS ? "bg-amber-500/20 border-amber-500/50" : "bg-gray-900/96 border-gray-800/50"}`}>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-2xl flex-shrink-0 shadow-lg">🚌</div>
               <div className="flex-1 min-w-0">
                 <p className="text-white font-black text-sm">{motorista.nome || "Motorista"}</p>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-amber-400 text-xs font-bold">{motorista.velocidade?.toFixed(0) || 0} km/h</span>
                   <span className="text-gray-600 text-xs">·</span>
                   <span className="text-gray-500 text-xs">{(viagemAtiva?.onibus_rotas as any)?.nome || "Em rota"}</span>
+                  {distanciaTexto && (
+                    <>
+                      <span className="text-gray-600 text-xs">·</span>
+                      <span className="text-blue-400 text-xs font-bold">{distanciaTexto} de você</span>
+                    </>
+                  )}
+                  {etaMinutos !== null && (
+                    <>
+                      <span className="text-gray-600 text-xs">·</span>
+                      <span className="text-green-400 text-xs font-bold">~{etaMinutos} min</span>
+                    </>
+                  )}
                 </div>
+                {distanciaMotorista !== null && distanciaMotorista <= LIMIAR_CHEGANDO_METROS && (
+                  <p className="text-amber-400 text-[11px] font-black mt-1 animate-pulse">⚠ Ônibus chegando! Prepare-se.</p>
+                )}
               </div>
               <div className="flex flex-col items-center gap-1">
                 <div className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
