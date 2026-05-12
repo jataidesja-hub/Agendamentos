@@ -118,33 +118,33 @@ export default function AppMotorista() {
   useEffect(() => { rotaRef.current = rotaSelecionada; }, [rotaSelecionada]);
 
   // ── Função centralizada para acionar instalação ─────────────────────────
-  const acionarInstalacao = useCallback(async () => {
-    // 1) Tenta usar o prompt capturado pelo beforeInteractive script
+  const acionarInstalacao = useCallback(() => {
     const prompt = pwaPrompt || (window as any).__pwaPrompt;
-    console.log("[PWA Motorista] acionarInstalacao, prompt:", !!prompt);
+
+    // SEMPRE mostra as instruções manuais imediatamente
+    setShowInstallModal(true);
+    setShowBanner(false);
+
+    // Tenta o prompt nativo em paralelo (fire-and-forget)
     if (prompt) {
       try {
-        await prompt.prompt();
-        const { outcome } = await prompt.userChoice;
-        console.log("[PWA Motorista] userChoice:", outcome);
-        // Limpa prompt (só pode ser usado uma vez)
-        setPwaPrompt(null);
-        (window as any).__pwaPrompt = null;
-        if (outcome === "accepted") {
-          setShowBanner(false);
-          setIsStandalone(true);
-          return;
-        }
-      } catch (err) {
-        console.warn("[PWA Motorista] prompt falhou:", err);
-        // Prompt já foi usado ou inválido — limpa
+        prompt.prompt();
+        prompt.userChoice.then((result: any) => {
+          if (result.outcome === "accepted") {
+            setShowInstallModal(false);
+            setIsStandalone(true);
+          }
+          setPwaPrompt(null);
+          (window as any).__pwaPrompt = null;
+        }).catch(() => {
+          setPwaPrompt(null);
+          (window as any).__pwaPrompt = null;
+        });
+      } catch {
         setPwaPrompt(null);
         (window as any).__pwaPrompt = null;
       }
     }
-    // 2) Fallback: mostra modal com instruções manuais
-    setShowInstallModal(true);
-    setShowBanner(false);
   }, [pwaPrompt]);
 
   // PWA setup + restaura sessão
