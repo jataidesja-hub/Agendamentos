@@ -10,6 +10,7 @@ export interface PosicaoMapa {
   nome?: string;
   tipo: "motorista" | "passageiro" | "ponto" | "minha";
   velocidade?: number;
+  atualizadoEm?: string;
 }
 
 export interface Waypoint {
@@ -70,13 +71,16 @@ export default function MapaLeaflet({ posicoes, centro, zoom = 15, onMapClick, r
       attributionControl: false,
     });
 
+    // Satélite Esri — maxNativeZoom:18 faz Leaflet ampliar em vez de cinzar ao zoom alto
     L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-      {
-        maxZoom: 20,
-        subdomains: "abcd",
-        attribution: "© OpenStreetMap © CARTO",
-      }
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxNativeZoom: 18, maxZoom: 20, attribution: "© Esri" }
+    ).addTo(mapRef.current);
+
+    // Rótulos de ruas e locais por cima do satélite
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      { maxNativeZoom: 18, maxZoom: 20, opacity: 0.85 }
     ).addTo(mapRef.current);
 
     mapRef.current.on("click", (e: L.LeafletMouseEvent) => {

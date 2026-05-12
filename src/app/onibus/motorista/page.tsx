@@ -30,6 +30,8 @@ export default function AppMotorista() {
   const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const offlineQueueRef = useRef<any[]>([]);
+  const [online, setOnline] = useState(true);
 
   // Refs para closures estáveis no realtime
   const minhaPosRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -46,6 +48,23 @@ export default function AppMotorista() {
       .then(({ data }) => setMotoristas(data || []));
     supabase.from("onibus_rotas").select("id, nome, cor").eq("ativa", true)
       .then(({ data }) => setRotas(data || []));
+
+    // Detecta conectividade
+    const handleOnline = async () => {
+      setOnline(true);
+      // Envia última posição da fila ao reconectar
+      const q = offlineQueueRef.current;
+      if (q.length > 0) {
+        const last = q[q.length - 1];
+        offlineQueueRef.current = [];
+        try { await supabase.from("onibus_posicoes").upsert(last, { onConflict: "referencia_id" }); } catch {}
+      }
+    };
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    setOnline(navigator.onLine);
+    return () => { window.removeEventListener("online", handleOnline); window.removeEventListener("offline", handleOffline); };
   }, []);
 
   // Ao selecionar rota: busca paradas + calcula OSRM pelos waypoints
@@ -86,15 +105,24 @@ export default function AppMotorista() {
       if (!m) return;
       const { latitude: lat, longitude: lng, speed } = pos.coords;
       setMinhaPos({ lat, lng });
-      await supabase.from("onibus_posicoes").upsert({
-        referencia_id: m.id,
-        tipo: "motorista",
-        nome: m.nome,
-        lat, lng,
+      const payload = {
+        referencia_id: m.id, tipo: "motorista", nome: m.nome, lat, lng,
         velocidade: speed ? speed * 3.6 : 0,
         rota_ativa_id: r?.id || null,
         atualizado_em: new Date().toISOString(),
-      }, { onConflict: "referencia_id" });
+      };
+      if (navigator.onLine) {
+        try {
+          await supabase.from("onibus_posicoes").upsert(payload, { onConflict: "referencia_id" });
+          offlineQueueRef.current = []; // limpa fila ao enviar com sucesso
+        } catch {
+          offlineQueueRef.current.push(payload);
+        }
+      } else {
+        // Sem internet: guarda na fila (mantém só últimas 50)
+        offlineQueueRef.current.push(payload);
+        if (offlineQueueRef.current.length > 50) offlineQueueRef.current.shift();
+      }
     };
 
     watchIdRef.current = navigator.geolocation.watchPosition(
@@ -253,6 +281,11 @@ export default function AppMotorista() {
             >
               ⬇ Instalar
             </button>
+          )}
+          {!online && (
+            <span className="px-2 py-1.5 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-black">
+              📵 OFFLINE
+            </span>
           )}
           {emRota && (
             <button onClick={encerrarRota} className="text-red-400 text-xs px-3 py-2 rounded-xl bg-red-500/10 active:bg-red-500/20 font-bold border border-red-500/20">

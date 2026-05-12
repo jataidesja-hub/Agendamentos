@@ -12,6 +12,7 @@ interface Viagem { id: string; rota_id: string; onibus_rotas: { nome: string; co
 interface Ponto { lat: number; lng: number; nome: string; ordem: number; }
 
 const LIMIAR_CHEGANDO_METROS = 500;
+const POSICAO_VELHA_SEGUNDOS = 30;
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -19,6 +20,30 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number): numb
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Distância percorrida ao longo da geometria da rota entre dois pontos geográficos
+function distanciaNoTrajeto(
+  rota: { lat: number; lng: number }[],
+  posA: { lat: number; lng: number },
+  posB: { lat: number; lng: number }
+): number {
+  if (rota.length < 2) return haversine(posA.lat, posA.lng, posB.lat, posB.lng);
+  const snap = (p: { lat: number; lng: number }) => {
+    let best = 0, bestDist = Infinity;
+    for (let i = 0; i < rota.length; i++) {
+      const d = haversine(p.lat, p.lng, rota[i].lat, rota[i].lng);
+      if (d < bestDist) { bestDist = d; best = i; }
+    }
+    return best;
+  };
+  const iA = snap(posA);
+  const iB = snap(posB);
+  const from = Math.min(iA, iB);
+  const to = Math.max(iA, iB);
+  let dist = 0;
+  for (let i = from; i < to; i++) dist += haversine(rota[i].lat, rota[i].lng, rota[i + 1].lat, rota[i + 1].lng);
+  return dist;
 }
 
 export default function AppPassageiro() {
@@ -30,16 +55,27 @@ export default function AppPassageiro() {
   const [rotaCor, setRotaCor] = useState("#0b7336");
   const [minhaPos, setMinhaPos] = useState<{ lat: number; lng: number } | null>(null);
   const [distanciaMotorista, setDistanciaMotorista] = useState<number | null>(null);
+  const [paradasRota, setParadasRota] = useState<Ponto[]>([]);
+  const [ultimaAtualizacaoMotorista, setUltimaAtualizacaoMotorista] = useState<Date | null>(null);
+  const [agora, setAgora] = useState(Date.now());
   const { canInstall, showInstructions, instalar: instalarPWA } = useInstallPrompt();
   const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const notificacaoEnviadaRef = useRef(false);
+  const rotaGeometriaRef = useRef<{ lat: number; lng: number }[]>([]);
 
   // Refs para evitar closures velhas na subscription realtime
   const minhaPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const userRef = useRef<any>(null);
   useEffect(() => { minhaPosRef.current = minhaPos; }, [minhaPos]);
   useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { rotaGeometriaRef.current = rotaGeometria; }, [rotaGeometria]);
+
+  // Relógio para atualizar "há X seg" a cada segundo
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   // Pede permissão de notificação ao carregar
   useEffect(() => {
@@ -48,24 +84,28 @@ export default function AppPassageiro() {
     }
   }, []);
 
-  // Calcula distância até o motorista e dispara notificação quando próximo
+  // Calcula distância até o motorista (pelo trajeto se disponível) e dispara notificação
   useEffect(() => {
     const motoristaPosicao = posicoes.find(p => p.tipo === "motorista");
     if (!motoristaPosicao || !minhaPos) {
       setDistanciaMotorista(null);
       return;
     }
-    const dist = haversine(minhaPos.lat, minhaPos.lng, motoristaPosicao.lat, motoristaPosicao.lng);
+    setUltimaAtualizacaoMotorista(new Date());
+
+    const rota = rotaGeometriaRef.current;
+    const dist = rota.length >= 2
+      ? distanciaNoTrajeto(rota, { lat: motoristaPosicao.lat, lng: motoristaPosicao.lng }, minhaPos)
+      : haversine(minhaPos.lat, minhaPos.lng, motoristaPosicao.lat, motoristaPosicao.lng);
     setDistanciaMotorista(dist);
 
-    if (dist > LIMIAR_CHEGANDO_METROS) {
-      notificacaoEnviadaRef.current = false;
-      return;
-    }
+    // Notificação usa linha reta pois o limiar é curto (500m)
+    const distReta = haversine(minhaPos.lat, minhaPos.lng, motoristaPosicao.lat, motoristaPosicao.lng);
+    if (distReta > LIMIAR_CHEGANDO_METROS) { notificacaoEnviadaRef.current = false; return; }
     if (!notificacaoEnviadaRef.current && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
       notificacaoEnviadaRef.current = true;
       new Notification("🚌 Ônibus chegando!", {
-        body: `O ônibus está a ${Math.round(dist)}m de você. Prepare-se!`,
+        body: `O ônibus está a ${Math.round(distReta)}m de você. Prepare-se!`,
         icon: "/icon-192.png",
       });
     }
@@ -102,7 +142,8 @@ export default function AppPassageiro() {
     const mapped: PosicaoMapa[] = (pos || [])
       .filter((p: any) => p.referencia_id !== u?.id)
       .map((p: any) => ({
-        id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: p.tipo, velocidade: p.velocidade,
+        id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: p.tipo,
+        velocidade: p.velocidade, atualizadoEm: p.atualizado_em,
       }));
     if (u && mp) mapped.push({ id: "minha", lat: mp.lat, lng: mp.lng, nome: "Você", tipo: "minha" });
     setPosicoes(mapped);
@@ -162,9 +203,14 @@ export default function AppPassageiro() {
       if (viagem) {
         const cor = (viagem.onibus_rotas as any)?.cor || "#0b7336";
         carregarGeometria(viagem.rota_id, cor);
+        // Carrega paradas da rota para exibir no mapa do passageiro
+        const { data: pts } = await supabase.from("onibus_pontos")
+          .select("lat, lng, nome, ordem").eq("rota_id", viagem.rota_id).eq("tipo", "parada").order("ordem");
+        setParadasRota(pts || []);
       } else {
         setRotaGeometria([]);
         setRotaCor("#0b7336");
+        setParadasRota([]);
       }
 
       buscarTodasPosicoes();
@@ -189,6 +235,11 @@ export default function AppPassageiro() {
 
   const motorista = posicoes.find(p => p.tipo === "motorista");
 
+  const segundosDesdeAtualizacao = ultimaAtualizacaoMotorista
+    ? Math.floor((agora - ultimaAtualizacaoMotorista.getTime()) / 1000)
+    : null;
+  const posicaoVelha = segundosDesdeAtualizacao !== null && segundosDesdeAtualizacao > POSICAO_VELHA_SEGUNDOS;
+
   const etaMinutos = (() => {
     if (!distanciaMotorista || !motorista?.velocidade || motorista.velocidade < 2) return null;
     const speedMs = motorista.velocidade * 1000 / 3600;
@@ -201,6 +252,12 @@ export default function AppPassageiro() {
       ? `${(distanciaMotorista / 1000).toFixed(1)} km`
       : `${Math.round(distanciaMotorista)} m`;
   })();
+
+  // Combina posições + paradas para o mapa
+  const posicoesComParadas: PosicaoMapa[] = [
+    ...posicoes,
+    ...paradasRota.map(p => ({ id: `parada-${p.ordem}`, lat: p.lat, lng: p.lng, nome: p.nome, tipo: "ponto" as const })),
+  ];
 
   if (!user) return (
     <div className="h-screen bg-gray-950 flex items-center justify-center">
@@ -242,14 +299,18 @@ export default function AppPassageiro() {
       {/* Mapa */}
       <div className="flex-1 relative overflow-hidden">
         <MapaLeaflet
-          posicoes={posicoes}
+          posicoes={posicoesComParadas}
           centro={minhaPos ? [minhaPos.lat, minhaPos.lng] : undefined}
           rotaPontos={rotaGeometria.length > 0 ? rotaGeometria : undefined}
           rotaCor={rotaCor}
         />
 
         {motorista && (
-          <div className={`absolute bottom-safe bottom-4 left-4 right-4 backdrop-blur-md rounded-3xl p-4 shadow-2xl z-[1000] border transition-colors duration-500 ${distanciaMotorista !== null && distanciaMotorista <= LIMIAR_CHEGANDO_METROS ? "bg-amber-500/20 border-amber-500/50" : "bg-gray-900/96 border-gray-800/50"}`}>
+          <div className={`absolute bottom-safe bottom-4 left-4 right-4 backdrop-blur-md rounded-3xl p-4 shadow-2xl z-[1000] border transition-colors duration-500 ${
+            posicaoVelha ? "bg-red-900/30 border-red-700/50" :
+            distanciaMotorista !== null && distanciaMotorista <= LIMIAR_CHEGANDO_METROS ? "bg-amber-500/20 border-amber-500/50" :
+            "bg-gray-900/96 border-gray-800/50"
+          }`}>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-2xl flex-shrink-0 shadow-lg">🚌</div>
               <div className="flex-1 min-w-0">
@@ -261,7 +322,7 @@ export default function AppPassageiro() {
                   {distanciaTexto && (
                     <>
                       <span className="text-gray-600 text-xs">·</span>
-                      <span className="text-blue-400 text-xs font-bold">{distanciaTexto} de você</span>
+                      <span className="text-blue-400 text-xs font-bold">{distanciaTexto} pelo trajeto</span>
                     </>
                   )}
                   {etaMinutos !== null && (
@@ -271,13 +332,18 @@ export default function AppPassageiro() {
                     </>
                   )}
                 </div>
-                {distanciaMotorista !== null && distanciaMotorista <= LIMIAR_CHEGANDO_METROS && (
+                {posicaoVelha && (
+                  <p className="text-red-400 text-[11px] font-black mt-1">⚠ Última posição há {segundosDesdeAtualizacao}s — sinal instável</p>
+                )}
+                {!posicaoVelha && distanciaMotorista !== null && distanciaMotorista <= LIMIAR_CHEGANDO_METROS && (
                   <p className="text-amber-400 text-[11px] font-black mt-1 animate-pulse">⚠ Ônibus chegando! Prepare-se.</p>
                 )}
               </div>
               <div className="flex flex-col items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-[9px] text-green-500 font-bold">AO VIVO</span>
+                <div className={`w-2.5 h-2.5 rounded-full ${posicaoVelha ? "bg-red-400" : "bg-green-400 animate-pulse"}`} />
+                <span className={`text-[9px] font-bold ${posicaoVelha ? "text-red-400" : "text-green-500"}`}>
+                  {posicaoVelha ? "ANTIGO" : "AO VIVO"}
+                </span>
               </div>
             </div>
           </div>
