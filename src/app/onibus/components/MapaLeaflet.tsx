@@ -49,7 +49,7 @@ function getIcone(tipo: PosicaoMapa["tipo"]) {
   return ICONES[tipo];
 }
 
-export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, rotaPontos, rotaCor = "#0b7336", waypoints = [] }: Props) {
+export default function MapaLeaflet({ posicoes, centro, zoom = 15, onMapClick, rotaPontos, rotaCor = "#0b7336", waypoints = [] }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -71,13 +71,12 @@ export default function MapaLeaflet({ posicoes, centro, zoom = 13, onMapClick, r
     });
 
     L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 19, attribution: "© Esri" }
-    ).addTo(mapRef.current);
-
-    L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 19, opacity: 0.7 }
+      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 20,
+        subdomains: "abcd",
+        attribution: "© OpenStreetMap © CARTO",
+      }
     ).addTo(mapRef.current);
 
     mapRef.current.on("click", (e: L.LeafletMouseEvent) => {
