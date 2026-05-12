@@ -16,7 +16,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CYMI - Gerenciamentos",
   description: "Sistema Inteligente de Gerenciamento da CYMI O&M",
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

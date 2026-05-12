@@ -85,9 +85,18 @@ export default function AppMotorista() {
       (navigator as any).standalone === true
     );
 
-    // Registra Service Worker
+    // Registra Service Worker — recarrega uma vez se acabou de instalar (Chrome precisa do SW ativo para mostrar "Instalar app")
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker.register("/sw.js").then((reg) => {
+        if (reg.installing) {
+          reg.installing.addEventListener("statechange", (e: any) => {
+            if (e.target.state === "activated" && !sessionStorage.getItem("sw-reloaded")) {
+              sessionStorage.setItem("sw-reloaded", "1");
+              window.location.reload();
+            }
+          });
+        }
+      }).catch(() => {});
     }
 
     // Captura prompt de instalação nativo do Chrome Android
