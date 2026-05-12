@@ -4,9 +4,42 @@ import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import type { PosicaoMapa } from "../components/MapaLeaflet";
-import InstallPWA, { useInstallPrompt } from "../components/InstallPWA";
 
 const MapaLeaflet = dynamic(() => import("../components/MapaLeaflet"), { ssr: false });
+
+function ModalInstalacaoAndroid({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[3000] bg-black/85 flex items-end p-4" onClick={onClose}>
+      <div className="bg-gray-900 rounded-3xl p-6 w-full border border-amber-500/30 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-xl flex-shrink-0">🚌</div>
+          <div>
+            <p className="text-white font-black text-base">Instalar aplicativo</p>
+            <p className="text-gray-400 text-xs">Motorista CYMI</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center gap-4 bg-gray-800 rounded-2xl p-3">
+            <span className="text-2xl flex-shrink-0 w-8 text-center">⋮</span>
+            <p className="text-gray-300 text-sm">Toque no menu <span className="text-white font-bold">⋮</span> no canto superior direito do Chrome</p>
+          </div>
+          <div className="flex items-center gap-4 bg-gray-800 rounded-2xl p-3">
+            <span className="text-2xl flex-shrink-0 w-8 text-center">📲</span>
+            <p className="text-gray-300 text-sm">Toque em <span className="text-white font-bold">"Adicionar à tela inicial"</span></p>
+          </div>
+          <div className="flex items-center gap-4 bg-gray-800 rounded-2xl p-3">
+            <span className="text-2xl flex-shrink-0 w-8 text-center">✅</span>
+            <p className="text-gray-300 text-sm">Confirme tocando em <span className="text-white font-bold">Adicionar</span></p>
+          </div>
+        </div>
+        <p className="text-gray-600 text-xs text-center">Após instalar, o app continua funcionando mesmo ao trocar de tela</p>
+        <button onClick={onClose} className="w-full py-3 bg-amber-500 rounded-2xl text-white font-black">
+          Entendi
+        </button>
+      </div>
+    </div>
+  );
+}
 
 interface Motorista { id: string; nome: string; }
 interface Rota { id: string; nome: string; cor: string; }
@@ -14,7 +47,9 @@ interface Ponto { id: string; lat: number; lng: number; nome: string; ordem: num
 
 export default function AppMotorista() {
   const router = useRouter();
-  const { canInstall, showInstructions, instalar: instalarPWA } = useInstallPrompt();
+  const [pwaPrompt, setPwaPrompt] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [motorista, setMotorista] = useState<Motorista | null>(null);
   const [rotas, setRotas] = useState<Rota[]>([]);
@@ -27,7 +62,6 @@ export default function AppMotorista() {
   const [emRota, setEmRota] = useState(false);
   const [minhaPos, setMinhaPos] = useState<{ lat: number; lng: number } | null>(null);
   const [aba, setAba] = useState<"mapa" | "passageiros">("mapa");
-  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const offlineQueueRef = useRef<any[]>([]);
@@ -43,8 +77,27 @@ export default function AppMotorista() {
   useEffect(() => { motoristaRef.current = motorista; }, [motorista]);
   useEffect(() => { rotaRef.current = rotaSelecionada; }, [rotaSelecionada]);
 
-  // Restaura sessão salva ao recarregar (Android mata o tab em background)
+  // PWA setup + restaura sessão
   useEffect(() => {
+    // Detecta se já está instalado como standalone
+    setIsStandalone(
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as any).standalone === true
+    );
+
+    // Registra Service Worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+
+    // Captura prompt de instalação nativo do Chrome Android
+    const handlePrompt = (e: Event) => {
+      e.preventDefault();
+      setPwaPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handlePrompt as any);
+
+    // Restaura sessão salva (Android mata o tab em background)
     try {
       const saved = localStorage.getItem("motorista_sessao");
       if (saved) {
@@ -55,6 +108,8 @@ export default function AppMotorista() {
         setEmRota(true);
       }
     } catch {}
+
+    return () => window.removeEventListener("beforeinstallprompt", handlePrompt as any);
   }, []);
 
   useEffect(() => {
@@ -243,13 +298,19 @@ export default function AppMotorista() {
           ))}
         </div>
 
-        {/* Botão instalar na tela de seleção */}
-        {(canInstall || showInstructions) && (
+        {/* Botão instalar */}
+        {!isStandalone && (
           <div className="px-4 pb-safe pb-4 flex-shrink-0">
             <button
               onClick={async () => {
-                const r = await instalarPWA();
-                if (r !== "accepted") setShowInstallInstructions(true);
+                if (pwaPrompt) {
+                  try {
+                    await pwaPrompt.prompt();
+                    const { outcome } = await pwaPrompt.userChoice;
+                    if (outcome === "accepted") { setPwaPrompt(null); return; }
+                  } catch {}
+                }
+                setShowInstallModal(true);
               }}
               className="w-full py-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-400 text-sm font-bold flex items-center justify-center gap-2"
             >
@@ -258,24 +319,7 @@ export default function AppMotorista() {
           </div>
         )}
 
-        <InstallPWA tema="amber" />
-
-        {showInstallInstructions && (
-          <div className="fixed inset-0 z-[3000] bg-black/80 flex items-end p-4" onClick={() => setShowInstallInstructions(false)}>
-            <div className="bg-gray-900 rounded-3xl p-6 w-full border border-gray-700 space-y-4" onClick={e => e.stopPropagation()}>
-              <p className="text-white font-black text-base text-center">Adicionar à tela inicial</p>
-              <div className="space-y-3">
-                {[["⎋","Toque no botão Compartilhar na barra do navegador"],["➕","Role e toque em 'Adicionar à Tela de Início'"],["✅","Confirme tocando em Adicionar"]].map(([icon, text], i) => (
-                  <div key={i} className="flex items-center gap-4 bg-gray-800 rounded-2xl p-3">
-                    <span className="text-2xl flex-shrink-0">{icon}</span>
-                    <p className="text-gray-300 text-sm">{text}</p>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => setShowInstallInstructions(false)} className="w-full py-3 bg-gray-700 rounded-2xl text-white font-bold">Entendi</button>
-            </div>
-          </div>
-        )}
+        {showInstallModal && <ModalInstalacaoAndroid onClose={() => setShowInstallModal(false)} />}
       </div>
     );
   }
@@ -298,9 +342,18 @@ export default function AppMotorista() {
           </div>
         </button>
         <div className="flex items-center gap-2">
-          {(canInstall || showInstructions) && !emRota && (
+          {!isStandalone && !emRota && (
             <button
-              onClick={async () => { const r = await instalarPWA(); if (r !== "accepted") setShowInstallInstructions(true); }}
+              onClick={async () => {
+                if (pwaPrompt) {
+                  try {
+                    await pwaPrompt.prompt();
+                    const { outcome } = await pwaPrompt.userChoice;
+                    if (outcome === "accepted") { setPwaPrompt(null); return; }
+                  } catch {}
+                }
+                setShowInstallModal(true);
+              }}
               className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold"
             >
               ⬇ Instalar
@@ -396,7 +449,7 @@ export default function AppMotorista() {
         </div>
       )}
 
-      <InstallPWA tema="amber" />
+      {showInstallModal && <ModalInstalacaoAndroid onClose={() => setShowInstallModal(false)} />}
     </div>
   );
 }
