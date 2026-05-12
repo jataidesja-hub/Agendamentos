@@ -21,8 +21,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {/* Captura beforeinstallprompt o mais cedo possível, antes do bundle React */}
-      <Script id="pwa-capture" strategy="beforeInteractive">{`
+      <Script id="pwa-setup" strategy="beforeInteractive">{`
         (function() {
+          // Registra SW o mais cedo possível
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function(){});
+          }
+          // Captura o prompt de instalação nativo do Chrome Android
           function capture(e) {
             e.preventDefault();
             window.__pwaPrompt = e;

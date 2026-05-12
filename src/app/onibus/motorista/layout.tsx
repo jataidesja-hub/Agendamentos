@@ -21,8 +21,11 @@ export default function MotoristaLayout({ children }: { children: React.ReactNod
   return (
     <>
       {/* Captura beforeinstallprompt o mais cedo possível, antes do bundle React */}
-      <Script id="pwa-capture" strategy="beforeInteractive">{`
+      <Script id="pwa-setup" strategy="beforeInteractive">{`
         (function() {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function(){});
+          }
           function capture(e) {
             e.preventDefault();
             window.__pwaPrompt = e;

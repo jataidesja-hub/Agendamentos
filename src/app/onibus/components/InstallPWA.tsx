@@ -56,10 +56,6 @@ export function useInstallPrompt() {
     const latest = _deferredPrompt || (window as any).__pwaPrompt || null;
     if (latest) setPrompt(latest);
 
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
-    }
-
     const update = () => {
       const p = _deferredPrompt || (window as any).__pwaPrompt || null;
       setPrompt(p);
