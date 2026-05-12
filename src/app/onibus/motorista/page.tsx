@@ -104,8 +104,10 @@ export default function AppMotorista() {
   const [aba, setAba] = useState<"mapa" | "passageiros">("mapa");
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const wakeLockRef = useRef<any>(null);
   const offlineQueueRef = useRef<any[]>([]);
   const [online, setOnline] = useState(true);
+  const [telaAtiva, setTelaAtiva] = useState(false);
 
   // Refs para closures estáveis no realtime
   const minhaPosRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -185,6 +187,7 @@ export default function AppMotorista() {
         setRotaSelecionada({ id: s.rotaId, nome: s.rotaNome, cor: s.rotaCor });
         setViagemId(s.viagemId);
         setEmRota(true);
+        solicitarWakeLock();
       }
     } catch {}
 
@@ -329,6 +332,29 @@ export default function AppMotorista() {
     return () => { supabase.removeChannel(sub); };
   }, [emRota, motorista?.id]);
 
+  const solicitarWakeLock = async () => {
+    if (!("wakeLock" in navigator)) return;
+    try {
+      wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+      setTelaAtiva(true);
+      wakeLockRef.current.addEventListener("release", () => setTelaAtiva(false));
+    } catch {}
+  };
+
+  const liberarWakeLock = () => {
+    wakeLockRef.current?.release();
+    wakeLockRef.current = null;
+    setTelaAtiva(false);
+  };
+
+  // Re-adquire wake lock quando a aba volta ao foco (ex: usuário voltou do GPS nativo)
+  useEffect(() => {
+    if (!emRota) return;
+    const reativar = () => { if (document.visibilityState === "visible") solicitarWakeLock(); };
+    document.addEventListener("visibilitychange", reativar);
+    return () => document.removeEventListener("visibilitychange", reativar);
+  }, [emRota]);
+
   const iniciarRota = async () => {
     if (!rotaSelecionada || !motorista) return;
     const { data } = await supabase.from("onibus_viagens").insert({
@@ -338,7 +364,7 @@ export default function AppMotorista() {
     }).select().single();
     setViagemId(data.id);
     setEmRota(true);
-    // Salva sessão para recuperar se o Android matar o tab
+    solicitarWakeLock();
     localStorage.setItem("motorista_sessao", JSON.stringify({
       motoristaId: motorista.id,
       motoristaNome: motorista.nome,
@@ -350,6 +376,7 @@ export default function AppMotorista() {
   };
 
   const encerrarRota = async () => {
+    liberarWakeLock();
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
     if (viagemId) await supabase.from("onibus_viagens").update({ ativa: false, encerrada_em: new Date().toISOString() }).eq("id", viagemId);
@@ -449,6 +476,11 @@ export default function AppMotorista() {
             >
               ⬇ Instalar
             </button>
+          )}
+          {emRota && telaAtiva && (
+            <span className="px-2 py-1.5 rounded-xl bg-green-500/20 border border-green-500/30 text-green-400 text-[10px] font-black">
+              🔆 TELA ON
+            </span>
           )}
           {!online && (
             <span className="px-2 py-1.5 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-black">
