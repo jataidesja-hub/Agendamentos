@@ -20,12 +20,19 @@ export const viewport: Viewport = {
 export default function MotoristaLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <Script id="pwa-capture" strategy="afterInteractive">{`
-        window.addEventListener('beforeinstallprompt', function(e) {
-          e.preventDefault();
-          window.__pwaPrompt = e;
-          window.dispatchEvent(new Event('pwaPromptReady'));
-        });
+      {/* Captura beforeinstallprompt o mais cedo possível, antes do bundle React */}
+      <Script id="pwa-capture" strategy="beforeInteractive">{`
+        (function() {
+          function capture(e) {
+            e.preventDefault();
+            window.__pwaPrompt = e;
+            window.dispatchEvent(new Event('pwaPromptReady'));
+          }
+          if (window.__pwaPrompt) {
+            window.dispatchEvent(new Event('pwaPromptReady'));
+          }
+          window.addEventListener('beforeinstallprompt', capture);
+        })();
       `}</Script>
       {children}
     </>

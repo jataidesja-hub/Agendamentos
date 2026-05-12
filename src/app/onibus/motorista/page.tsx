@@ -43,6 +43,20 @@ export default function AppMotorista() {
   useEffect(() => { motoristaRef.current = motorista; }, [motorista]);
   useEffect(() => { rotaRef.current = rotaSelecionada; }, [rotaSelecionada]);
 
+  // Restaura sessão salva ao recarregar (Android mata o tab em background)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("motorista_sessao");
+      if (saved) {
+        const s = JSON.parse(saved);
+        setMotorista({ id: s.motoristaId, nome: s.motoristaNome });
+        setRotaSelecionada({ id: s.rotaId, nome: s.rotaNome, cor: s.rotaCor });
+        setViagemId(s.viagemId);
+        setEmRota(true);
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     supabase.from("onibus_perfis").select("id, nome").eq("tipo", "motorista").order("nome")
       .then(({ data }) => setMotoristas(data || []));
@@ -169,6 +183,15 @@ export default function AppMotorista() {
     }).select().single();
     setViagemId(data.id);
     setEmRota(true);
+    // Salva sessão para recuperar se o Android matar o tab
+    localStorage.setItem("motorista_sessao", JSON.stringify({
+      motoristaId: motorista.id,
+      motoristaNome: motorista.nome,
+      rotaId: rotaSelecionada.id,
+      rotaNome: rotaSelecionada.nome,
+      rotaCor: rotaSelecionada.cor,
+      viagemId: data.id,
+    }));
   };
 
   const encerrarRota = async () => {
@@ -176,6 +199,7 @@ export default function AppMotorista() {
     if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
     if (viagemId) await supabase.from("onibus_viagens").update({ ativa: false, encerrada_em: new Date().toISOString() }).eq("id", viagemId);
     if (motorista) await supabase.from("onibus_posicoes").delete().eq("referencia_id", motorista.id);
+    localStorage.removeItem("motorista_sessao");
     setEmRota(false); setViagemId(null); setPosicoes([]);
   };
 
