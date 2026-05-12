@@ -30,7 +30,7 @@ export default function AppPassageiro() {
   const [rotaCor, setRotaCor] = useState("#0b7336");
   const [minhaPos, setMinhaPos] = useState<{ lat: number; lng: number } | null>(null);
   const [distanciaMotorista, setDistanciaMotorista] = useState<number | null>(null);
-  const { canInstall, instalar: instalarPWA } = useInstallPrompt();
+  const { canInstall, showInstructions, instalar: instalarPWA } = useInstallPrompt();
   const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const notificacaoEnviadaRef = useRef(false);
@@ -81,7 +81,7 @@ export default function AppPassageiro() {
     });
   }, []);
 
-  // GPS — envia a cada 5s e já busca posições de todos (garante atualização mesmo sem Realtime)
+  // GPS — só envia a própria posição, sem depender do retorno para atualizar o mapa
   const enviarLocalizacao = useCallback(async (userId: string, nome: string) => {
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude: lat, longitude: lng, speed } = pos.coords;
@@ -91,15 +91,21 @@ export default function AppPassageiro() {
         velocidade: speed ? speed * 3.6 : 0,
         atualizado_em: new Date().toISOString(),
       }, { onConflict: "referencia_id" });
+    }, undefined, { enableHighAccuracy: true });
+  }, []);
 
-      // Polling de todas as posições para garantir que o mapa atualize
-      const { data: todasPos } = await supabase.from("onibus_posicoes").select("*");
-      const mapped: PosicaoMapa[] = (todasPos || []).map((p: any) => ({
+  // Polling independente de posições — roda a cada 5s mesmo que o GPS falhe
+  const buscarTodasPosicoes = useCallback(async () => {
+    const mp = minhaPosRef.current;
+    const u = userRef.current;
+    const { data: pos } = await supabase.from("onibus_posicoes").select("*");
+    const mapped: PosicaoMapa[] = (pos || [])
+      .filter((p: any) => p.referencia_id !== u?.id)
+      .map((p: any) => ({
         id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: p.tipo, velocidade: p.velocidade,
       }));
-      mapped.push({ id: "minha", lat, lng, nome: "Você", tipo: "minha" });
-      setPosicoes(mapped);
-    }, undefined, { enableHighAccuracy: true });
+    if (u && mp) mapped.push({ id: "minha", lat: mp.lat, lng: mp.lng, nome: "Você", tipo: "minha" });
+    setPosicoes(mapped);
   }, []);
 
   useEffect(() => {
@@ -108,6 +114,15 @@ export default function AppPassageiro() {
     intervalRef.current = setInterval(() => enviarLocalizacao(user.id, user.nome), 5000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [user]);
+
+  // Intervalo separado que garante atualização do mapa a cada 5s independente do GPS
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    buscarTodasPosicoes();
+    pollRef.current = setInterval(buscarTodasPosicoes, 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [user?.id]);
 
   // Carrega geometria OSRM da rota ativa
   const carregarGeometria = useCallback(async (rotaId: string, cor: string) => {
@@ -133,14 +148,11 @@ export default function AppPassageiro() {
     }
   }, []);
 
-  // Realtime — subscription criada UMA VEZ quando user carrega
+  // Realtime — atualiza viagem/rota; posições já vêm pelo polling a cada 5s
   useEffect(() => {
     if (!user) return;
 
-    const carregarDados = async () => {
-      const u = userRef.current;
-      const mp = minhaPosRef.current;
-
+    const carregarViagem = async () => {
       const { data: viagem } = await supabase
         .from("onibus_viagens").select("id, rota_id, onibus_rotas(nome, cor)")
         .eq("ativa", true).limit(1).maybeSingle();
@@ -151,29 +163,22 @@ export default function AppPassageiro() {
         const cor = (viagem.onibus_rotas as any)?.cor || "#0b7336";
         carregarGeometria(viagem.rota_id, cor);
       } else {
-        // Rota encerrou — limpa tudo imediatamente
         setRotaGeometria([]);
         setRotaCor("#0b7336");
       }
 
-      const { data: pos } = await supabase.from("onibus_posicoes").select("*");
-      const mapped: PosicaoMapa[] = (pos || []).map((p: any) => ({
-        id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: p.tipo, velocidade: p.velocidade,
-      }));
-      if (u && mp) mapped.push({ id: "minha", lat: mp.lat, lng: mp.lng, nome: "Você", tipo: "minha" });
-      setPosicoes(mapped);
+      buscarTodasPosicoes();
     };
 
-    carregarDados();
+    carregarViagem();
 
-    // Canal estável — não é recriado quando minhaPos muda
     const sub = supabase.channel("passageiro-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "onibus_posicoes" }, carregarDados)
-      .on("postgres_changes", { event: "*", schema: "public", table: "onibus_viagens" }, carregarDados)
+      .on("postgres_changes", { event: "*", schema: "public", table: "onibus_posicoes" }, buscarTodasPosicoes)
+      .on("postgres_changes", { event: "*", schema: "public", table: "onibus_viagens" }, carregarViagem)
       .subscribe();
 
     return () => { supabase.removeChannel(sub); };
-  }, [user?.id]); // só recria quando o user muda, NÃO quando minhaPos muda
+  }, [user?.id]);
 
   const handleSair = async () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -218,9 +223,12 @@ export default function AppPassageiro() {
           </div>
         </button>
         <div className="flex items-center gap-2">
-          {canInstall && (
+          {(canInstall || showInstructions) && (
             <button
-              onClick={async () => { const r = await instalarPWA(); if (r === "instructions") setShowInstallInstructions(true); }}
+              onClick={async () => {
+                const r = await instalarPWA();
+                if (r !== "accepted") setShowInstallInstructions(true);
+              }}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 text-xs font-bold active:bg-blue-600/30">
               ⬇ Instalar
             </button>

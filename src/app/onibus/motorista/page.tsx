@@ -14,7 +14,7 @@ interface Ponto { id: string; lat: number; lng: number; nome: string; ordem: num
 
 export default function AppMotorista() {
   const router = useRouter();
-  const { canInstall, instalar: instalarPWA } = useInstallPrompt();
+  const { canInstall, showInstructions, instalar: instalarPWA } = useInstallPrompt();
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [motorista, setMotorista] = useState<Motorista | null>(null);
   const [rotas, setRotas] = useState<Rota[]>([]);
@@ -29,12 +29,17 @@ export default function AppMotorista() {
   const [aba, setAba] = useState<"mapa" | "passageiros">("mapa");
   const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const watchIdRef = useRef<number | null>(null);
 
   // Refs para closures estáveis no realtime
   const minhaPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const paradasRef = useRef<Ponto[]>([]);
+  const motoristaRef = useRef<Motorista | null>(null);
+  const rotaRef = useRef<Rota | null>(null);
   useEffect(() => { minhaPosRef.current = minhaPos; }, [minhaPos]);
   useEffect(() => { paradasRef.current = paradas; }, [paradas]);
+  useEffect(() => { motoristaRef.current = motorista; }, [motorista]);
+  useEffect(() => { rotaRef.current = rotaSelecionada; }, [rotaSelecionada]);
 
   useEffect(() => {
     supabase.from("onibus_perfis").select("id, nome").eq("tipo", "motorista").order("nome")
@@ -71,28 +76,39 @@ export default function AppMotorista() {
     carregar();
   }, [rotaSelecionada?.id]);
 
-  const enviarLocalizacao = useCallback(async () => {
-    if (!motorista) return;
-    navigator.geolocation.getCurrentPosition(async (pos) => {
+  // watchPosition — continua em segundo plano, sem timer JavaScript (que é congelado pelo SO)
+  useEffect(() => {
+    if (!emRota || !motorista) return;
+
+    const onPos = async (pos: GeolocationPosition) => {
+      const m = motoristaRef.current;
+      const r = rotaRef.current;
+      if (!m) return;
       const { latitude: lat, longitude: lng, speed } = pos.coords;
       setMinhaPos({ lat, lng });
       await supabase.from("onibus_posicoes").upsert({
-        referencia_id: motorista.id,
+        referencia_id: m.id,
         tipo: "motorista",
-        nome: motorista.nome,
+        nome: m.nome,
         lat, lng,
         velocidade: speed ? speed * 3.6 : 0,
-        rota_ativa_id: rotaSelecionada?.id || null,
+        rota_ativa_id: r?.id || null,
         atualizado_em: new Date().toISOString(),
       }, { onConflict: "referencia_id" });
-    }, undefined, { enableHighAccuracy: true });
-  }, [motorista?.id, rotaSelecionada?.id]);
+    };
 
-  useEffect(() => {
-    if (!emRota || !motorista) return;
-    enviarLocalizacao();
-    intervalRef.current = setInterval(enviarLocalizacao, 5000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      onPos,
+      undefined,
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+    );
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
   }, [emRota, motorista?.id]);
 
   // Realtime passageiros — subscription estável
@@ -129,6 +145,7 @@ export default function AppMotorista() {
 
   const encerrarRota = async () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
+    if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
     if (viagemId) await supabase.from("onibus_viagens").update({ ativa: false, encerrada_em: new Date().toISOString() }).eq("id", viagemId);
     if (motorista) await supabase.from("onibus_posicoes").delete().eq("referencia_id", motorista.id);
     setEmRota(false); setViagemId(null); setPosicoes([]);
@@ -175,12 +192,12 @@ export default function AppMotorista() {
         </div>
 
         {/* Botão instalar na tela de seleção */}
-        {canInstall && (
+        {(canInstall || showInstructions) && (
           <div className="px-4 pb-safe pb-4 flex-shrink-0">
             <button
               onClick={async () => {
                 const r = await instalarPWA();
-                if (r === "instructions") setShowInstallInstructions(true);
+                if (r !== "accepted") setShowInstallInstructions(true);
               }}
               className="w-full py-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-400 text-sm font-bold flex items-center justify-center gap-2"
             >
@@ -229,9 +246,9 @@ export default function AppMotorista() {
           </div>
         </button>
         <div className="flex items-center gap-2">
-          {canInstall && !emRota && (
+          {(canInstall || showInstructions) && !emRota && (
             <button
-              onClick={async () => { const r = await instalarPWA(); if (r === "instructions") setShowInstallInstructions(true); }}
+              onClick={async () => { const r = await instalarPWA(); if (r !== "accepted") setShowInstallInstructions(true); }}
               className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold"
             >
               ⬇ Instalar
