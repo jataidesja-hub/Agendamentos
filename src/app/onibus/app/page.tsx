@@ -81,7 +81,7 @@ export default function AppPassageiro() {
     });
   }, []);
 
-  // GPS — envia a cada 5s sem recriar subscription
+  // GPS — envia a cada 5s e já busca posições de todos (garante atualização mesmo sem Realtime)
   const enviarLocalizacao = useCallback(async (userId: string, nome: string) => {
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude: lat, longitude: lng, speed } = pos.coords;
@@ -91,6 +91,14 @@ export default function AppPassageiro() {
         velocidade: speed ? speed * 3.6 : 0,
         atualizado_em: new Date().toISOString(),
       }, { onConflict: "referencia_id" });
+
+      // Polling de todas as posições para garantir que o mapa atualize
+      const { data: todasPos } = await supabase.from("onibus_posicoes").select("*");
+      const mapped: PosicaoMapa[] = (todasPos || []).map((p: any) => ({
+        id: p.referencia_id, lat: p.lat, lng: p.lng, nome: p.nome, tipo: p.tipo, velocidade: p.velocidade,
+      }));
+      mapped.push({ id: "minha", lat, lng, nome: "Você", tipo: "minha" });
+      setPosicoes(mapped);
     }, undefined, { enableHighAccuracy: true });
   }, []);
 
