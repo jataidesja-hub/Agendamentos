@@ -41,6 +41,45 @@ function ModalInstalacaoAndroid({ onClose }: { onClose: () => void }) {
   );
 }
 
+/* ── Banner de instalação automático ─────────────────────────────────── */
+function BannerInstalarPWA({
+  onInstalar,
+  onFechar,
+}: {
+  onInstalar: () => void;
+  onFechar: () => void;
+}) {
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-[2500] p-4 animate-slide-up">
+      <div className="bg-gradient-to-r from-amber-600 to-amber-500 rounded-2xl p-4 shadow-2xl shadow-amber-500/30 border border-amber-400/30">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl flex-shrink-0 backdrop-blur-sm">
+            🚌
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-black text-sm">Instalar Motorista CYMI</p>
+            <p className="text-amber-100/80 text-xs mt-0.5">
+              Instale o app para acesso rápido e uso offline
+            </p>
+          </div>
+          <button
+            onClick={onFechar}
+            className="text-amber-200/60 hover:text-white text-lg px-1 flex-shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+        <button
+          onClick={onInstalar}
+          className="w-full mt-3 py-3 bg-white rounded-xl text-amber-700 font-black text-sm active:scale-95 transition-all shadow-lg"
+        >
+          📲 Instalar agora
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface Motorista { id: string; nome: string; }
 interface Rota { id: string; nome: string; cor: string; }
 interface Ponto { id: string; lat: number; lng: number; nome: string; ordem: number; tipo: string; }
@@ -48,8 +87,9 @@ interface Ponto { id: string; lat: number; lng: number; nome: string; ordem: num
 export default function AppMotorista() {
   const router = useRouter();
   const [pwaPrompt, setPwaPrompt] = useState<any>(null);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(true); // assume true to avoid flash
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [showBanner, setShowBanner] = useState(false);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [motorista, setMotorista] = useState<Motorista | null>(null);
   const [rotas, setRotas] = useState<Rota[]>([]);
@@ -77,32 +117,53 @@ export default function AppMotorista() {
   useEffect(() => { motoristaRef.current = motorista; }, [motorista]);
   useEffect(() => { rotaRef.current = rotaSelecionada; }, [rotaSelecionada]);
 
+  // ── Função centralizada para acionar instalação ─────────────────────────
+  const acionarInstalacao = useCallback(async () => {
+    // 1) Tenta usar o prompt capturado pelo beforeInteractive script
+    const prompt = pwaPrompt || (window as any).__pwaPrompt;
+    if (prompt) {
+      try {
+        await prompt.prompt();
+        const { outcome } = await prompt.userChoice;
+        if (outcome === "accepted") {
+          setPwaPrompt(null);
+          (window as any).__pwaPrompt = null;
+          setShowBanner(false);
+          return;
+        }
+      } catch {}
+    }
+    // 2) Fallback: mostra modal com instruções manuais
+    setShowInstallModal(true);
+    setShowBanner(false);
+  }, [pwaPrompt]);
+
   // PWA setup + restaura sessão
   useEffect(() => {
     // Detecta se já está instalado como standalone
-    setIsStandalone(
+    const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
-      (navigator as any).standalone === true
-    );
+      (navigator as any).standalone === true;
+    setIsStandalone(standalone);
 
-    // Registra Service Worker — recarrega uma vez se acabou de instalar (Chrome precisa do SW ativo para mostrar "Instalar app")
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").then((reg) => {
-        if (reg.installing) {
-          reg.installing.addEventListener("statechange", (e: any) => {
-            if (e.target.state === "activated" && !sessionStorage.getItem("sw-reloaded")) {
-              sessionStorage.setItem("sw-reloaded", "1");
-              window.location.reload();
-            }
-          });
-        }
-      }).catch(() => {});
+    // Pega prompt que o beforeInteractive script já capturou
+    if ((window as any).__pwaPrompt) {
+      setPwaPrompt((window as any).__pwaPrompt);
     }
 
-    // Captura prompt de instalação nativo do Chrome Android
+    // Escuta caso o prompt chegue depois
+    const onPromptReady = () => {
+      if ((window as any).__pwaPrompt) {
+        setPwaPrompt((window as any).__pwaPrompt);
+      }
+    };
+    window.addEventListener("pwaPromptReady", onPromptReady);
+
+    // Escuta também o evento nativo diretamente (redundância)
     const handlePrompt = (e: Event) => {
       e.preventDefault();
       setPwaPrompt(e);
+      (window as any).__pwaPrompt = e;
     };
     window.addEventListener("beforeinstallprompt", handlePrompt as any);
 
@@ -118,7 +179,28 @@ export default function AppMotorista() {
       }
     } catch {}
 
-    return () => window.removeEventListener("beforeinstallprompt", handlePrompt as any);
+    // ── Auto-mostra banner de instalação ───────────────────────────────
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (!standalone) {
+      const dismissed = sessionStorage.getItem("pwa-banner-dismissed");
+      if (!dismissed) {
+        timer = setTimeout(() => {
+          // Verifica novamente standalone (pode ter mudado)
+          const isNowStandalone =
+            window.matchMedia("(display-mode: standalone)").matches ||
+            (navigator as any).standalone === true;
+          if (!isNowStandalone) {
+            setShowBanner(true);
+          }
+        }, 2000);
+      }
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("pwaPromptReady", onPromptReady);
+      window.removeEventListener("beforeinstallprompt", handlePrompt as any);
+    };
   }, []);
 
   useEffect(() => {
@@ -311,16 +393,7 @@ export default function AppMotorista() {
         {!isStandalone && (
           <div className="px-4 pb-safe pb-4 flex-shrink-0">
             <button
-              onClick={async () => {
-                if (pwaPrompt) {
-                  try {
-                    await pwaPrompt.prompt();
-                    const { outcome } = await pwaPrompt.userChoice;
-                    if (outcome === "accepted") { setPwaPrompt(null); return; }
-                  } catch {}
-                }
-                setShowInstallModal(true);
-              }}
+              onClick={acionarInstalacao}
               className="w-full py-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-400 text-sm font-bold flex items-center justify-center gap-2"
             >
               ⬇ Instalar aplicativo
@@ -329,6 +402,15 @@ export default function AppMotorista() {
         )}
 
         {showInstallModal && <ModalInstalacaoAndroid onClose={() => setShowInstallModal(false)} />}
+        {showBanner && (
+          <BannerInstalarPWA
+            onInstalar={acionarInstalacao}
+            onFechar={() => {
+              setShowBanner(false);
+              sessionStorage.setItem("pwa-banner-dismissed", "1");
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -353,16 +435,7 @@ export default function AppMotorista() {
         <div className="flex items-center gap-2">
           {!isStandalone && !emRota && (
             <button
-              onClick={async () => {
-                if (pwaPrompt) {
-                  try {
-                    await pwaPrompt.prompt();
-                    const { outcome } = await pwaPrompt.userChoice;
-                    if (outcome === "accepted") { setPwaPrompt(null); return; }
-                  } catch {}
-                }
-                setShowInstallModal(true);
-              }}
+              onClick={acionarInstalacao}
               className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold"
             >
               ⬇ Instalar
@@ -459,6 +532,15 @@ export default function AppMotorista() {
       )}
 
       {showInstallModal && <ModalInstalacaoAndroid onClose={() => setShowInstallModal(false)} />}
+      {showBanner && (
+        <BannerInstalarPWA
+          onInstalar={acionarInstalacao}
+          onFechar={() => {
+            setShowBanner(false);
+            sessionStorage.setItem("pwa-banner-dismissed", "1");
+          }}
+        />
+      )}
     </div>
   );
 }
