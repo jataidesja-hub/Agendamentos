@@ -23,14 +23,28 @@ export default function MotoristaLayout({ children }: { children: React.ReactNod
       {/* Captura beforeinstallprompt o mais cedo possível, antes do bundle React */}
       <Script id="pwa-motorista-setup" strategy="beforeInteractive">{`
         (function() {
-          // Registra SW o mais cedo possível
+          // Registra SW do mesmo path para ter scope correto
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw-motorista.js', { scope: '/onibus/motorista' }).catch(function(){});
+            navigator.serviceWorker.register('/onibus/motorista/sw.js', { scope: '/onibus/motorista' })
+              .then(function(reg) {
+                console.log('[PWA Motorista] SW registrado, scope:', reg.scope);
+                // Se acabou de instalar, recarrega uma vez para ativar
+                if (reg.installing) {
+                  reg.installing.addEventListener('statechange', function(e) {
+                    if (e.target.state === 'activated' && !sessionStorage.getItem('sw-motor-reloaded')) {
+                      sessionStorage.setItem('sw-motor-reloaded', '1');
+                      location.reload();
+                    }
+                  });
+                }
+              })
+              .catch(function(err) { console.error('[PWA Motorista] SW falhou:', err); });
           }
           // Captura o prompt de instalação nativo do Chrome Android
           function capture(e) {
             e.preventDefault();
             window.__pwaPrompt = e;
+            console.log('[PWA Motorista] beforeinstallprompt capturado!');
             window.dispatchEvent(new Event('pwaPromptReady'));
           }
           if (window.__pwaPrompt) {

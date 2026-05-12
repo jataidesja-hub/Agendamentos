@@ -121,17 +121,26 @@ export default function AppMotorista() {
   const acionarInstalacao = useCallback(async () => {
     // 1) Tenta usar o prompt capturado pelo beforeInteractive script
     const prompt = pwaPrompt || (window as any).__pwaPrompt;
+    console.log("[PWA Motorista] acionarInstalacao, prompt:", !!prompt);
     if (prompt) {
       try {
         await prompt.prompt();
         const { outcome } = await prompt.userChoice;
+        console.log("[PWA Motorista] userChoice:", outcome);
+        // Limpa prompt (só pode ser usado uma vez)
+        setPwaPrompt(null);
+        (window as any).__pwaPrompt = null;
         if (outcome === "accepted") {
-          setPwaPrompt(null);
-          (window as any).__pwaPrompt = null;
           setShowBanner(false);
+          setIsStandalone(true);
           return;
         }
-      } catch {}
+      } catch (err) {
+        console.warn("[PWA Motorista] prompt falhou:", err);
+        // Prompt já foi usado ou inválido — limpa
+        setPwaPrompt(null);
+        (window as any).__pwaPrompt = null;
+      }
     }
     // 2) Fallback: mostra modal com instruções manuais
     setShowInstallModal(true);
