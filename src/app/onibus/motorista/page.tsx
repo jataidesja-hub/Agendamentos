@@ -105,9 +105,12 @@ export default function AppMotorista() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const wakeLockRef = useRef<any>(null);
+  const pipWatchRef = useRef<number | null>(null);
+  const pipWindowRef = useRef<any>(null);
   const offlineQueueRef = useRef<any[]>([]);
   const [online, setOnline] = useState(true);
   const [telaAtiva, setTelaAtiva] = useState(false);
+  const [pipAtivo, setPipAtivo] = useState(false);
 
   // Refs para closures estáveis no realtime
   const minhaPosRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -347,6 +350,90 @@ export default function AppMotorista() {
     setTelaAtiva(false);
   };
 
+  const abrirPip = async () => {
+    const m = motoristaRef.current;
+    const r = rotaRef.current;
+    if (!m) return;
+
+    if (!("documentPictureInPicture" in window)) {
+      alert("Seu Chrome não suporta tela reduzida. Atualize para Chrome 116 ou superior.");
+      return;
+    }
+
+    try {
+      const pipWin = await (window as any).documentPictureInPicture.requestWindow({ width: 260, height: 180 });
+      pipWindowRef.current = pipWin;
+      setPipAtivo(true);
+
+      pipWin.document.head.innerHTML = `<style>
+        *{margin:0;padding:0;box-sizing:border-box;font-family:sans-serif}
+        body{background:#030712;color:white;padding:14px;display:flex;flex-direction:column;gap:6px;height:100vh}
+        .lbl{font-size:10px;color:#6b7280;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+        .spd{font-size:42px;font-weight:900;color:#f59e0b;line-height:1}
+        .row{display:flex;align-items:flex-end;gap:6px}
+        .unit{font-size:12px;color:#9ca3af;padding-bottom:6px}
+        .badge{font-size:9px;font-weight:900;padding:3px 8px;border-radius:999px}
+        .on{background:#065f46;color:#34d399}
+        .off{background:#7f1d1d;color:#f87171}
+        .dot{width:7px;height:7px;border-radius:50%;background:#34d399;animation:p 1.5s infinite}
+        @keyframes p{0%,100%{opacity:1}50%{opacity:.2}}
+        .coord{font-size:9px;color:#374151;margin-top:2px}
+      </style>`;
+
+      pipWin.document.body.innerHTML = `
+        <div class="lbl">🚌 GPS Ativo — ${m.nome}</div>
+        <div class="row">
+          <div class="spd" id="spd">0</div>
+          <div class="unit">km/h</div>
+          <div class="dot" id="dot"></div>
+        </div>
+        <span class="badge on" id="st">● Online</span>
+        <div class="coord" id="coord">Aguardando GPS...</div>
+      `;
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+      const script = pipWin.document.createElement("script");
+      script.textContent = `
+        const URL="${supabaseUrl}";
+        const KEY="${supabaseKey}";
+        const MID="${m.id}";
+        const MNOME="${m.nome.replace(/"/g, "")}";
+        const RID="${r?.id ?? ""}";
+        async function send(lat,lng,spd){
+          try{
+            await fetch(URL+"/rest/v1/onibus_posicoes",{
+              method:"POST",
+              headers:{"Content-Type":"application/json","apikey":KEY,"Authorization":"Bearer "+KEY,"Prefer":"resolution=merge-duplicates"},
+              body:JSON.stringify({referencia_id:MID,tipo:"motorista",nome:MNOME,lat,lng,velocidade:spd,rota_ativa_id:RID||null,atualizado_em:new Date().toISOString()})
+            });
+            document.getElementById("st").className="badge on";
+            document.getElementById("st").textContent="● Online";
+          }catch{
+            document.getElementById("st").className="badge off";
+            document.getElementById("st").textContent="● Offline";
+          }
+        }
+        navigator.geolocation.watchPosition(function(p){
+          var s=(p.coords.speed?p.coords.speed*3.6:0).toFixed(0);
+          document.getElementById("spd").textContent=s;
+          document.getElementById("coord").textContent=p.coords.latitude.toFixed(5)+", "+p.coords.longitude.toFixed(5);
+          send(p.coords.latitude,p.coords.longitude,parseFloat(s));
+        },null,{enableHighAccuracy:true,maximumAge:0});
+      `;
+      pipWin.document.body.appendChild(script);
+
+      pipWin.addEventListener("pagehide", () => {
+        pipWindowRef.current = null;
+        setPipAtivo(false);
+      });
+
+    } catch (e: any) {
+      alert("Não foi possível abrir tela reduzida: " + (e.message ?? e));
+    }
+  };
+
   // Re-adquire wake lock quando a aba volta ao foco (ex: usuário voltou do GPS nativo)
   useEffect(() => {
     if (!emRota) return;
@@ -480,6 +567,19 @@ export default function AppMotorista() {
           {emRota && telaAtiva && (
             <span className="px-2 py-1.5 rounded-xl bg-green-500/20 border border-green-500/30 text-green-400 text-[10px] font-black">
               🔆 TELA ON
+            </span>
+          )}
+          {emRota && !pipAtivo && typeof window !== "undefined" && "documentPictureInPicture" in window && (
+            <button
+              onClick={abrirPip}
+              className="px-2 py-1.5 rounded-xl bg-purple-500/20 border border-purple-500/30 text-purple-400 text-[10px] font-black active:scale-95 transition-all"
+            >
+              📺 Mini
+            </button>
+          )}
+          {pipAtivo && (
+            <span className="px-2 py-1.5 rounded-xl bg-purple-500/20 border border-purple-500/30 text-purple-400 text-[10px] font-black">
+              📺 MINI ON
             </span>
           )}
           {!online && (
