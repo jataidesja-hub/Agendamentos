@@ -3,7 +3,7 @@ import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "Ônibus CYMI – Motorista",
-  manifest: "/onibus/motorista/manifest.webmanifest",
+  manifest: "/motorista.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Motorista" },
   other: { "mobile-web-app-capable": "yes" },
 };
