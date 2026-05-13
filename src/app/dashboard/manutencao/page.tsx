@@ -179,7 +179,7 @@ export default function ManutencaoPage() {
     const reader = new FileReader();
     reader.onload = async (evt: any) => {
       try {
-        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        const wb = XLSX.read(evt.target.result, { type: 'array' });
         const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
         
         const getV = (row: any, names: string[]) => {
@@ -243,7 +243,7 @@ export default function ManutencaoPage() {
         toast.error("Erro ao processar planilha."); 
       } finally { setLoading(false); }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   // ==========================================
@@ -719,9 +719,9 @@ Serviços: ${item.servicos || "N/A"}`;
           const EtapaIcon = etapa.icon;
 
           return (
-            <div key={etapa.id} className={`flex flex-col rounded-[1.5rem] border ${colors.border} ${colors.bg} overflow-hidden shadow-sm`}>
+            <div key={etapa.id} className={`flex flex-col rounded-[1.5rem] border ${colors.border} ${colors.bg} shadow-sm`}>
               {/* Cabeçalho da coluna */}
-              <div className={`px-5 py-4 ${colors.headerBg} border-b ${colors.border}`}>
+              <div className={`px-5 py-4 ${colors.headerBg} border-b ${colors.border} rounded-t-[1.5rem]`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <div className={`w-2.5 h-2.5 rounded-full ${colors.dot} animate-pulse`} />
