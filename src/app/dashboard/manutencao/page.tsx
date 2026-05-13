@@ -17,6 +17,7 @@ import {
   ArrowDownTrayIcon,
   TrashIcon,
   PencilSquareIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { CheckIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-hot-toast";
@@ -29,6 +30,7 @@ const ETAPAS = [
   { id: "enviado", label: "Enviado p/ Email", color: "blue", icon: PaperAirplaneIcon },
   { id: "aguardando_aprovacao", label: "Aprovação confirmada via email", color: "purple", icon: CheckCircleIcon },
   { id: "aprovado", label: "Aprovado", color: "emerald", icon: CheckCircleIcon },
+  { id: "contestado", label: "Contestado", color: "rose", icon: ExclamationTriangleIcon },
 ] as const;
 
 type EtapaId = typeof ETAPAS[number]["id"];
@@ -44,6 +46,7 @@ interface ManutencaoVeiculo {
   servicos: string;
   pdf_url: string | null;
   obs_aprovacao: string | null;
+  obs_contestacao: string | null;
   updated_at: string;
 }
 
@@ -80,6 +83,14 @@ const etapaColors: Record<string, { bg: string; border: string; text: string; ba
     dot: "bg-emerald-400",
     headerBg: "bg-gradient-to-r from-emerald-100/80 to-emerald-50/40 dark:from-emerald-500/10 dark:to-transparent",
   },
+  contestado: {
+    bg: "bg-rose-50/80 dark:bg-rose-500/5",
+    border: "border-rose-200/60 dark:border-rose-500/20",
+    text: "text-rose-700 dark:text-rose-400",
+    badge: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/30",
+    dot: "bg-rose-400",
+    headerBg: "bg-gradient-to-r from-rose-100/80 to-rose-50/40 dark:from-rose-500/10 dark:to-transparent",
+  },
 };
 
 export default function ManutencaoPage() {
@@ -98,6 +109,8 @@ export default function ManutencaoPage() {
   const [editServicoText, setEditServicoText] = useState("");
   const [obsEditId, setObsEditId] = useState<string | null>(null);
   const [obsEditText, setObsEditText] = useState("");
+  const [contestacaoEditId, setContestacaoEditId] = useState<string | null>(null);
+  const [contestacaoEditText, setContestacaoEditText] = useState("");
   
   // Função para tocar o som de alerta
   const playNotificationSound = () => {
@@ -531,6 +544,7 @@ Serviços: ${item.servicos || "N/A"}`;
       enviado: [],
       aguardando_aprovacao: [],
       aprovado: [],
+      contestado: [],
     };
 
     data.forEach(item => {
@@ -698,7 +712,7 @@ Serviços: ${item.servicos || "N/A"}`;
       )}
 
       {/* KANBAN - Colunas por Etapa */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 min-h-[400px] overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 min-h-[400px] overflow-hidden">
         {ETAPAS.map(etapa => {
           const items = vehiclesByEtapa[etapa.id];
           const colors = etapaColors[etapa.id];
@@ -871,6 +885,59 @@ Serviços: ${item.servicos || "N/A"}`;
                                   </p>
                                 ) : (
                                   <p className="text-[10px] text-purple-400 font-bold italic">+ Adicionar descrição da aprovação</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Contestação (se status for contestado ou já tiver obs) */}
+                        {(item.status === 'contestado' || item.obs_contestacao) && (
+                          <div className="mb-3">
+                            {contestacaoEditId === item.id ? (
+                              <div className="space-y-2">
+                                <label className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Motivo da Contestação</label>
+                                <textarea
+                                  value={contestacaoEditText}
+                                  onChange={(e) => setContestacaoEditText(e.target.value)}
+                                  placeholder="Descreva o motivo da contestação..."
+                                  rows={2}
+                                  className="w-full px-3 py-2 bg-rose-50/50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-800 rounded-lg text-[11px] font-medium focus:ring-2 focus:ring-rose-500 transition-all resize-none"
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const { error } = await supabase
+                                        .from('manutencao_veiculos')
+                                        .update({ obs_contestacao: contestacaoEditText, updated_at: new Date().toISOString() })
+                                        .eq('id', item.id);
+                                      if (error) throw error;
+                                      setData(prev => prev.map(d => d.id === item.id ? { ...d, obs_contestacao: contestacaoEditText } : d));
+                                      setContestacaoEditId(null);
+                                      toast.success("Contestação salva!");
+                                    } catch {
+                                      toast.error("Erro ao salvar.");
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold hover:bg-rose-700 transition-all"
+                                >
+                                  <CheckIcon className="w-3.5 h-3.5" />
+                                  Confirmar
+                                </button>
+                              </div>
+                            ) : (
+                              <div
+                                onClick={() => { setContestacaoEditId(item.id); setContestacaoEditText(item.obs_contestacao || ""); }}
+                                className="p-2.5 bg-rose-50/50 dark:bg-rose-900/20 border border-rose-100/50 dark:border-rose-800/50 rounded-lg cursor-pointer hover:bg-rose-100/50 dark:hover:bg-rose-900/30 transition-all"
+                              >
+                                <p className="text-[9px] font-black text-rose-400 dark:text-rose-500 uppercase mb-1 tracking-tighter">Contestação</p>
+                                {item.obs_contestacao ? (
+                                  <p className="text-[11px] text-rose-700 dark:text-rose-300 font-medium line-clamp-2">
+                                    {item.obs_contestacao}
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-rose-400 font-bold italic">+ Adicionar motivo da contestação</p>
                                 )}
                               </div>
                             )}
