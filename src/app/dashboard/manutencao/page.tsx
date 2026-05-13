@@ -587,7 +587,7 @@ Serviços: ${item.servicos || "N/A"}`;
         </div>
         <div className="flex gap-3 flex-wrap">
           <button 
-            onClick={loadData}
+            onClick={() => loadData()}
             className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 transition-all shadow-sm"
             title="Atualizar"
           >
@@ -880,9 +880,15 @@ Serviços: ${item.servicos || "N/A"}`;
                               >
                                 <p className="text-[9px] font-black text-purple-400 dark:text-purple-500 uppercase mb-1 tracking-tighter">Aprovação por email</p>
                                 {item.obs_aprovacao ? (
-                                  <p className="text-[11px] text-purple-700 dark:text-purple-300 font-medium line-clamp-2">
-                                    {item.obs_aprovacao}
-                                  </p>
+                                  <div className="relative group/tooltip">
+                                    <p className="text-[11px] text-purple-700 dark:text-purple-300 font-medium line-clamp-2">
+                                      {item.obs_aprovacao}
+                                    </p>
+                                    <div className="absolute bottom-full left-0 z-50 hidden group-hover/tooltip:block w-64 p-3 bg-gray-900 text-white text-xs rounded-xl shadow-2xl mb-2 border border-purple-500/20 leading-relaxed pointer-events-none">
+                                      {item.obs_aprovacao}
+                                      <div className="absolute top-full left-4 w-2 h-2 bg-gray-900 rotate-45 -mt-1 border-r border-b border-purple-500/20" />
+                                    </div>
+                                  </div>
                                 ) : (
                                   <p className="text-[10px] text-purple-400 font-bold italic">+ Adicionar descrição da aprovação</p>
                                 )}
@@ -933,9 +939,15 @@ Serviços: ${item.servicos || "N/A"}`;
                               >
                                 <p className="text-[9px] font-black text-rose-400 dark:text-rose-500 uppercase mb-1 tracking-tighter">Contestação</p>
                                 {item.obs_contestacao ? (
-                                  <p className="text-[11px] text-rose-700 dark:text-rose-300 font-medium line-clamp-2">
-                                    {item.obs_contestacao}
-                                  </p>
+                                  <div className="relative group/tooltip">
+                                    <p className="text-[11px] text-rose-700 dark:text-rose-300 font-medium line-clamp-2">
+                                      {item.obs_contestacao}
+                                    </p>
+                                    <div className="absolute bottom-full left-0 z-50 hidden group-hover/tooltip:block w-64 p-3 bg-gray-900 text-white text-xs rounded-xl shadow-2xl mb-2 border border-rose-500/20 leading-relaxed pointer-events-none">
+                                      {item.obs_contestacao}
+                                      <div className="absolute top-full left-4 w-2 h-2 bg-gray-900 rotate-45 -mt-1 border-r border-b border-rose-500/20" />
+                                    </div>
+                                  </div>
                                 ) : (
                                   <p className="text-[10px] text-rose-400 font-bold italic">+ Adicionar motivo da contestação</p>
                                 )}
