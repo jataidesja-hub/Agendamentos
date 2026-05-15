@@ -323,39 +323,39 @@ export default function CotPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+              <tbody>
                 {tarefasFiltradas.map(t => {
                   const statusInfo = getStatusInfo(t.tipo_atividade, t.status);
                   const StatusIcon = statusInfo.icon;
                   return (
-                    <tr key={t.id} className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40 transition-colors group">
-                      <td className="px-5 py-4 whitespace-nowrap">
+                    <tr key={t.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/60 dark:hover:bg-gray-800/40 transition-colors group">
+                      <td className="px-5 py-5 whitespace-nowrap align-top">
                         <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${TIPO_COLORS[t.tipo_atividade]}`}>
                           {TIPO_LABELS[t.tipo_atividade]}
                         </span>
                       </td>
-                      <td className="px-5 py-4">
-                        <p className="text-sm font-bold text-gray-800 dark:text-white truncate max-w-[160px]" title={t.nome_projeto}>
+                      <td className="px-5 py-5 align-top">
+                        <p className="text-sm font-bold text-gray-800 dark:text-white min-w-[120px]">
                           {t.nome_projeto}
                         </p>
                       </td>
-                      <td className="px-5 py-4">
-                        <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-[200px]" title={t.atividade}>
+                      <td className="px-5 py-5 align-top">
+                        <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[200px] max-w-[340px]">
                           {t.atividade}
                         </p>
                       </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
+                      <td className="px-5 py-5 whitespace-nowrap align-top">
                         <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
                           {t.numero_documento || "—"}
                         </p>
                       </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
+                      <td className="px-5 py-5 whitespace-nowrap align-top">
                         <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
                           <CalendarDaysIcon className="w-4 h-4" />
                           {formatDate(t.data_fim)}
                         </div>
                       </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
+                      <td className="px-5 py-5 whitespace-nowrap align-top">
                         <select
                           value={t.status}
                           onChange={e => alterarStatus(t.id, t.tipo_atividade, e.target.value as StatusTarefa)}
@@ -366,16 +366,16 @@ export default function CotPage() {
                           ))}
                         </select>
                       </td>
-                      <td className="px-5 py-4 max-w-[200px]">
+                      <td className="px-5 py-5 align-top max-w-[220px]">
                         {t.observacao ? (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 hover:line-clamp-none transition-all cursor-default" title={t.observacao}>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-default">
                             {t.observacao}
                           </p>
                         ) : (
                           <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
+                      <td className="px-5 py-5 whitespace-nowrap align-top">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => abrirEdicao(t)}
@@ -479,7 +479,7 @@ export default function CotPage() {
                       onChange={e => setForm(p => ({ ...p, nome_projeto: e.target.value }))}
                       placeholder="Nome do projeto..."
                       required
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
+                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
                     />
                   </div>
                   <div>
@@ -492,7 +492,7 @@ export default function CotPage() {
                       onChange={e => setForm(p => ({ ...p, atividade: e.target.value }))}
                       placeholder="Descrição da atividade..."
                       required
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
+                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -503,7 +503,7 @@ export default function CotPage() {
                         value={form.numero_documento}
                         onChange={e => setForm(p => ({ ...p, numero_documento: e.target.value }))}
                         placeholder="Ex: DOC-2026-001"
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
+                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
                       />
                     </div>
                     <div>
@@ -512,7 +512,7 @@ export default function CotPage() {
                         type="date"
                         value={form.data_fim}
                         onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
+                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
                       />
                     </div>
                   </div>
@@ -547,7 +547,7 @@ export default function CotPage() {
                       onChange={e => setForm(p => ({ ...p, observacao: e.target.value }))}
                       placeholder="Observações adicionais..."
                       rows={3}
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all resize-none"
+                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all resize-none"
                     />
                   </div>
                 </div>
