@@ -45,7 +45,8 @@ interface CotTarefa {
   subtipo: Subtipo;
   nome_projeto: string;
   atividade: string;
-  numero_documento: string | null;
+  numero_documento: string | null;   // Nº do PES (PES) ou Nº Documento (DOC EXT.)
+  numero_doc_ext: string | null;      // Nº Documento quando PES tem doc externo vinculado
   observacao: string | null;
   data_fim: string | null;
   tipo_atividade: TipoAtividade;
@@ -98,6 +99,7 @@ const EMPTY_FORM = {
   nome_projeto: "",
   atividade: "",
   numero_documento: "",
+  numero_doc_ext: "",
   observacao: "",
   data_fim: "",
   tipo_numero: "" as string,
@@ -245,6 +247,7 @@ export default function CotPage() {
       nome_projeto: t.nome_projeto,
       atividade: t.atividade,
       numero_documento: t.numero_documento ?? "",
+      numero_doc_ext: t.numero_doc_ext ?? "",
       observacao: t.observacao ?? "",
       data_fim: t.data_fim ?? "",
       tipo_numero: t.tipo_numero != null ? String(t.tipo_numero) : "",
@@ -277,6 +280,7 @@ export default function CotPage() {
         nome_projeto: form.nome_projeto.trim(),
         atividade: form.atividade.trim(),
         numero_documento: form.numero_documento.trim() || null,
+        numero_doc_ext: (form.subtipo === "pes" && form.doc_externo !== "nao_possui") ? (form.numero_doc_ext.trim() || null) : null,
         observacao: form.observacao.trim() || null,
         data_fim: form.data_fim || null,
         tipo_atividade: tipoSelecionado,
@@ -386,9 +390,14 @@ export default function CotPage() {
               : <span className="text-gray-500 text-xs">—</span>}
           </td>
         )}
-        {/* Nº Documento */}
+        {/* Nº PES / Documento */}
         <td className="px-2 py-3 text-center align-middle">
-          <p className="text-xs text-gray-400 font-mono whitespace-nowrap">{t.numero_documento || "—"}</p>
+          <div className="flex flex-col items-center gap-0.5">
+            <p className="text-xs text-gray-400 font-mono whitespace-nowrap">{t.numero_documento || "—"}</p>
+            {t.subtipo === "pes" && t.numero_doc_ext && (
+              <p className="text-[9px] text-gray-500 font-mono whitespace-nowrap">{t.numero_doc_ext}</p>
+            )}
+          </div>
         </td>
         {/* Data Fim */}
         <td className="px-2 py-3 text-center align-middle whitespace-nowrap">
@@ -489,7 +498,7 @@ export default function CotPage() {
     { label: "Projeto",      align: "text-left" },
     { label: "Atividade",    align: "text-left" },
     ...(subtipoAtivo === "doc_ext" ? [{ label: "Agente", align: "text-left" }] : []),
-    { label: "Nº Documento", align: "text-center" },
+    { label: subtipoAtivo === "pes" ? "Nº PES / Doc." : "Nº Documento", align: "text-center" },
     { label: "Data Fim",     align: "text-center" },
     { label: "Status",       align: "text-center" },
     { label: "Doc. Ext.",    align: "text-center" },
@@ -833,17 +842,34 @@ export default function CotPage() {
                   </div>
                 </div>
 
+                {/* Nº do PES (PES) ou Nº Documento (DOC EXT.) + Data */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Nº Documento</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
+                      {form.subtipo === "pes" ? "Nº do PES" : "Nº Documento"}
+                    </label>
                     <input type="text" value={form.numero_documento} onChange={e => setForm(p => ({ ...p, numero_documento: e.target.value }))}
-                      placeholder="Ex: 24.532-26" className={inputCls} />
+                      placeholder={form.subtipo === "pes" ? "Ex: PES-001" : "Ex: 24.532-26"} className={inputCls} />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data de Fim</label>
                     <input type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className={inputCls} />
                   </div>
                 </div>
+
+                {/* Nº do Documento vinculado — só para PES quando tem doc. externo */}
+                {form.subtipo === "pes" && form.doc_externo !== "nao_possui" && (
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
+                      Nº Documento
+                      <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full border font-black ${DOC_EXT_COLORS[form.doc_externo] ?? ""}`}>
+                        {form.doc_externo}
+                      </span>
+                    </label>
+                    <input type="text" value={form.numero_doc_ext} onChange={e => setForm(p => ({ ...p, numero_doc_ext: e.target.value }))}
+                      placeholder={`Nº do documento ${form.doc_externo}...`} className={inputCls} />
+                  </div>
+                )}
 
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Status</label>
