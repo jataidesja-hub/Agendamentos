@@ -17,6 +17,7 @@ import {
   ClipboardDocumentCheckIcon,
   MapPinIcon,
   TableCellsIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigation, MOBILE_NAMES } from "@/lib/useNavigation";
 
@@ -38,6 +39,7 @@ const iconMap: Record<string, any> = {
   ClipboardDocumentCheckIcon,
   MapPinIcon,
   TableCellsIcon,
+  ExclamationTriangleIcon,
 };
 
 export default function MobileNav() {

@@ -19,7 +19,9 @@ import {
   ClipboardDocumentCheckIcon,
   MapPinIcon,
   TableCellsIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
+
 import { supabase } from "@/lib/supabase";
 import { useState, useRef } from "react";
 import { useNavigation } from "@/lib/useNavigation";
@@ -42,6 +44,7 @@ const iconMap: Record<string, any> = {
   ClipboardDocumentCheckIcon,
   MapPinIcon,
   TableCellsIcon,
+  ExclamationTriangleIcon,
 };
 
 export default function Sidebar() {

@@ -37,6 +37,7 @@ export default function UsuariosPage() {
     { id: 'checklist', nome: 'Checklist Veículos' },
     { id: 'km', nome: 'Relatório de KM' },
     { id: 'cot', nome: 'COT – Tarefas' },
+    { id: 'anormalidades', nome: 'Anormalidades' },
   ];
 
   useEffect(() => {
