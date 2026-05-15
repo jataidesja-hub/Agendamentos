@@ -28,6 +28,7 @@ type TipoAtividade = "diaria" | "continua";
 type StatusDiaria = "iniciada" | "em_execucao" | "interrompida" | "concluida";
 type StatusContinua = "iniciada" | "em_execucao" | "concluida";
 type StatusTarefa = StatusDiaria | StatusContinua;
+type Registro = "registrada" | "nao_registrada";
 
 interface CotTarefa {
   id: string;
@@ -41,6 +42,7 @@ interface CotTarefa {
   tipo_numero: number | null;
   nome_agente: string | null;
   status: StatusTarefa;
+  registro: Registro;
   concluida_em: string | null;
   arquivada: boolean;
   created_at: string;
@@ -90,6 +92,7 @@ const EMPTY_FORM = {
   tipo_numero: "" as string,
   nome_agente: "",
   status: "iniciada" as StatusTarefa,
+  registro: "nao_registrada" as Registro,
 };
 
 function StatsCard({ label, value, color }: { label: string; value: number; color: string }) {
@@ -231,6 +234,7 @@ export default function CotPage() {
       tipo_numero: t.tipo_numero != null ? String(t.tipo_numero) : "",
       nome_agente: t.nome_agente ?? "",
       status: t.status,
+      registro: (t.registro ?? "nao_registrada") as Registro,
     });
     setModalStep(2);
   };
@@ -262,6 +266,7 @@ export default function CotPage() {
         tipo_numero: form.tipo_numero ? parseInt(form.tipo_numero) : null,
         nome_agente: form.subtipo === "doc_ext" ? (form.nome_agente.trim() || null) : null,
         status: form.status,
+        registro: form.registro,
         updated_at: new Date().toISOString(),
       };
       if (editId) {
@@ -304,6 +309,15 @@ export default function CotPage() {
     } catch { toast.error("Erro ao atualizar status."); }
   };
 
+  const alterarRegistro = async (id: string, novoRegistro: Registro) => {
+    try {
+      const { error } = await supabase.from("cot_tarefas")
+        .update({ registro: novoRegistro, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      setTarefas(prev => prev.map(t => t.id === id ? { ...t, registro: novoRegistro } : t));
+    } catch { toast.error("Erro ao atualizar registro."); }
+  };
+
   const formatDate = (d: string | null) => {
     if (!d) return "—";
     const [y, m, day] = d.split("-");
@@ -313,12 +327,13 @@ export default function CotPage() {
   const statusOptions = tipoSelecionado === "diaria" ? STATUS_DIARIA : STATUS_CONTINUA;
   const inputCls = "w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all";
 
-  const colCount = subtipoAtivo === "doc_ext" ? 10 : 9;
+  const colCount = subtipoAtivo === "doc_ext" ? 11 : 10;
 
   const renderRow = (t: CotTarefa, isArquivada = false) => {
     const statusInfo = getStatusInfo(t.tipo_atividade, t.status);
     const isConcluida = t.status === "concluida" && !isArquivada;
     const countdown = isConcluida ? calcCountdown(t.concluida_em, nowMs) : null;
+    const reg = t.registro ?? "nao_registrada";
 
     return (
       <tr key={t.id} className={`border-b border-gray-100 dark:border-gray-800 transition-colors group
@@ -376,12 +391,36 @@ export default function CotPage() {
             </button>
           )}
         </td>
+        {/* Registro */}
+        <td className="px-4 py-4 text-center align-middle">
+          {isArquivada ? (
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] ${
+              reg === "registrada"
+                ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
+                : "bg-gray-500/10 text-gray-500 border-gray-500/20"
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${reg === "registrada" ? "bg-indigo-400" : "bg-gray-500"}`} />
+              {reg === "registrada" ? "Registrada" : "Não registrada"}
+            </span>
+          ) : (
+            <button
+              onClick={() => alterarRegistro(t.id, reg === "registrada" ? "nao_registrada" : "registrada")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] transition-all hover:opacity-80 ${
+                reg === "registrada"
+                  ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
+                  : "bg-gray-500/10 text-gray-400 border-gray-500/20 hover:border-indigo-500/30 hover:text-indigo-400"
+              }`}>
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${reg === "registrada" ? "bg-indigo-400" : "bg-gray-500"}`} />
+              {reg === "registrada" ? "Registrada" : "Não registrada"}
+            </button>
+          )}
+        </td>
         <td className="px-4 py-4 align-top max-w-[200px]">
           {t.observacao
             ? <p className="text-xs text-gray-400 whitespace-pre-wrap break-words hover:text-gray-200 transition-colors cursor-default leading-relaxed">{t.observacao}</p>
             : <span className="text-gray-600 text-xs">—</span>}
         </td>
-        {/* Última coluna: countdown (concluídas) ou ações (resto) — alinhado à direita */}
+        {/* Última coluna: countdown (concluídas) ou ações */}
         <td className="px-4 py-4 text-right align-middle min-w-[100px]">
           {isConcluida && countdown ? (
             <div className="flex flex-col items-end gap-1">
@@ -416,6 +455,7 @@ export default function CotPage() {
     { label: "Nº Documento", align: "text-center" },
     { label: "Data Fim",     align: "text-center" },
     { label: "Status",       align: "text-center" },
+    { label: "Registro",     align: "text-center" },
     { label: "Obs.",         align: "text-left" },
     { label: "",             align: "text-right" },
   ];
@@ -747,6 +787,28 @@ export default function CotPage() {
                         </button>
                       );
                     })}
+                  </div>
+                </div>
+
+                {/* Registro */}
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Registro</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { id: "registrada",     label: "Registrada",     cls: "border-indigo-500 bg-indigo-500/10 text-indigo-400", dot: "bg-indigo-400" },
+                      { id: "nao_registrada", label: "Não Registrada", cls: "border-gray-400 bg-gray-500/10 text-gray-400",       dot: "bg-gray-400" },
+                    ] as { id: Registro; label: string; cls: string; dot: string }[]).map(r => (
+                      <button key={r.id} type="button" onClick={() => setForm(p => ({ ...p, registro: r.id }))}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                          form.registro === r.id
+                            ? r.cls + " ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-[#0b7336]"
+                            : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
+                        }`}>
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${form.registro === r.id ? r.dot : "bg-gray-400"}`} />
+                        {r.label}
+                        {form.registro === r.id && <CheckIcon className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
