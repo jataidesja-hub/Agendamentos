@@ -84,7 +84,7 @@ export default function CotPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [openStatusId, setOpenStatusId] = useState<string | null>(null);
+  const [statusDropdown, setStatusDropdown] = useState<{ id: string; top: number; left: number } | null>(null);
 
   // Filtros
   const [filtroTipo, setFiltroTipo] = useState<TipoAtividade | "todos">("todos");
@@ -365,33 +365,23 @@ export default function CotPage() {
                           {formatDate(t.data_fim)}
                         </div>
                       </td>
-                      {/* Status — dropdown customizado */}
+                      {/* Status — dropdown fixo para escapar do overflow */}
                       <td className="px-5 py-5 text-center align-middle">
-                        <div className="relative inline-block">
-                          <button
-                            onClick={() => setOpenStatusId(openStatusId === t.id ? null : t.id)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] transition-all hover:opacity-80 ${statusInfo.badge}`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} flex-shrink-0`} />
-                            {statusInfo.label}
-                            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-                          </button>
-                          {openStatusId === t.id && (
-                            <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-1.5 min-w-[150px]">
-                              {getStatusList(t.tipo_atividade).map(s => (
-                                <button
-                                  key={s.id}
-                                  onClick={() => { alterarStatus(t.id, t.tipo_atividade, s.id); setOpenStatusId(null); }}
-                                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold transition-all hover:bg-gray-800 ${t.status === s.id ? s.badge : "text-gray-400"}`}
-                                >
-                                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
-                                  {s.label}
-                                  {t.status === s.id && <CheckIcon className="w-3 h-3 ml-auto" />}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          onClick={(e) => {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setStatusDropdown(statusDropdown?.id === t.id ? null : {
+                              id: t.id,
+                              top: rect.bottom + 6,
+                              left: rect.left + rect.width / 2,
+                            });
+                          }}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] transition-all hover:opacity-80 ${statusInfo.badge}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} flex-shrink-0`} />
+                          {statusInfo.label}
+                          <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                        </button>
                       </td>
                       <td className="px-5 py-5 align-top max-w-[220px]">
                         {t.observacao ? (
@@ -429,10 +419,32 @@ export default function CotPage() {
         )}
       </div>
 
-      {/* Backdrop para fechar dropdown de status */}
-      {openStatusId && (
-        <div className="fixed inset-0 z-40" onClick={() => setOpenStatusId(null)} />
-      )}
+      {/* Dropdown de status — renderizado fora da tabela para não ser cortado */}
+      {statusDropdown && (() => {
+        const t = tarefas.find(x => x.id === statusDropdown.id);
+        if (!t) return null;
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setStatusDropdown(null)} />
+            <div
+              className="fixed z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-1.5 min-w-[160px] -translate-x-1/2"
+              style={{ top: statusDropdown.top, left: statusDropdown.left }}
+            >
+              {getStatusList(t.tipo_atividade).map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => { alterarStatus(t.id, t.tipo_atividade, s.id); setStatusDropdown(null); }}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[11px] font-bold transition-all hover:bg-gray-800 ${t.status === s.id ? s.badge : "text-gray-400 hover:text-gray-200"}`}
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
+                  {s.label}
+                  {t.status === s.id && <CheckIcon className="w-3 h-3 ml-auto" />}
+                </button>
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── MODAL ─────────────────────────────────────────────────────── */}
       {modalStep > 0 && (
