@@ -37,17 +37,17 @@ interface CotTarefa {
   updated_at: string;
 }
 
-const STATUS_DIARIA: { id: StatusDiaria; label: string; color: string; icon: any }[] = [
-  { id: "iniciada",     label: "Iniciada",      color: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30",   icon: PlayIcon },
-  { id: "em_execucao",  label: "Em execução",   color: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30", icon: ClockIcon },
-  { id: "interrompida", label: "Interrompida",  color: "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30",         icon: ExclamationTriangleIcon },
-  { id: "concluida",    label: "Concluída",     color: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30", icon: CheckCircleIcon },
+const STATUS_DIARIA: { id: StatusDiaria; label: string; badge: string; dot: string; icon: any }[] = [
+  { id: "iniciada",     label: "Iniciada",     badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",          dot: "bg-sky-400",     icon: PlayIcon },
+  { id: "em_execucao",  label: "Em execução",  badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",    dot: "bg-amber-400",   icon: ClockIcon },
+  { id: "interrompida", label: "Interrompida", badge: "bg-rose-500/15 text-rose-400 border-rose-500/30",       dot: "bg-rose-400",    icon: ExclamationTriangleIcon },
+  { id: "concluida",    label: "Concluída",    badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", dot: "bg-emerald-400", icon: CheckCircleIcon },
 ];
 
-const STATUS_CONTINUA: { id: StatusContinua; label: string; color: string; icon: any }[] = [
-  { id: "iniciada",    label: "Iniciada",    color: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30",   icon: PlayIcon },
-  { id: "em_execucao", label: "Em execução", color: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30", icon: ClockIcon },
-  { id: "concluida",   label: "Concluída",   color: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30", icon: CheckCircleIcon },
+const STATUS_CONTINUA: { id: StatusContinua; label: string; badge: string; dot: string; icon: any }[] = [
+  { id: "iniciada",    label: "Iniciada",    badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",           dot: "bg-sky-400",     icon: PlayIcon },
+  { id: "em_execucao", label: "Em execução", badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",     dot: "bg-amber-400",   icon: ClockIcon },
+  { id: "concluida",   label: "Concluída",   badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", dot: "bg-emerald-400", icon: CheckCircleIcon },
 ];
 
 function getStatusList(tipo: TipoAtividade) {
@@ -59,8 +59,8 @@ function getStatusInfo(tipo: TipoAtividade, status: StatusTarefa) {
 }
 
 const TIPO_COLORS = {
-  diaria:  "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/20 dark:text-orange-300 dark:border-orange-500/30",
-  continua: "bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-500/20 dark:text-teal-300 dark:border-teal-500/30",
+  diaria:   "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  continua: "bg-teal-500/15 text-teal-400 border-teal-500/30",
 };
 
 const TIPO_LABELS = { diaria: "Diária", continua: "Contínua" };
@@ -84,10 +84,17 @@ export default function CotPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [openStatusId, setOpenStatusId] = useState<string | null>(null);
 
   // Filtros
   const [filtroTipo, setFiltroTipo] = useState<TipoAtividade | "todos">("todos");
   const [filtroStatus, setFiltroStatus] = useState<StatusTarefa | "todos">("todos");
+
+  useEffect(() => {
+    const fechar = () => setOpenStatusId(null);
+    document.addEventListener("click", fechar);
+    return () => document.removeEventListener("click", fechar);
+  }, []);
 
   useEffect(() => {
     loadTarefas();
@@ -316,9 +323,18 @@ export default function CotPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-800">
-                  {["Tipo", "Projeto", "Atividade", "Nº Documento", "Data Fim", "Status", "Obs.", "Ações"].map(h => (
-                    <th key={h} className="text-left px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                      {h}
+                  {[
+                    { label: "Tipo",         align: "text-center" },
+                    { label: "Projeto",      align: "text-left" },
+                    { label: "Atividade",    align: "text-left" },
+                    { label: "Nº Documento", align: "text-center" },
+                    { label: "Data Fim",     align: "text-center" },
+                    { label: "Status",       align: "text-center" },
+                    { label: "Obs.",         align: "text-left" },
+                    { label: "Ações",        align: "text-center" },
+                  ].map(h => (
+                    <th key={h.label} className={`${h.align} px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>
+                      {h.label}
                     </th>
                   ))}
                 </tr>
@@ -328,55 +344,72 @@ export default function CotPage() {
                   const statusInfo = getStatusInfo(t.tipo_atividade, t.status);
                   const StatusIcon = statusInfo.icon;
                   return (
-                    <tr key={t.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/60 dark:hover:bg-gray-800/40 transition-colors group">
-                      <td className="px-5 py-5 whitespace-nowrap align-top">
-                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${TIPO_COLORS[t.tipo_atividade]}`}>
+                    <tr key={t.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/40 dark:hover:bg-gray-800/30 transition-colors group">
+                      <td className="px-5 py-5 text-center align-middle">
+                        <span className={`text-[10px] font-black px-2.5 py-1.5 rounded-full border ${TIPO_COLORS[t.tipo_atividade]}`}>
                           {TIPO_LABELS[t.tipo_atividade]}
                         </span>
                       </td>
-                      <td className="px-5 py-5 align-top">
+                      <td className="px-5 py-5 align-middle">
                         <p className="text-sm font-bold text-gray-800 dark:text-white min-w-[120px]">
                           {t.nome_projeto}
                         </p>
                       </td>
                       <td className="px-5 py-5 align-top">
-                        <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[200px] max-w-[340px]">
+                        <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[200px] max-w-[340px] leading-relaxed">
                           {t.atividade}
                         </p>
                       </td>
-                      <td className="px-5 py-5 whitespace-nowrap align-top">
-                        <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
+                      <td className="px-5 py-5 text-center align-middle">
+                        <p className="text-sm text-gray-400 dark:text-gray-400 font-mono">
                           {t.numero_documento || "—"}
                         </p>
                       </td>
-                      <td className="px-5 py-5 whitespace-nowrap align-top">
-                        <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-5 py-5 text-center align-middle whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5 text-sm text-gray-400 dark:text-gray-400">
                           <CalendarDaysIcon className="w-4 h-4" />
                           {formatDate(t.data_fim)}
                         </div>
                       </td>
-                      <td className="px-5 py-5 whitespace-nowrap align-top">
-                        <select
-                          value={t.status}
-                          onChange={e => alterarStatus(t.id, t.tipo_atividade, e.target.value as StatusTarefa)}
-                          className={`text-[10px] font-black px-2.5 py-1.5 rounded-lg border cursor-pointer focus:outline-none ${statusInfo.color}`}
-                        >
-                          {getStatusList(t.tipo_atividade).map(s => (
-                            <option key={s.id} value={s.id}>{s.label}</option>
-                          ))}
-                        </select>
+                      {/* Status — dropdown customizado */}
+                      <td className="px-5 py-5 text-center align-middle">
+                        <div className="relative inline-block">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenStatusId(openStatusId === t.id ? null : t.id); }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] transition-all hover:opacity-80 ${statusInfo.badge}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} flex-shrink-0`} />
+                            {statusInfo.label}
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                          {openStatusId === t.id && (
+                            <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-1.5 min-w-[150px]" onClick={e => e.stopPropagation()}>
+                              {getStatusList(t.tipo_atividade).map(s => (
+                                <button
+                                  key={s.id}
+                                  onClick={() => { alterarStatus(t.id, t.tipo_atividade, s.id); setOpenStatusId(null); }}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold transition-all hover:bg-gray-800 ${t.status === s.id ? s.badge : "text-gray-400"}`}
+                                >
+                                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
+                                  {s.label}
+                                  {t.status === s.id && <CheckIcon className="w-3 h-3 ml-auto" />}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-5 align-top max-w-[220px]">
                         {t.observacao ? (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-default">
+                          <p className="text-xs text-gray-400 dark:text-gray-400 whitespace-pre-wrap break-words hover:text-gray-200 transition-colors cursor-default leading-relaxed">
                             {t.observacao}
                           </p>
                         ) : (
-                          <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                          <span className="text-gray-600 text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-5 whitespace-nowrap align-top">
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <td className="px-5 py-5 text-center align-middle">
+                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => abrirEdicao(t)}
                             className="p-1.5 text-gray-400 hover:text-[#0b7336] hover:bg-green-50 dark:hover:bg-green-500/10 rounded-lg transition-colors"
@@ -528,8 +561,8 @@ export default function CotPage() {
                             onClick={() => setForm(p => ({ ...p, status: s.id }))}
                             className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
                               form.status === s.id
-                                ? s.color + " ring-2 ring-offset-1 ring-[#0b7336]"
-                                : "border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300"
+                                ? s.badge + " ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-[#0b7336]"
+                                : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
                             }`}
                           >
                             <SIcon className="w-4 h-4 flex-shrink-0" />
