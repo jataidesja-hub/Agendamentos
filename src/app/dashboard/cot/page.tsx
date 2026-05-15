@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   PlusIcon,
   XMarkIcon,
@@ -14,11 +14,16 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
   PlayIcon,
+  UserIcon,
+  ArchiveBoxIcon,
+  ArrowLeftIcon,
+  SignalIcon,
 } from "@heroicons/react/24/outline";
 import { CheckIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-hot-toast";
 import { supabase } from "@/lib/supabase";
 
+type Subtipo = "pes" | "doc_ext";
 type TipoAtividade = "diaria" | "continua";
 type StatusDiaria = "iniciada" | "em_execucao" | "interrompida" | "concluida";
 type StatusContinua = "iniciada" | "em_execucao" | "concluida";
@@ -26,98 +31,190 @@ type StatusTarefa = StatusDiaria | StatusContinua;
 
 interface CotTarefa {
   id: string;
+  subtipo: Subtipo;
   nome_projeto: string;
   atividade: string;
   numero_documento: string | null;
   observacao: string | null;
   data_fim: string | null;
   tipo_atividade: TipoAtividade;
+  tipo_numero: number | null;
+  nome_agente: string | null;
   status: StatusTarefa;
+  concluida_em: string | null;
+  arquivada: boolean;
   created_at: string;
   updated_at: string;
 }
 
 const STATUS_DIARIA: { id: StatusDiaria; label: string; badge: string; dot: string; icon: any }[] = [
-  { id: "iniciada",     label: "Iniciada",     badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",          dot: "bg-sky-400",     icon: PlayIcon },
-  { id: "em_execucao",  label: "Em execução",  badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",    dot: "bg-amber-400",   icon: ClockIcon },
-  { id: "interrompida", label: "Interrompida", badge: "bg-rose-500/15 text-rose-400 border-rose-500/30",       dot: "bg-rose-400",    icon: ExclamationTriangleIcon },
-  { id: "concluida",    label: "Concluída",    badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", dot: "bg-emerald-400", icon: CheckCircleIcon },
+  { id: "iniciada",     label: "Iniciada",     badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: PlayIcon },
+  { id: "em_execucao",  label: "Em execução",  badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",         dot: "bg-amber-400",   icon: ClockIcon },
+  { id: "interrompida", label: "Interrompida", badge: "bg-rose-500/15 text-rose-400 border-rose-500/30",            dot: "bg-rose-400",    icon: ExclamationTriangleIcon },
+  { id: "concluida",    label: "Concluída",    badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",   dot: "bg-emerald-400", icon: CheckCircleIcon },
 ];
 
 const STATUS_CONTINUA: { id: StatusContinua; label: string; badge: string; dot: string; icon: any }[] = [
-  { id: "iniciada",    label: "Iniciada",    badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",           dot: "bg-sky-400",     icon: PlayIcon },
-  { id: "em_execucao", label: "Em execução", badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",     dot: "bg-amber-400",   icon: ClockIcon },
-  { id: "concluida",   label: "Concluída",   badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", dot: "bg-emerald-400", icon: CheckCircleIcon },
+  { id: "iniciada",    label: "Iniciada",    badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: PlayIcon },
+  { id: "em_execucao", label: "Em execução", badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",         dot: "bg-amber-400",   icon: ClockIcon },
+  { id: "concluida",   label: "Concluída",   badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",   dot: "bg-emerald-400", icon: CheckCircleIcon },
 ];
 
 function getStatusList(tipo: TipoAtividade) {
   return tipo === "diaria" ? STATUS_DIARIA : STATUS_CONTINUA;
 }
-
 function getStatusInfo(tipo: TipoAtividade, status: StatusTarefa) {
   return getStatusList(tipo).find(s => s.id === status) ?? getStatusList(tipo)[0];
 }
 
-const TIPO_COLORS = {
+const TIPO_COLORS: Record<TipoAtividade, string> = {
   diaria:   "bg-orange-500/15 text-orange-400 border-orange-500/30",
   continua: "bg-teal-500/15 text-teal-400 border-teal-500/30",
 };
+const TIPO_LABELS: Record<TipoAtividade, string> = { diaria: "Diária", continua: "Contínua" };
 
-const TIPO_LABELS = { diaria: "Diária", continua: "Contínua" };
+const SUBTIPO_CONFIG: Record<Subtipo, { label: string; color: string; activeColor: string }> = {
+  pes:     { label: "PES",      color: "text-violet-400", activeColor: "border-violet-500 bg-violet-500/10" },
+  doc_ext: { label: "DOC EXT.", color: "text-cyan-400",   activeColor: "border-cyan-500 bg-cyan-500/10" },
+};
+
+const ARCHIVE_MS = 24 * 60 * 60 * 1000;
 
 const EMPTY_FORM = {
+  subtipo: "pes" as Subtipo,
   nome_projeto: "",
   atividade: "",
   numero_documento: "",
   observacao: "",
   data_fim: "",
+  tipo_numero: "" as string,
+  nome_agente: "",
   status: "iniciada" as StatusTarefa,
 };
+
+function StatsCard({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
+      <span className={`text-2xl font-black ${color}`}>{value}</span>
+    </div>
+  );
+}
+
+function calcCountdown(concluida_em: string | null, nowMs: number): { text: string; color: string } | null {
+  if (!concluida_em) return null;
+  const remaining = Math.max(0, ARCHIVE_MS - (nowMs - new Date(concluida_em).getTime()));
+  if (remaining === 0) return { text: "Arquivando…", color: "text-red-400" };
+  const h = Math.floor(remaining / 3600000);
+  const m = Math.floor((remaining % 3600000) / 60000);
+  const s = Math.floor((remaining % 60000) / 1000);
+  const text = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  if (h < 4)  return { text, color: "text-red-400" };
+  if (h < 12) return { text, color: "text-amber-400" };
+  return { text, color: "text-emerald-400" };
+}
 
 export default function CotPage() {
   const [tarefas, setTarefas] = useState<CotTarefa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [subtipoAtivo, setSubtipoAtivo] = useState<Subtipo>("pes");
+  const [mostrarArquivados, setMostrarArquivados] = useState(false);
+  const [realtimePulse, setRealtimePulse] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
 
-  // Modal state
-  const [modalStep, setModalStep] = useState<0 | 1 | 2>(0); // 0=fechado, 1=escolher tipo, 2=form
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const [modalStep, setModalStep] = useState<0 | 1 | 2>(0);
   const [tipoSelecionado, setTipoSelecionado] = useState<TipoAtividade>("diaria");
   const [form, setForm] = useState(EMPTY_FORM);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [statusDropdown, setStatusDropdown] = useState<{ id: string; top: number; left: number } | null>(null);
 
-  // Filtros
   const [filtroTipo, setFiltroTipo] = useState<TipoAtividade | "todos">("todos");
   const [filtroStatus, setFiltroStatus] = useState<StatusTarefa | "todos">("todos");
+
+  const loadTarefas = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("cot_tarefas").select("*").order("updated_at", { ascending: false });
+      if (error) throw error;
+      setTarefas(data || []);
+    } catch { toast.error("Erro ao carregar tarefas."); }
+    finally { setLoading(false); }
+  }, []);
 
   useEffect(() => {
     loadTarefas();
     const channel = supabase
-      .channel("realtime_cot")
-      .on("postgres_changes", { event: "*", schema: "public", table: "cot_tarefas" }, () => loadTarefas(true))
+      .channel("realtime_cot_v2")
+      .on("postgres_changes", { event: "*", schema: "public", table: "cot_tarefas" }, () => {
+        setRealtimePulse(true);
+        setTimeout(() => setRealtimePulse(false), 2000);
+        loadTarefas(true);
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [loadTarefas]);
 
-  const loadTarefas = async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("cot_tarefas")
-        .select("*")
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      setTarefas(data || []);
-    } catch {
-      toast.error("Erro ao carregar tarefas.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Auto-archive tasks concluded 24h+ ago
+  useEffect(() => {
+    const now = Date.now();
+    const toArchive = tarefas.filter(t =>
+      t.status === "concluida" && !t.arquivada && t.concluida_em &&
+      now - new Date(t.concluida_em).getTime() >= ARCHIVE_MS
+    );
+    if (toArchive.length === 0) return;
+    Promise.all(
+      toArchive.map(t =>
+        supabase.from("cot_tarefas")
+          .update({ arquivada: true, updated_at: new Date().toISOString() })
+          .eq("id", t.id)
+      )
+    ).then(() => loadTarefas(true));
+  }, [tarefas, loadTarefas]);
+
+  const stats = useMemo(() => {
+    const calc = (sub: Subtipo) => {
+      const t = tarefas.filter(x => x.subtipo === sub && !x.arquivada);
+      return {
+        total:     t.length,
+        diarias:   t.filter(x => x.tipo_atividade === "diaria").length,
+        continuas: t.filter(x => x.tipo_atividade === "continua").length,
+        concluidas:t.filter(x => x.status === "concluida").length,
+        arquivadas:tarefas.filter(x => x.subtipo === sub && x.arquivada).length,
+      };
+    };
+    return { pes: calc("pes"), doc_ext: calc("doc_ext") };
+  }, [tarefas]);
+
+  const { tarefasAtivas, tarefasConcluidas, tarefasArquivadas } = useMemo(() => {
+    const base = tarefas.filter(t => {
+      if (t.subtipo !== subtipoAtivo) return false;
+      if (filtroTipo !== "todos" && t.tipo_atividade !== filtroTipo) return false;
+      if (filtroStatus !== "todos" && t.status !== filtroStatus) return false;
+      return true;
+    });
+    const arquivadas = base.filter(t => t.arquivada)
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    const ativas = base.filter(t => !t.arquivada && t.status !== "concluida")
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    const concluidas = base.filter(t => !t.arquivada && t.status === "concluida")
+      .sort((a, b) => {
+        const ta = a.concluida_em ? new Date(a.concluida_em).getTime() : 0;
+        const tb = b.concluida_em ? new Date(b.concluida_em).getTime() : 0;
+        return tb - ta;
+      });
+    return { tarefasAtivas: ativas, tarefasConcluidas: concluidas, tarefasArquivadas: arquivadas };
+  }, [tarefas, subtipoAtivo, filtroTipo, filtroStatus]);
 
   const abrirNova = () => {
     setEditId(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, subtipo: subtipoAtivo });
     setModalStep(1);
   };
 
@@ -125,11 +222,14 @@ export default function CotPage() {
     setEditId(t.id);
     setTipoSelecionado(t.tipo_atividade);
     setForm({
+      subtipo: t.subtipo,
       nome_projeto: t.nome_projeto,
       atividade: t.atividade,
       numero_documento: t.numero_documento ?? "",
       observacao: t.observacao ?? "",
       data_fim: t.data_fim ?? "",
+      tipo_numero: t.tipo_numero != null ? String(t.tipo_numero) : "",
+      nome_agente: t.nome_agente ?? "",
       status: t.status,
     });
     setModalStep(2);
@@ -141,46 +241,45 @@ export default function CotPage() {
     setModalStep(2);
   };
 
-  const fecharModal = () => {
-    setModalStep(0);
-    setEditId(null);
-    setForm(EMPTY_FORM);
-  };
+  const fecharModal = () => { setModalStep(0); setEditId(null); setForm(EMPTY_FORM); };
 
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nome_projeto.trim() || !form.atividade.trim()) {
-      toast.error("Projeto e Atividade são obrigatórios.");
-      return;
+      toast.error("Projeto e Atividade são obrigatórios."); return;
     }
     setSaving(true);
     try {
-      const payload = {
+      const isConcluida = form.status === "concluida";
+      const payload: any = {
+        subtipo: form.subtipo,
         nome_projeto: form.nome_projeto.trim(),
         atividade: form.atividade.trim(),
         numero_documento: form.numero_documento.trim() || null,
         observacao: form.observacao.trim() || null,
         data_fim: form.data_fim || null,
         tipo_atividade: tipoSelecionado,
+        tipo_numero: form.tipo_numero ? parseInt(form.tipo_numero) : null,
+        nome_agente: form.subtipo === "doc_ext" ? (form.nome_agente.trim() || null) : null,
         status: form.status,
         updated_at: new Date().toISOString(),
       };
       if (editId) {
+        const current = tarefas.find(t => t.id === editId);
+        if (isConcluida && !current?.concluida_em) payload.concluida_em = new Date().toISOString();
+        else if (!isConcluida) { payload.concluida_em = null; payload.arquivada = false; }
         const { error } = await supabase.from("cot_tarefas").update(payload).eq("id", editId);
         if (error) throw error;
         toast.success("Tarefa atualizada!");
       } else {
+        if (isConcluida) payload.concluida_em = new Date().toISOString();
         const { error } = await supabase.from("cot_tarefas").insert(payload);
         if (error) throw error;
         toast.success("Tarefa criada!");
       }
-      fecharModal();
-      loadTarefas();
-    } catch {
-      toast.error("Erro ao salvar tarefa.");
-    } finally {
-      setSaving(false);
-    }
+      fecharModal(); loadTarefas();
+    } catch { toast.error("Erro ao salvar tarefa."); }
+    finally { setSaving(false); }
   };
 
   const excluir = async (id: string) => {
@@ -188,40 +287,22 @@ export default function CotPage() {
     try {
       const { error } = await supabase.from("cot_tarefas").delete().eq("id", id);
       if (error) throw error;
-      toast.success("Tarefa excluída!");
-      loadTarefas();
-    } catch {
-      toast.error("Erro ao excluir.");
-    }
+      toast.success("Tarefa excluída!"); loadTarefas();
+    } catch { toast.error("Erro ao excluir."); }
   };
 
   const alterarStatus = async (id: string, tipo: TipoAtividade, novoStatus: StatusTarefa) => {
     try {
-      const { error } = await supabase
-        .from("cot_tarefas")
-        .update({ status: novoStatus, updated_at: new Date().toISOString() })
-        .eq("id", id);
+      const isConcluida = novoStatus === "concluida";
+      const current = tarefas.find(t => t.id === id);
+      const update: any = { status: novoStatus, updated_at: new Date().toISOString() };
+      if (isConcluida && !current?.concluida_em) update.concluida_em = new Date().toISOString();
+      else if (!isConcluida) { update.concluida_em = null; update.arquivada = false; }
+      const { error } = await supabase.from("cot_tarefas").update(update).eq("id", id);
       if (error) throw error;
-      setTarefas(prev => prev.map(t => t.id === id ? { ...t, status: novoStatus } : t));
-    } catch {
-      toast.error("Erro ao atualizar status.");
-    }
+      setTarefas(prev => prev.map(t => t.id === id ? { ...t, ...update } : t));
+    } catch { toast.error("Erro ao atualizar status."); }
   };
-
-  const tarefasFiltradas = useMemo(() => {
-    return tarefas.filter(t => {
-      if (filtroTipo !== "todos" && t.tipo_atividade !== filtroTipo) return false;
-      if (filtroStatus !== "todos" && t.status !== filtroStatus) return false;
-      return true;
-    });
-  }, [tarefas, filtroTipo, filtroStatus]);
-
-  const totais = useMemo(() => ({
-    total: tarefas.length,
-    diarias: tarefas.filter(t => t.tipo_atividade === "diaria").length,
-    continuas: tarefas.filter(t => t.tipo_atividade === "continua").length,
-    concluidas: tarefas.filter(t => t.status === "concluida").length,
-  }), [tarefas]);
 
   const formatDate = (d: string | null) => {
     if (!d) return "—";
@@ -230,86 +311,252 @@ export default function CotPage() {
   };
 
   const statusOptions = tipoSelecionado === "diaria" ? STATUS_DIARIA : STATUS_CONTINUA;
+  const inputCls = "w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all";
+
+  const colCount = subtipoAtivo === "doc_ext" ? 10 : 9;
+
+  const renderRow = (t: CotTarefa, isArquivada = false) => {
+    const statusInfo = getStatusInfo(t.tipo_atividade, t.status);
+    const isConcluida = t.status === "concluida" && !isArquivada;
+    const countdown = isConcluida ? calcCountdown(t.concluida_em, nowMs) : null;
+
+    return (
+      <tr key={t.id} className={`border-b border-gray-100 dark:border-gray-800 transition-colors group
+        ${isConcluida ? "opacity-60 hover:opacity-80 bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04]" : "hover:bg-gray-50/40 dark:hover:bg-gray-800/30"}
+        ${isArquivada ? "opacity-40 hover:opacity-60" : ""}
+      `}>
+        <td className="px-4 py-4 text-center align-middle">
+          <span className={`text-[10px] font-black px-2.5 py-1.5 rounded-full border ${TIPO_COLORS[t.tipo_atividade]}`}>
+            {TIPO_LABELS[t.tipo_atividade]}
+          </span>
+        </td>
+        <td className="px-4 py-4 text-center align-middle">
+          {t.tipo_numero != null
+            ? <span className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-black text-xs inline-flex items-center justify-center">{t.tipo_numero}</span>
+            : <span className="text-gray-500 text-xs">—</span>}
+        </td>
+        <td className="px-4 py-4 align-middle">
+          <p className="text-sm font-bold text-gray-800 dark:text-white min-w-[100px]">{t.nome_projeto}</p>
+        </td>
+        <td className="px-4 py-4 align-top">
+          <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[180px] max-w-[300px] leading-relaxed">{t.atividade}</p>
+        </td>
+        {subtipoAtivo === "doc_ext" && (
+          <td className="px-4 py-4 align-middle">
+            {t.nome_agente
+              ? <div className="flex items-center gap-1.5 text-sm text-cyan-400"><UserIcon className="w-3.5 h-3.5 flex-shrink-0" />{t.nome_agente}</div>
+              : <span className="text-gray-500 text-xs">—</span>}
+          </td>
+        )}
+        <td className="px-4 py-4 text-center align-middle">
+          <p className="text-sm text-gray-400 font-mono">{t.numero_documento || "—"}</p>
+        </td>
+        <td className="px-4 py-4 text-center align-middle whitespace-nowrap">
+          <div className="flex items-center justify-center gap-1.5 text-sm text-gray-400">
+            <CalendarDaysIcon className="w-4 h-4" />{formatDate(t.data_fim)}
+          </div>
+        </td>
+        <td className="px-4 py-4 text-center align-middle">
+          {isArquivada ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] bg-gray-500/10 text-gray-400 border-gray-500/20">
+              <ArchiveBoxIcon className="w-3.5 h-3.5 flex-shrink-0" /> Arquivada
+            </span>
+          ) : (
+            <button
+              onClick={(e) => {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                setStatusDropdown(statusDropdown?.id === t.id ? null : { id: t.id, top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] transition-all hover:opacity-80 ${statusInfo.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} flex-shrink-0`} />
+              {statusInfo.label}
+              <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
+        </td>
+        <td className="px-4 py-4 align-top max-w-[200px]">
+          {t.observacao
+            ? <p className="text-xs text-gray-400 whitespace-pre-wrap break-words hover:text-gray-200 transition-colors cursor-default leading-relaxed">{t.observacao}</p>
+            : <span className="text-gray-600 text-xs">—</span>}
+        </td>
+        {/* Última coluna: countdown (concluídas) ou ações (resto) — alinhado à direita */}
+        <td className="px-4 py-4 text-right align-middle min-w-[100px]">
+          {isConcluida && countdown ? (
+            <div className="flex flex-col items-end gap-1">
+              <span className={`font-mono font-black text-xs ${countdown.color}`}>{countdown.text}</span>
+              <span className="text-[8px] text-gray-500 uppercase tracking-widest">arquivo em</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {!isArquivada && (
+                <button onClick={() => abrirEdicao(t)}
+                  className="p-1.5 text-gray-400 hover:text-[#0b7336] hover:bg-green-50 dark:hover:bg-green-500/10 rounded-lg transition-colors">
+                  <PencilSquareIcon className="w-4 h-4" />
+                </button>
+              )}
+              <button onClick={() => excluir(t.id)}
+                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </td>
+      </tr>
+    );
+  };
+
+  const tableHeaders = [
+    { label: "Tipo",         align: "text-center" },
+    { label: "Nº Tipo",      align: "text-center" },
+    { label: "Projeto",      align: "text-left" },
+    { label: "Atividade",    align: "text-left" },
+    ...(subtipoAtivo === "doc_ext" ? [{ label: "Agente", align: "text-left" }] : []),
+    { label: "Nº Documento", align: "text-center" },
+    { label: "Data Fim",     align: "text-center" },
+    { label: "Status",       align: "text-center" },
+    { label: "Obs.",         align: "text-left" },
+    { label: "",             align: "text-right" },
+  ];
 
   return (
     <div className="h-full flex flex-col px-4 md:px-8 pb-10">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 mt-8 gap-4">
         <div>
-          <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">COT – Tarefas</h1>
-          <p className="text-gray-500 text-sm mt-1 font-medium">
-            Controle de atividades diárias e contínuas •{" "}
-            <span className="text-[#0b7336] font-bold">{totais.total}</span> tarefas
-          </p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">COT – Tarefas</h1>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest transition-all duration-500 ${
+              realtimePulse
+                ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400 scale-105"
+                : "border-gray-200 dark:border-gray-700 text-gray-400"
+            }`}>
+              <SignalIcon className={`w-3 h-3 ${realtimePulse ? "text-emerald-400" : "text-gray-400"}`} />
+              {realtimePulse ? "Atualizado" : "Ao vivo"}
+            </div>
+          </div>
+          <p className="text-gray-500 text-sm mt-1 font-medium">Controle de atividades diárias e contínuas</p>
         </div>
-        <div className="flex gap-3 flex-wrap items-center">
-          <button
-            onClick={() => loadTarefas()}
-            className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 transition-all shadow-sm"
-            title="Atualizar"
-          >
+        <div className="flex gap-3 items-center">
+          <button onClick={() => loadTarefas()}
+            className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 transition-all shadow-sm">
             <ArrowPathIcon className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
           </button>
-          <button
-            onClick={abrirNova}
-            className="flex items-center gap-2 px-6 py-3 bg-[#0b7336] text-white rounded-2xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-xl"
-          >
+          <button onClick={abrirNova}
+            className="flex items-center gap-2 px-6 py-3 bg-[#0b7336] text-white rounded-2xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-xl">
             <PlusIcon className="w-5 h-5" />
             Nova Tarefa
           </button>
         </div>
       </div>
 
-      {/* Cards de resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: "Total", value: totais.total, color: "text-gray-700 dark:text-gray-200", bg: "bg-white dark:bg-gray-800" },
-          { label: "Diárias", value: totais.diarias, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-50 dark:bg-orange-500/10" },
-          { label: "Contínuas", value: totais.continuas, color: "text-teal-600 dark:text-teal-400", bg: "bg-teal-50 dark:bg-teal-500/10" },
-          { label: "Concluídas", value: totais.concluidas, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
-        ].map(c => (
-          <div key={c.label} className={`${c.bg} rounded-2xl px-5 py-4 border border-gray-100 dark:border-gray-700 shadow-sm`}>
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">{c.label}</p>
-            <p className={`text-3xl font-black mt-1 ${c.color}`}>{c.value}</p>
+      {/* Tabs PES / DOC EXT. */}
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        {(["pes", "doc_ext"] as Subtipo[]).map(sub => {
+          const cfg = SUBTIPO_CONFIG[sub];
+          const s = stats[sub];
+          const isAtivo = subtipoAtivo === sub;
+          return (
+            <button key={sub} onClick={() => { setSubtipoAtivo(sub); setMostrarArquivados(false); }}
+              className={`rounded-2xl p-5 border-2 text-left transition-all ${isAtivo ? cfg.activeColor : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
+              <div className="flex items-center justify-between mb-4">
+                <span className={`text-lg font-black ${isAtivo ? cfg.color : "text-gray-400 dark:text-gray-500"}`}>{cfg.label}</span>
+                <div className="flex items-center gap-2">
+                  {s.arquivadas > 0 && (
+                    <span className="text-[9px] font-black px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center gap-1">
+                      <ArchiveBoxIcon className="w-3 h-3" />{s.arquivadas}
+                    </span>
+                  )}
+                  {isAtivo && <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${cfg.activeColor} ${cfg.color}`}>ATIVO</span>}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                <StatsCard label="Total"     value={s.total}      color={isAtivo ? cfg.color : "text-gray-500 dark:text-gray-400"} />
+                <StatsCard label="Diárias"   value={s.diarias}    color={isAtivo ? "text-orange-400" : "text-gray-500 dark:text-gray-400"} />
+                <StatsCard label="Contínuas" value={s.continuas}  color={isAtivo ? "text-teal-400"   : "text-gray-500 dark:text-gray-400"} />
+                <StatsCard label="Concluídas"value={s.concluidas} color={isAtivo ? "text-emerald-400": "text-gray-500 dark:text-gray-400"} />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filtros + Arquivados */}
+      <div className="flex flex-wrap gap-3 mb-4 items-center justify-between">
+        <div className="flex flex-wrap gap-3 items-center">
+          <FunnelIcon className="w-4 h-4 text-gray-400" />
+          <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+            {(["todos", "diaria", "continua"] as const).map(v => (
+              <button key={v} onClick={() => setFiltroTipo(v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroTipo === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                {v === "todos" ? "Todos" : v === "diaria" ? "Diárias" : "Contínuas"}
+              </button>
+            ))}
           </div>
-        ))}
+          <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+            {(["todos", "iniciada", "em_execucao", "interrompida", "concluida"] as const).map(v => (
+              <button key={v} onClick={() => setFiltroStatus(v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroStatus === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                {v === "todos" ? "Todos" : v === "em_execucao" ? "Em execução" : v === "iniciada" ? "Iniciada" : v === "interrompida" ? "Interrompida" : "Concluída"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={() => setMostrarArquivados(v => !v)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+            mostrarArquivados
+              ? "border-gray-400 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+              : "border-gray-200 dark:border-gray-700 text-gray-400 hover:border-gray-300 hover:text-gray-600 dark:hover:border-gray-600"
+          }`}>
+          {mostrarArquivados ? <ArrowLeftIcon className="w-3.5 h-3.5" /> : <ArchiveBoxIcon className="w-3.5 h-3.5" />}
+          {mostrarArquivados ? "Voltar" : "Arquivados"}
+          {!mostrarArquivados && tarefasArquivadas.length > 0 && (
+            <span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full text-[9px] font-black">
+              {tarefasArquivadas.length}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-3 mb-5 items-center">
-        <FunnelIcon className="w-4 h-4 text-gray-400" />
-        <div className="flex gap-1.5 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
-          {(["todos", "diaria", "continua"] as const).map(v => (
-            <button key={v}
-              onClick={() => setFiltroTipo(v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroTipo === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
-            >
-              {v === "todos" ? "Todos" : v === "diaria" ? "Diárias" : "Contínuas"}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-1.5 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
-          {(["todos", "iniciada", "em_execucao", "interrompida", "concluida"] as const).map(v => (
-            <button key={v}
-              onClick={() => setFiltroStatus(v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroStatus === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
-            >
-              {v === "todos" ? "Todos" : v === "em_execucao" ? "Em execução" : v === "iniciada" ? "Iniciada" : v === "interrompida" ? "Interrompida" : "Concluída"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tabela de tarefas */}
+      {/* Tabela */}
       <div className="flex-1 bg-white dark:bg-gray-900 rounded-[1.5rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-24">
             <ArrowPathIcon className="w-8 h-8 text-[#0b7336] animate-spin" />
           </div>
-        ) : tarefasFiltradas.length === 0 ? (
+        ) : mostrarArquivados ? (
+          tarefasArquivadas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
+              <ArchiveBoxIcon className="w-12 h-12" />
+              <p className="font-bold">Nenhuma tarefa arquivada em {SUBTIPO_CONFIG[subtipoAtivo].label}</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
+                <ArchiveBoxIcon className="w-4 h-4 text-gray-400" />
+                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                  Arquivados — {SUBTIPO_CONFIG[subtipoAtivo].label}
+                </span>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-800">
+                    {tableHeaders.map((h, i) => (
+                      <th key={i} className={`${h.align} px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>{tarefasArquivadas.map(t => renderRow(t, true))}</tbody>
+              </table>
+            </div>
+          )
+        ) : (tarefasAtivas.length === 0 && tarefasConcluidas.length === 0) ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
             <DocumentTextIcon className="w-12 h-12" />
-            <p className="font-bold">Nenhuma tarefa encontrada</p>
+            <p className="font-bold">Nenhuma tarefa em {SUBTIPO_CONFIG[subtipoAtivo].label}</p>
             <p className="text-sm">Clique em "Nova Tarefa" para começar</p>
           </div>
         ) : (
@@ -317,125 +564,51 @@ export default function CotPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-800">
-                  {[
-                    { label: "Tipo",         align: "text-center" },
-                    { label: "Projeto",      align: "text-left" },
-                    { label: "Atividade",    align: "text-left" },
-                    { label: "Nº Documento", align: "text-center" },
-                    { label: "Data Fim",     align: "text-center" },
-                    { label: "Status",       align: "text-center" },
-                    { label: "Obs.",         align: "text-left" },
-                    { label: "Ações",        align: "text-center" },
-                  ].map(h => (
-                    <th key={h.label} className={`${h.align} px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>
-                      {h.label}
-                    </th>
+                  {tableHeaders.map((h, i) => (
+                    <th key={i} className={`${h.align} px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {tarefasFiltradas.map(t => {
-                  const statusInfo = getStatusInfo(t.tipo_atividade, t.status);
-                  const StatusIcon = statusInfo.icon;
-                  return (
-                    <tr key={t.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/40 dark:hover:bg-gray-800/30 transition-colors group">
-                      <td className="px-5 py-5 text-center align-middle">
-                        <span className={`text-[10px] font-black px-2.5 py-1.5 rounded-full border ${TIPO_COLORS[t.tipo_atividade]}`}>
-                          {TIPO_LABELS[t.tipo_atividade]}
-                        </span>
-                      </td>
-                      <td className="px-5 py-5 align-middle">
-                        <p className="text-sm font-bold text-gray-800 dark:text-white min-w-[120px]">
-                          {t.nome_projeto}
-                        </p>
-                      </td>
-                      <td className="px-5 py-5 align-top">
-                        <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[200px] max-w-[340px] leading-relaxed">
-                          {t.atividade}
-                        </p>
-                      </td>
-                      <td className="px-5 py-5 text-center align-middle">
-                        <p className="text-sm text-gray-400 dark:text-gray-400 font-mono">
-                          {t.numero_documento || "—"}
-                        </p>
-                      </td>
-                      <td className="px-5 py-5 text-center align-middle whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5 text-sm text-gray-400 dark:text-gray-400">
-                          <CalendarDaysIcon className="w-4 h-4" />
-                          {formatDate(t.data_fim)}
+                {tarefasAtivas.map(t => renderRow(t))}
+
+                {tarefasConcluidas.length > 0 && (
+                  <tr>
+                    <td colSpan={colCount} className="px-6 pt-6 pb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 border-t border-dashed border-emerald-500/20" />
+                        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/8 border border-emerald-500/20">
+                          <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">
+                            Concluídas — arquivamento automático em 24h
+                          </span>
                         </div>
-                      </td>
-                      {/* Status — dropdown fixo para escapar do overflow */}
-                      <td className="px-5 py-5 text-center align-middle">
-                        <button
-                          onClick={(e) => {
-                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                            setStatusDropdown(statusDropdown?.id === t.id ? null : {
-                              id: t.id,
-                              top: rect.bottom + 6,
-                              left: rect.left + rect.width / 2,
-                            });
-                          }}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] transition-all hover:opacity-80 ${statusInfo.badge}`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} flex-shrink-0`} />
-                          {statusInfo.label}
-                          <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-                        </button>
-                      </td>
-                      <td className="px-5 py-5 align-top max-w-[220px]">
-                        {t.observacao ? (
-                          <p className="text-xs text-gray-400 dark:text-gray-400 whitespace-pre-wrap break-words hover:text-gray-200 transition-colors cursor-default leading-relaxed">
-                            {t.observacao}
-                          </p>
-                        ) : (
-                          <span className="text-gray-600 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-5 text-center align-middle">
-                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => abrirEdicao(t)}
-                            className="p-1.5 text-gray-400 hover:text-[#0b7336] hover:bg-green-50 dark:hover:bg-green-500/10 rounded-lg transition-colors"
-                            title="Editar"
-                          >
-                            <PencilSquareIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => excluir(t.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
-                            title="Excluir"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        <div className="flex-1 border-t border-dashed border-emerald-500/20" />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                {tarefasConcluidas.map(t => renderRow(t))}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Dropdown de status — renderizado fora da tabela para não ser cortado */}
+      {/* Dropdown status fixo */}
       {statusDropdown && (() => {
         const t = tarefas.find(x => x.id === statusDropdown.id);
         if (!t) return null;
         return (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setStatusDropdown(null)} />
-            <div
-              className="fixed z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-1.5 min-w-[160px] -translate-x-1/2"
-              style={{ top: statusDropdown.top, left: statusDropdown.left }}
-            >
+            <div className="fixed z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-1.5 min-w-[160px] -translate-x-1/2"
+              style={{ top: statusDropdown.top, left: statusDropdown.left }}>
               {getStatusList(t.tipo_atividade).map(s => (
-                <button
-                  key={s.id}
+                <button key={s.id}
                   onClick={() => { alterarStatus(t.id, t.tipo_atividade, s.id); setStatusDropdown(null); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[11px] font-bold transition-all hover:bg-gray-800 ${t.status === s.id ? s.badge : "text-gray-400 hover:text-gray-200"}`}
-                >
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[11px] font-bold transition-all hover:bg-gray-800 ${t.status === s.id ? s.badge : "text-gray-400 hover:text-gray-200"}`}>
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
                   {s.label}
                   {t.status === s.id && <CheckIcon className="w-3 h-3 ml-auto" />}
@@ -446,27 +619,22 @@ export default function CotPage() {
         );
       })()}
 
-      {/* ── MODAL ─────────────────────────────────────────────────────── */}
+      {/* MODAL */}
       {modalStep > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-lg border border-gray-100 dark:border-gray-800 overflow-hidden">
-
-            {/* Header do modal */}
-            <div className="flex items-center justify-between px-7 pt-7 pb-5">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-lg border border-gray-100 dark:border-gray-800 overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-7 pt-7 pb-5 sticky top-0 bg-white dark:bg-gray-900 z-10 border-b border-gray-100 dark:border-gray-800">
               <div>
                 <h2 className="text-xl font-black text-gray-900 dark:text-white">
                   {modalStep === 1 ? "Tipo de Atividade" : editId ? "Editar Tarefa" : "Nova Tarefa"}
                 </h2>
                 {modalStep === 2 && (
                   <div className="flex items-center gap-2 mt-1">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${TIPO_COLORS[tipoSelecionado]}`}>
-                      {TIPO_LABELS[tipoSelecionado]}
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${TIPO_COLORS[tipoSelecionado]}`}>{TIPO_LABELS[tipoSelecionado]}</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${form.subtipo === "pes" ? "border-violet-500/30 text-violet-400 bg-violet-500/10" : "border-cyan-500/30 text-cyan-400 bg-cyan-500/10"}`}>
+                      {SUBTIPO_CONFIG[form.subtipo].label}
                     </span>
-                    {!editId && (
-                      <button onClick={() => setModalStep(1)} className="text-xs text-gray-400 hover:text-gray-600 underline">
-                        alterar tipo
-                      </button>
-                    )}
+                    {!editId && <button onClick={() => setModalStep(1)} className="text-xs text-gray-400 hover:text-gray-600 underline">alterar</button>}
                   </div>
                 )}
               </div>
@@ -475,136 +643,123 @@ export default function CotPage() {
               </button>
             </div>
 
-            {/* Step 1: escolher tipo */}
             {modalStep === 1 && (
-              <div className="px-7 pb-7 grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => confirmarTipo("diaria")}
-                  className="flex flex-col items-center gap-4 p-6 rounded-2xl border-2 border-orange-200 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10 hover:border-orange-400 dark:hover:border-orange-500/60 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                >
+              <div className="px-7 pb-7 pt-6 grid grid-cols-2 gap-4">
+                <button onClick={() => confirmarTipo("diaria")}
+                  className="flex flex-col items-center gap-4 p-6 rounded-2xl border-2 border-orange-200 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10 hover:border-orange-400 hover:scale-[1.02] active:scale-[0.98] transition-all">
                   <div className="w-14 h-14 rounded-2xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/30">
                     <CalendarDaysIcon className="w-7 h-7 text-white" />
                   </div>
                   <div className="text-center">
                     <p className="font-black text-orange-700 dark:text-orange-400 text-base">Diária</p>
-                    <p className="text-xs text-orange-500/70 dark:text-orange-400/60 mt-1 leading-tight">
-                      Iniciada · Em execução<br />Interrompida · Concluída
-                    </p>
+                    <p className="text-xs text-orange-500/70 mt-1 leading-tight">Iniciada · Em execução<br />Interrompida · Concluída</p>
                   </div>
                 </button>
-                <button
-                  onClick={() => confirmarTipo("continua")}
-                  className="flex flex-col items-center gap-4 p-6 rounded-2xl border-2 border-teal-200 dark:border-teal-500/30 bg-teal-50 dark:bg-teal-500/10 hover:border-teal-400 dark:hover:border-teal-500/60 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                >
+                <button onClick={() => confirmarTipo("continua")}
+                  className="flex flex-col items-center gap-4 p-6 rounded-2xl border-2 border-teal-200 dark:border-teal-500/30 bg-teal-50 dark:bg-teal-500/10 hover:border-teal-400 hover:scale-[1.02] active:scale-[0.98] transition-all">
                   <div className="w-14 h-14 rounded-2xl bg-teal-600 flex items-center justify-center shadow-lg shadow-teal-500/30">
                     <ArrowPathIcon className="w-7 h-7 text-white" />
                   </div>
                   <div className="text-center">
                     <p className="font-black text-teal-700 dark:text-teal-400 text-base">Contínua</p>
-                    <p className="text-xs text-teal-500/70 dark:text-teal-400/60 mt-1 leading-tight">
-                      Iniciada · Em execução<br />Concluída
-                    </p>
+                    <p className="text-xs text-teal-500/70 mt-1 leading-tight">Iniciada · Em execução<br />Concluída</p>
                   </div>
                 </button>
               </div>
             )}
 
-            {/* Step 2: formulário */}
             {modalStep === 2 && (
-              <form onSubmit={salvar} className="px-7 pb-7 space-y-4">
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
-                      Projeto <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={form.nome_projeto}
-                      onChange={e => setForm(p => ({ ...p, nome_projeto: e.target.value }))}
-                      placeholder="Nome do projeto..."
-                      required
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
-                      Atividade <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={form.atividade}
-                      onChange={e => setForm(p => ({ ...p, atividade: e.target.value }))}
-                      placeholder="Descrição da atividade..."
-                      required
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Nº Documento</label>
-                      <input
-                        type="text"
-                        value={form.numero_documento}
-                        onChange={e => setForm(p => ({ ...p, numero_documento: e.target.value }))}
-                        placeholder="Ex: DOC-2026-001"
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data de Fim</label>
-                      <input
-                        type="date"
-                        value={form.data_fim}
-                        onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Status</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {statusOptions.map(s => {
-                        const SIcon = s.icon;
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => setForm(p => ({ ...p, status: s.id }))}
-                            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                              form.status === s.id
-                                ? s.badge + " ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-[#0b7336]"
-                                : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
-                            }`}
-                          >
-                            <SIcon className="w-4 h-4 flex-shrink-0" />
-                            {s.label}
-                            {form.status === s.id && <CheckIcon className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Observação</label>
-                    <textarea
-                      value={form.observacao}
-                      onChange={e => setForm(p => ({ ...p, observacao: e.target.value }))}
-                      placeholder="Observações adicionais..."
-                      rows={3}
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all resize-none"
-                    />
+              <form onSubmit={salvar} className="px-7 pb-7 pt-5 space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Subtipo</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["pes", "doc_ext"] as Subtipo[]).map(sub => (
+                      <button key={sub} type="button" onClick={() => setForm(p => ({ ...p, subtipo: sub }))}
+                        className={`py-2.5 rounded-xl border text-xs font-black transition-all ${
+                          form.subtipo === sub
+                            ? sub === "pes" ? "border-violet-500 bg-violet-500/10 text-violet-400" : "border-cyan-500 bg-cyan-500/10 text-cyan-400"
+                            : "border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300 dark:hover:border-gray-600"
+                        }`}>
+                        {SUBTIPO_CONFIG[sub].label}
+                        {form.subtipo === sub && <CheckIcon className="w-3 h-3 inline ml-1.5" />}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="w-full py-3.5 bg-[#0b7336] disabled:opacity-50 text-white rounded-xl font-black text-sm hover:bg-[#075a2a] transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
-                >
-                  {saving ? (
-                    <ArrowPathIcon className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckIcon className="w-4 h-4" />
-                  )}
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Projeto <span className="text-red-400">*</span></label>
+                    <input type="text" value={form.nome_projeto} onChange={e => setForm(p => ({ ...p, nome_projeto: e.target.value }))}
+                      placeholder="Nome do projeto..." required className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Nº Tipo</label>
+                    <select value={form.tipo_numero} onChange={e => setForm(p => ({ ...p, tipo_numero: e.target.value }))} className={inputCls}>
+                      <option value="">—</option>
+                      {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Atividade <span className="text-red-400">*</span></label>
+                  <textarea value={form.atividade} onChange={e => setForm(p => ({ ...p, atividade: e.target.value }))}
+                    placeholder="Descrição da atividade..." required rows={3}
+                    className={inputCls + " resize-none"} />
+                </div>
+
+                {form.subtipo === "doc_ext" && (
+                  <div>
+                    <label className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-1.5 block">Nome do Agente</label>
+                    <input type="text" value={form.nome_agente} onChange={e => setForm(p => ({ ...p, nome_agente: e.target.value }))}
+                      placeholder="Nome do agente responsável..." className={inputCls} />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Nº Documento</label>
+                    <input type="text" value={form.numero_documento} onChange={e => setForm(p => ({ ...p, numero_documento: e.target.value }))}
+                      placeholder="Ex: 24.532-26" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data de Fim</label>
+                    <input type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className={inputCls} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Status</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {statusOptions.map(s => {
+                      const SIcon = s.icon;
+                      return (
+                        <button key={s.id} type="button" onClick={() => setForm(p => ({ ...p, status: s.id }))}
+                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                            form.status === s.id
+                              ? s.badge + " ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-[#0b7336]"
+                              : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
+                          }`}>
+                          <SIcon className="w-4 h-4 flex-shrink-0" />
+                          {s.label}
+                          {form.status === s.id && <CheckIcon className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Observação</label>
+                  <textarea value={form.observacao} onChange={e => setForm(p => ({ ...p, observacao: e.target.value }))}
+                    placeholder="Observações adicionais..." rows={3}
+                    className={inputCls + " resize-none"} />
+                </div>
+
+                <button type="submit" disabled={saving}
+                  className="w-full py-3.5 bg-[#0b7336] disabled:opacity-50 text-white rounded-xl font-black text-sm hover:bg-[#075a2a] transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                  {saving ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
                   {editId ? "Salvar Alterações" : "Criar Tarefa"}
                 </button>
               </form>
