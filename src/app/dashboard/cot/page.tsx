@@ -358,41 +358,49 @@ export default function CotPage() {
         ${isConcluida ? "opacity-60 hover:opacity-80 bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04]" : "hover:bg-gray-50/40 dark:hover:bg-gray-800/30"}
         ${isArquivada ? "opacity-40 hover:opacity-60" : ""}
       `}>
-        <td className="px-4 py-4 text-center align-middle">
-          <span className={`text-[10px] font-black px-2.5 py-1.5 rounded-full border ${TIPO_COLORS[t.tipo_atividade]}`}>
+        {/* Tipo */}
+        <td className="px-2 py-3 text-center align-middle whitespace-nowrap">
+          <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${TIPO_COLORS[t.tipo_atividade]}`}>
             {TIPO_LABELS[t.tipo_atividade]}
           </span>
         </td>
-        <td className="px-4 py-4 text-center align-middle">
+        {/* Nº Tipo */}
+        <td className="px-2 py-3 text-center align-middle">
           {t.tipo_numero != null
-            ? <span className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-black text-xs inline-flex items-center justify-center">{t.tipo_numero}</span>
+            ? <span className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-black text-xs inline-flex items-center justify-center">{t.tipo_numero}</span>
             : <span className="text-gray-500 text-xs">—</span>}
         </td>
-        <td className="px-4 py-4 align-middle">
-          <p className="text-sm font-bold text-gray-800 dark:text-white min-w-[100px]">{t.nome_projeto}</p>
+        {/* Projeto */}
+        <td className="px-2 py-3 align-middle">
+          <p className="text-xs font-bold text-gray-800 dark:text-white whitespace-nowrap">{t.nome_projeto}</p>
         </td>
-        <td className="px-4 py-4 align-top">
-          <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[180px] max-w-[300px] leading-relaxed">{t.atividade}</p>
+        {/* Atividade */}
+        <td className="px-2 py-3 align-top">
+          <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words w-[200px] leading-relaxed">{t.atividade}</p>
         </td>
+        {/* Agente (DOC EXT. only) */}
         {subtipoAtivo === "doc_ext" && (
-          <td className="px-4 py-4 align-middle">
+          <td className="px-2 py-3 align-middle">
             {t.nome_agente
-              ? <div className="flex items-center gap-1.5 text-sm text-cyan-400"><UserIcon className="w-3.5 h-3.5 flex-shrink-0" />{t.nome_agente}</div>
+              ? <div className="flex items-center gap-1 text-xs text-cyan-400 whitespace-nowrap"><UserIcon className="w-3 h-3 flex-shrink-0" />{t.nome_agente}</div>
               : <span className="text-gray-500 text-xs">—</span>}
           </td>
         )}
-        <td className="px-4 py-4 text-center align-middle">
-          <p className="text-sm text-gray-400 font-mono">{t.numero_documento || "—"}</p>
+        {/* Nº Documento */}
+        <td className="px-2 py-3 text-center align-middle">
+          <p className="text-xs text-gray-400 font-mono whitespace-nowrap">{t.numero_documento || "—"}</p>
         </td>
-        <td className="px-4 py-4 text-center align-middle whitespace-nowrap">
-          <div className="flex items-center justify-center gap-1.5 text-sm text-gray-400">
-            <CalendarDaysIcon className="w-4 h-4" />{formatDate(t.data_fim)}
+        {/* Data Fim */}
+        <td className="px-2 py-3 text-center align-middle whitespace-nowrap">
+          <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
+            <CalendarDaysIcon className="w-3.5 h-3.5" />{formatDate(t.data_fim)}
           </div>
         </td>
-        <td className="px-4 py-4 text-center align-middle">
+        {/* Status */}
+        <td className="px-2 py-3 text-center align-middle">
           {isArquivada ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] bg-gray-500/10 text-gray-400 border-gray-500/20">
-              <ArchiveBoxIcon className="w-3.5 h-3.5 flex-shrink-0" /> Arquivada
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] bg-gray-500/10 text-gray-400 border-gray-500/20 whitespace-nowrap">
+              <ArchiveBoxIcon className="w-3 h-3 flex-shrink-0" /> Arquivada
             </span>
           ) : (
             <button
@@ -400,64 +408,61 @@ export default function CotPage() {
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 setStatusDropdown(statusDropdown?.id === t.id ? null : { id: t.id, top: rect.bottom + 6, left: rect.left + rect.width / 2 });
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] transition-all hover:opacity-80 ${statusInfo.badge}`}>
+              className={`flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] transition-all hover:opacity-80 whitespace-nowrap ${statusInfo.badge}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} flex-shrink-0`} />
               {statusInfo.label}
-              <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-2.5 h-2.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
           )}
         </td>
         {/* Doc. Externo */}
-        <td className="px-4 py-4 text-center align-middle">
+        <td className="px-2 py-3 text-center align-middle">
           {(() => {
             const de = t.doc_externo;
-            if (!de || de === "nao_possui") {
-              return <span className="text-gray-500 text-xs font-mono">—</span>;
-            }
+            if (!de || de === "nao_possui") return <span className="text-gray-500 text-xs">—</span>;
             return (
-              <span className={`text-[10px] font-black px-2.5 py-1.5 rounded-full border ${DOC_EXT_COLORS[de] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
+              <span className={`text-[9px] font-black px-2 py-1 rounded-full border whitespace-nowrap ${DOC_EXT_COLORS[de] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
                 {de}
               </span>
             );
           })()}
         </td>
         {/* Registro */}
-        <td className="px-4 py-4 text-center align-middle">
+        <td className="px-2 py-3 text-center align-middle">
           {isArquivada ? (
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] ${
-              reg === "registrada"
-                ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
-                : "bg-gray-500/10 text-gray-500 border-gray-500/20"
+            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] whitespace-nowrap ${
+              reg === "registrada" ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30" : "bg-gray-500/10 text-gray-500 border-gray-500/20"
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${reg === "registrada" ? "bg-indigo-400" : "bg-gray-500"}`} />
-              {reg === "registrada" ? "Registrada" : "Não registrada"}
+              {reg === "registrada" ? "Registrada" : "Não reg."}
             </span>
           ) : (
             <button
               onClick={() => alterarRegistro(t.id, reg === "registrada" ? "nao_registrada" : "registrada")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] transition-all hover:opacity-80 ${
+              className={`flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] transition-all hover:opacity-80 whitespace-nowrap ${
                 reg === "registrada"
                   ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
                   : "bg-gray-500/10 text-gray-400 border-gray-500/20 hover:border-indigo-500/30 hover:text-indigo-400"
               }`}>
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${reg === "registrada" ? "bg-indigo-400" : "bg-gray-500"}`} />
-              {reg === "registrada" ? "Registrada" : "Não registrada"}
+              {reg === "registrada" ? "Registrada" : "Não reg."}
             </button>
           )}
         </td>
-        <td className="px-4 py-4 align-top max-w-[200px]">
+        {/* Obs. */}
+        <td className="px-2 py-3 align-top w-[140px]">
           {t.observacao
-            ? <p className="text-xs text-gray-400 whitespace-pre-wrap break-words hover:text-gray-200 transition-colors cursor-default leading-relaxed">{t.observacao}</p>
+            ? <p className="text-[10px] text-gray-400 whitespace-pre-wrap break-words hover:text-gray-200 transition-colors cursor-default leading-relaxed">{t.observacao}</p>
             : <span className="text-gray-600 text-xs">—</span>}
         </td>
-        {/* Última coluna: countdown (concluídas) ou ações */}
-        <td className="px-4 py-4 text-right align-middle min-w-[100px]">
+        {/* Countdown / Ações */}
+        <td className="px-2 py-3 text-right align-middle min-w-[90px]">
           {isConcluida && countdown ? (
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-col items-end gap-0.5">
               <span className={`font-mono font-black text-xs ${countdown.color}`}>{countdown.text}</span>
-              <span className="text-[8px] text-gray-500 uppercase tracking-widest">arquivo em</span>
+              <span className="text-[7px] text-gray-500 uppercase tracking-widest">arquivo em</span>
             </div>
           ) : (
             <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -494,7 +499,7 @@ export default function CotPage() {
   ];
 
   return (
-    <div className="h-full flex flex-col px-4 md:px-8 pb-10">
+    <div className="h-full flex flex-col px-2 md:px-4 pb-10">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 mt-8 gap-4">
         <div>
@@ -618,7 +623,7 @@ export default function CotPage() {
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-gray-800">
                     {tableHeaders.map((h, i) => (
-                      <th key={i} className={`${h.align} px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
+                      <th key={i} className={`${h.align} px-2 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -638,7 +643,7 @@ export default function CotPage() {
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-800">
                   {tableHeaders.map((h, i) => (
-                    <th key={i} className={`${h.align} px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
+                    <th key={i} className={`${h.align} px-2 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
                   ))}
                 </tr>
               </thead>
