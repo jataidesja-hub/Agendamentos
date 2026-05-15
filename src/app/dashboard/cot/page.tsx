@@ -30,6 +30,16 @@ type StatusContinua = "iniciada" | "em_execucao" | "concluida";
 type StatusTarefa = StatusDiaria | StatusContinua;
 type Registro = "registrada" | "nao_registrada";
 
+const DOC_EXT_OPTS = ["MO", "AI", "ATEE", "ATEIE"] as const;
+type DocExterno = "nao_possui" | typeof DOC_EXT_OPTS[number];
+
+const DOC_EXT_COLORS: Record<string, string> = {
+  MO:    "bg-violet-500/15 text-violet-400 border-violet-500/30",
+  AI:    "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+  ATEE:  "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  ATEIE: "bg-pink-500/15 text-pink-400 border-pink-500/30",
+};
+
 interface CotTarefa {
   id: string;
   subtipo: Subtipo;
@@ -41,6 +51,7 @@ interface CotTarefa {
   tipo_atividade: TipoAtividade;
   tipo_numero: number | null;
   nome_agente: string | null;
+  doc_externo: string | null;
   status: StatusTarefa;
   registro: Registro;
   concluida_em: string | null;
@@ -91,6 +102,7 @@ const EMPTY_FORM = {
   data_fim: "",
   tipo_numero: "" as string,
   nome_agente: "",
+  doc_externo: "nao_possui" as string,
   status: "iniciada" as StatusTarefa,
   registro: "nao_registrada" as Registro,
 };
@@ -217,7 +229,11 @@ export default function CotPage() {
 
   const abrirNova = () => {
     setEditId(null);
-    setForm({ ...EMPTY_FORM, subtipo: subtipoAtivo });
+    setForm({
+      ...EMPTY_FORM,
+      subtipo: subtipoAtivo,
+      doc_externo: subtipoAtivo === "doc_ext" ? "MO" : "nao_possui",
+    });
     setModalStep(1);
   };
 
@@ -233,6 +249,7 @@ export default function CotPage() {
       data_fim: t.data_fim ?? "",
       tipo_numero: t.tipo_numero != null ? String(t.tipo_numero) : "",
       nome_agente: t.nome_agente ?? "",
+      doc_externo: t.doc_externo ?? (t.subtipo === "doc_ext" ? "MO" : "nao_possui"),
       status: t.status,
       registro: (t.registro ?? "nao_registrada") as Registro,
     });
@@ -265,6 +282,7 @@ export default function CotPage() {
         tipo_atividade: tipoSelecionado,
         tipo_numero: form.tipo_numero ? parseInt(form.tipo_numero) : null,
         nome_agente: form.subtipo === "doc_ext" ? (form.nome_agente.trim() || null) : null,
+        doc_externo: form.doc_externo || null,
         status: form.status,
         registro: form.registro,
         updated_at: new Date().toISOString(),
@@ -327,7 +345,7 @@ export default function CotPage() {
   const statusOptions = tipoSelecionado === "diaria" ? STATUS_DIARIA : STATUS_CONTINUA;
   const inputCls = "w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all";
 
-  const colCount = subtipoAtivo === "doc_ext" ? 11 : 10;
+  const colCount = subtipoAtivo === "doc_ext" ? 12 : 11;
 
   const renderRow = (t: CotTarefa, isArquivada = false) => {
     const statusInfo = getStatusInfo(t.tipo_atividade, t.status);
@@ -390,6 +408,20 @@ export default function CotPage() {
               </svg>
             </button>
           )}
+        </td>
+        {/* Doc. Externo */}
+        <td className="px-4 py-4 text-center align-middle">
+          {(() => {
+            const de = t.doc_externo;
+            if (!de || de === "nao_possui") {
+              return <span className="text-gray-500 text-xs font-mono">—</span>;
+            }
+            return (
+              <span className={`text-[10px] font-black px-2.5 py-1.5 rounded-full border ${DOC_EXT_COLORS[de] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
+                {de}
+              </span>
+            );
+          })()}
         </td>
         {/* Registro */}
         <td className="px-4 py-4 text-center align-middle">
@@ -455,6 +487,7 @@ export default function CotPage() {
     { label: "Nº Documento", align: "text-center" },
     { label: "Data Fim",     align: "text-center" },
     { label: "Status",       align: "text-center" },
+    { label: "Doc. Ext.",    align: "text-center" },
     { label: "Registro",     align: "text-center" },
     { label: "Obs.",         align: "text-left" },
     { label: "",             align: "text-right" },
@@ -714,7 +747,12 @@ export default function CotPage() {
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Subtipo</label>
                   <div className="grid grid-cols-2 gap-2">
                     {(["pes", "doc_ext"] as Subtipo[]).map(sub => (
-                      <button key={sub} type="button" onClick={() => setForm(p => ({ ...p, subtipo: sub }))}
+                      <button key={sub} type="button" onClick={() => setForm(p => ({
+                        ...p,
+                        subtipo: sub,
+                        // reset doc_externo when switching subtipo
+                        doc_externo: sub === "pes" ? "nao_possui" : (DOC_EXT_OPTS.includes(p.doc_externo as any) ? p.doc_externo : "MO"),
+                      }))}
                         className={`py-2.5 rounded-xl border text-xs font-black transition-all ${
                           form.subtipo === sub
                             ? sub === "pes" ? "border-violet-500 bg-violet-500/10 text-violet-400" : "border-cyan-500 bg-cyan-500/10 text-cyan-400"
@@ -756,6 +794,39 @@ export default function CotPage() {
                       placeholder="Nome do agente responsável..." className={inputCls} />
                   </div>
                 )}
+
+                {/* Doc. Externo */}
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
+                    Doc. Externo{form.subtipo === "doc_ext" && <span className="text-red-400 ml-0.5">*</span>}
+                  </label>
+                  <div className={`grid gap-2 ${form.subtipo === "pes" ? "grid-cols-5" : "grid-cols-4"}`}>
+                    {form.subtipo === "pes" && (
+                      <button type="button"
+                        onClick={() => setForm(p => ({ ...p, doc_externo: "nao_possui" }))}
+                        className={`py-2 rounded-xl border text-xs font-black transition-all ${
+                          form.doc_externo === "nao_possui"
+                            ? "border-gray-400 bg-gray-500/15 text-gray-300 ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-[#0b7336]"
+                            : "border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300"
+                        }`}>
+                        Não possui
+                        {form.doc_externo === "nao_possui" && <CheckIcon className="w-3 h-3 inline ml-1" />}
+                      </button>
+                    )}
+                    {DOC_EXT_OPTS.map(opt => (
+                      <button key={opt} type="button"
+                        onClick={() => setForm(p => ({ ...p, doc_externo: opt }))}
+                        className={`py-2 rounded-xl border text-xs font-black transition-all ${
+                          form.doc_externo === opt
+                            ? (DOC_EXT_COLORS[opt] ?? "") + " ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-[#0b7336]"
+                            : "border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300"
+                        }`}>
+                        {opt}
+                        {form.doc_externo === opt && <CheckIcon className="w-3 h-3 inline ml-1" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

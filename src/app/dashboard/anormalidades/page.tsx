@@ -184,7 +184,7 @@ export default function AnormalidadesPage() {
         toast.success("Anormalidade registrada!");
       }
       fecharForm(); loadItens();
-    } catch { toast.error("Erro ao salvar."); }
+    } catch (err: any) { toast.error("Erro ao salvar: " + (err?.message || JSON.stringify(err))); }
     finally { setSaving(false); }
   };
 
