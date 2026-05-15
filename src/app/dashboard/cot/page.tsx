@@ -91,12 +91,6 @@ export default function CotPage() {
   const [filtroStatus, setFiltroStatus] = useState<StatusTarefa | "todos">("todos");
 
   useEffect(() => {
-    const fechar = () => setOpenStatusId(null);
-    document.addEventListener("click", fechar);
-    return () => document.removeEventListener("click", fechar);
-  }, []);
-
-  useEffect(() => {
     loadTarefas();
     const channel = supabase
       .channel("realtime_cot")
@@ -375,7 +369,7 @@ export default function CotPage() {
                       <td className="px-5 py-5 text-center align-middle">
                         <div className="relative inline-block">
                           <button
-                            onClick={(e) => { e.stopPropagation(); setOpenStatusId(openStatusId === t.id ? null : t.id); }}
+                            onClick={() => setOpenStatusId(openStatusId === t.id ? null : t.id)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-black text-[10px] transition-all hover:opacity-80 ${statusInfo.badge}`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} flex-shrink-0`} />
@@ -383,7 +377,7 @@ export default function CotPage() {
                             <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
                           </button>
                           {openStatusId === t.id && (
-                            <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-1.5 min-w-[150px]" onClick={e => e.stopPropagation()}>
+                            <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-1.5 min-w-[150px]">
                               {getStatusList(t.tipo_atividade).map(s => (
                                 <button
                                   key={s.id}
@@ -434,6 +428,11 @@ export default function CotPage() {
           </div>
         )}
       </div>
+
+      {/* Backdrop para fechar dropdown de status */}
+      {openStatusId && (
+        <div className="fixed inset-0 z-40" onClick={() => setOpenStatusId(null)} />
+      )}
 
       {/* ── MODAL ─────────────────────────────────────────────────────── */}
       {modalStep > 0 && (
