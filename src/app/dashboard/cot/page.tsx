@@ -279,13 +279,13 @@ export default function CotPage() {
         subtipo: form.subtipo,
         nome_projeto: form.nome_projeto.trim(),
         atividade: form.atividade.trim(),
-        numero_documento: form.numero_documento.trim() || null,
-        numero_doc_ext: (form.subtipo === "pes" && form.doc_externo !== "nao_possui") ? (form.numero_doc_ext.trim() || null) : null,
-        observacao: form.observacao.trim() || null,
+        numero_documento: (form.numero_documento || "").trim() || null,
+        numero_doc_ext: (form.subtipo === "pes" && form.doc_externo !== "nao_possui") ? ((form.numero_doc_ext || "").trim() || null) : null,
+        observacao: (form.observacao || "").trim() || null,
         data_fim: form.data_fim || null,
         tipo_atividade: tipoSelecionado,
         tipo_numero: form.tipo_numero ? parseInt(form.tipo_numero) : null,
-        nome_agente: form.subtipo === "doc_ext" ? (form.nome_agente.trim() || null) : null,
+        nome_agente: form.subtipo === "doc_ext" ? ((form.nome_agente || "").trim() || null) : null,
         doc_externo: form.doc_externo || null,
         status: form.status,
         registro: form.registro,
@@ -305,7 +305,7 @@ export default function CotPage() {
         toast.success("Tarefa criada!");
       }
       fecharModal(); loadTarefas();
-    } catch { toast.error("Erro ao salvar tarefa."); }
+    } catch (e: any) { toast.error("Erro ao salvar tarefa: " + (e.message || "Erro desconhecido")); }
     finally { setSaving(false); }
   };
 
