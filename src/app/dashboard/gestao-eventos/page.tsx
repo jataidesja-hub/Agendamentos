@@ -506,7 +506,7 @@ export default function GestaoEventosPage() {
                       </td>
                       <td className="px-3 py-3 align-top">
                         {evento.last_modified_by && (
-                          <p className="text-[8px] text-gray-400/70 italic mb-1">
+                          <p className="text-[9px] font-bold text-rose-500/90 dark:text-rose-400/90 mb-1 uppercase tracking-wide">
                             Modificado por {evento.last_modified_by.split("@")[0]} em {new Date(evento.updated_at).toLocaleString('pt-BR')}
                           </p>
                         )}
