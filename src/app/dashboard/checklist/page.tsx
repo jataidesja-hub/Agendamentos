@@ -64,6 +64,13 @@ export default function ChecklistPage() {
     c.projeto?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const groupedChecklists = filtrado.reduce((acc, item) => {
+    const proj = item.projeto || "Sem Projeto";
+    if (!acc[proj]) acc[proj] = [];
+    acc[proj].push(item);
+    return acc;
+  }, {} as Record<string, Checklist[]>);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -111,51 +118,59 @@ export default function ChecklistPage() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtrado.map(item => (
-            <div
-              key={item.id}
-              className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="font-black text-gray-900 dark:text-white text-lg tracking-wide">{item.placa}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 font-medium truncate">{item.condutor || "—"}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500 truncate">{item.projeto || "—"}</p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => router.push(`/dashboard/checklist/${item.id}`)}
-                    className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"
+        <div className="space-y-8">
+          {Object.entries(groupedChecklists).map(([projeto, items]) => (
+            <div key={projeto} className="space-y-3">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 pb-2">
+                {projeto} <span className="text-sm font-normal text-gray-500">({items.length})</span>
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {items.map(item => (
+                  <div
+                    key={item.id}
+                    className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all"
                   >
-                    <EyeIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDownloadPdf(item.id)}
-                    disabled={gerandoPdfId === item.id}
-                    className="p-2 rounded-xl bg-green-50 dark:bg-green-900/30 text-[#0b7336] dark:text-green-400 hover:bg-green-100 transition-colors disabled:opacity-50"
-                    title="Baixar PDF"
-                  >
-                    {gerandoPdfId === item.id
-                      ? <div className="w-4 h-4 border-2 border-[#0b7336] border-t-transparent rounded-full animate-spin" />
-                      : <ArrowDownTrayIcon className="w-4 h-4" />
-                    }
-                  </button>
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="p-2 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 hover:bg-red-100 transition-colors"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-gray-900 dark:text-white text-lg tracking-wide">{item.placa}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 font-medium truncate">{item.condutor || "—"}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => router.push(`/dashboard/checklist/${item.id}`)}
+                          className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"
+                        >
+                          <EyeIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDownloadPdf(item.id)}
+                          disabled={gerandoPdfId === item.id}
+                          className="p-2 rounded-xl bg-green-50 dark:bg-green-900/30 text-[#0b7336] dark:text-green-400 hover:bg-green-100 transition-colors disabled:opacity-50"
+                          title="Baixar PDF"
+                        >
+                          {gerandoPdfId === item.id
+                            ? <div className="w-4 h-4 border-2 border-[#0b7336] border-t-transparent rounded-full animate-spin" />
+                            : <ArrowDownTrayIcon className="w-4 h-4" />
+                          }
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="p-2 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 hover:bg-red-100 transition-colors"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-500 dark:text-gray-500">
+                      <span>KM: <span className="font-bold text-gray-700 dark:text-gray-300">{item.km_inspecao || "—"}</span></span>
+                      <span>{item.data_inspecao ? new Date(item.data_inspecao + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</span>
+                    </div>
+                    {item.local_inspecao && (
+                      <p className="text-xs text-gray-400 dark:text-gray-600 mt-1 truncate">{item.local_inspecao}</p>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-500 dark:text-gray-500">
-                <span>KM: <span className="font-bold text-gray-700 dark:text-gray-300">{item.km_inspecao || "—"}</span></span>
-                <span>{item.data_inspecao ? new Date(item.data_inspecao + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</span>
-              </div>
-              {item.local_inspecao && (
-                <p className="text-xs text-gray-400 dark:text-gray-600 mt-1 truncate">{item.local_inspecao}</p>
-              )}
             </div>
           ))}
         </div>
