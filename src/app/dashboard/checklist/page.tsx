@@ -23,6 +23,12 @@ export default function ChecklistPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [gerandoPdfId, setGerandoPdfId] = useState<string | null>(null);
+  const [isMaster, setIsMaster] = useState(false);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [veiculos, setVeiculos] = useState<any[]>([]);
+  const [novoProjeto, setNovoProjeto] = useState("");
+  const [selectedPlacas, setSelectedPlacas] = useState<string[]>([]);
+  const [savingProject, setSavingProject] = useState(false);
 
   const handleDownloadPdf = async (id: string) => {
     setGerandoPdfId(id);
@@ -37,8 +43,63 @@ export default function ChecklistPage() {
   };
 
   useEffect(() => {
+    checkMaster();
     load();
   }, []);
+
+  const checkMaster = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { data } = await supabase
+      .from("perfis_acesso")
+      .select("master")
+      .eq("email", session.user.email)
+      .single();
+    if (data?.master) {
+      setIsMaster(true);
+    }
+  };
+
+  const loadVeiculos = async () => {
+    const { data } = await supabase.from("frota_veiculos").select("placa, projeto").order("placa");
+    if (data) {
+      setVeiculos(data);
+    }
+  };
+
+  const openProjectModal = () => {
+    loadVeiculos();
+    setSelectedPlacas([]);
+    setNovoProjeto("");
+    setShowProjectModal(true);
+  };
+
+  const saveProjectLink = async () => {
+    if (!novoProjeto.trim()) {
+      toast.error("Digite o nome do projeto");
+      return;
+    }
+    if (selectedPlacas.length === 0) {
+      toast.error("Selecione pelo menos um veículo");
+      return;
+    }
+    setSavingProject(true);
+    try {
+      const { error } = await supabase
+        .from("frota_veiculos")
+        .update({ projeto: novoProjeto.trim() })
+        .in("placa", selectedPlacas);
+      
+      if (error) throw error;
+      toast.success("Veículos vinculados com sucesso!");
+      setShowProjectModal(false);
+      load(); // Reload checklists to update project names if necessary
+    } catch (e: any) {
+      toast.error("Erro ao vincular veículos");
+    } finally {
+      setSavingProject(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -64,13 +125,6 @@ export default function ChecklistPage() {
     c.projeto?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const groupedChecklists = filtrado.reduce((acc, item) => {
-    const proj = item.projeto || "Sem Projeto";
-    if (!acc[proj]) acc[proj] = [];
-    acc[proj].push(item);
-    return acc;
-  }, {} as Record<string, Checklist[]>);
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -83,13 +137,23 @@ export default function ChecklistPage() {
             {lista.length} checklist{lista.length !== 1 ? "s" : ""} registrado{lista.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <button
-          onClick={() => router.push("/dashboard/checklist/novo")}
-          className="flex items-center gap-2 px-5 py-3 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95"
-        >
-          <PlusIcon className="w-5 h-5" />
-          Novo Checklist
-        </button>
+        <div className="flex items-center gap-3">
+          {isMaster && (
+            <button
+              onClick={openProjectModal}
+              className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95"
+            >
+              Vincular Projetos
+            </button>
+          )}
+          <button
+            onClick={() => router.push("/dashboard/checklist/novo")}
+            className="flex items-center gap-2 px-5 py-3 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95"
+          >
+            <PlusIcon className="w-5 h-5" />
+            Novo Checklist
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -118,61 +182,129 @@ export default function ChecklistPage() {
           </button>
         </div>
       ) : (
-        <div className="space-y-8">
-          {Object.entries(groupedChecklists).map(([projeto, items]) => (
-            <div key={projeto} className="space-y-3">
-              <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 pb-2">
-                {projeto} <span className="text-sm font-normal text-gray-500">({items.length})</span>
-              </h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {items.map(item => (
-                  <div
-                    key={item.id}
-                    className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all"
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filtrado.map(item => (
+            <div
+              key={item.id}
+              className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-gray-900 dark:text-white text-lg tracking-wide">{item.placa}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 font-medium truncate">{item.condutor || "—"}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500 truncate">{item.projeto || "—"}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => router.push(`/dashboard/checklist/${item.id}`)}
+                    className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-gray-900 dark:text-white text-lg tracking-wide">{item.placa}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 font-medium truncate">{item.condutor || "—"}</p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => router.push(`/dashboard/checklist/${item.id}`)}
-                          className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"
-                        >
-                          <EyeIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDownloadPdf(item.id)}
-                          disabled={gerandoPdfId === item.id}
-                          className="p-2 rounded-xl bg-green-50 dark:bg-green-900/30 text-[#0b7336] dark:text-green-400 hover:bg-green-100 transition-colors disabled:opacity-50"
-                          title="Baixar PDF"
-                        >
-                          {gerandoPdfId === item.id
-                            ? <div className="w-4 h-4 border-2 border-[#0b7336] border-t-transparent rounded-full animate-spin" />
-                            : <ArrowDownTrayIcon className="w-4 h-4" />
-                          }
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-2 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 hover:bg-red-100 transition-colors"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-500 dark:text-gray-500">
-                      <span>KM: <span className="font-bold text-gray-700 dark:text-gray-300">{item.km_inspecao || "—"}</span></span>
-                      <span>{item.data_inspecao ? new Date(item.data_inspecao + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</span>
-                    </div>
-                    {item.local_inspecao && (
-                      <p className="text-xs text-gray-400 dark:text-gray-600 mt-1 truncate">{item.local_inspecao}</p>
-                    )}
-                  </div>
-                ))}
+                    <EyeIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDownloadPdf(item.id)}
+                    disabled={gerandoPdfId === item.id}
+                    className="p-2 rounded-xl bg-green-50 dark:bg-green-900/30 text-[#0b7336] dark:text-green-400 hover:bg-green-100 transition-colors disabled:opacity-50"
+                    title="Baixar PDF"
+                  >
+                    {gerandoPdfId === item.id
+                      ? <div className="w-4 h-4 border-2 border-[#0b7336] border-t-transparent rounded-full animate-spin" />
+                      : <ArrowDownTrayIcon className="w-4 h-4" />
+                    }
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="p-2 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 hover:bg-red-100 transition-colors"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs text-gray-500 dark:text-gray-500">
+                <span>KM: <span className="font-bold text-gray-700 dark:text-gray-300">{item.km_inspecao || "—"}</span></span>
+                <span>{item.data_inspecao ? new Date(item.data_inspecao + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</span>
+              </div>
+              {item.local_inspecao && (
+                <p className="text-xs text-gray-400 dark:text-gray-600 mt-1 truncate">{item.local_inspecao}</p>
+              )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal de Projetos */}
+      {showProjectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-2xl border border-gray-100 dark:border-gray-800 flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
+              <h2 className="text-xl font-black text-gray-900 dark:text-white">Vincular Veículos a Projeto</h2>
+              <p className="text-sm text-gray-500 mt-1">Defina o nome do projeto e selecione os veículos.</p>
+            </div>
+            
+            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Nome do Projeto</label>
+                <input
+                  type="text"
+                  value={novoProjeto}
+                  onChange={e => setNovoProjeto(e.target.value.toUpperCase())}
+                  placeholder="EX: AGUA VERMELHA"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Selecione os Veículos ({selectedPlacas.length})</label>
+                  <button 
+                    onClick={() => {
+                      if (selectedPlacas.length === veiculos.length) setSelectedPlacas([]);
+                      else setSelectedPlacas(veiculos.map(v => v.placa));
+                    }}
+                    className="text-xs text-indigo-600 font-bold hover:underline"
+                  >
+                    {selectedPlacas.length === veiculos.length ? "Desmarcar Todos" : "Marcar Todos"}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {veiculos.map(v => (
+                    <label key={v.placa} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selectedPlacas.includes(v.placa) ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                        checked={selectedPlacas.includes(v.placa)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedPlacas(p => [...p, v.placa]);
+                          else setSelectedPlacas(p => p.filter(pl => pl !== v.placa));
+                        }}
+                      />
+                      <div>
+                        <p className="text-sm font-black text-gray-900 dark:text-white">{v.placa}</p>
+                        <p className="text-[10px] text-gray-500 truncate max-w-[100px]">{v.projeto || "Sem projeto"}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-b-[2rem]">
+              <button
+                onClick={() => setShowProjectModal(false)}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveProjectLink}
+                disabled={savingProject}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 transition-all"
+              >
+                {savingProject && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Salvar Vínculos
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
