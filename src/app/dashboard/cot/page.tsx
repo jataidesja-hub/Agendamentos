@@ -57,6 +57,7 @@ interface CotTarefa {
   registro: Registro;
   concluida_em: string | null;
   arquivada: boolean;
+  last_modified_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -150,6 +151,7 @@ export default function CotPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [statusDropdown, setStatusDropdown] = useState<{ id: string; top: number; left: number } | null>(null);
+  const [userEmail, setUserEmail] = useState("");
 
   const [filtroTipo, setFiltroTipo] = useState<TipoAtividade | "todos">("todos");
   const [filtroStatus, setFiltroStatus] = useState<StatusTarefa | "todos">("todos");
@@ -166,6 +168,9 @@ export default function CotPage() {
   }, []);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session?.user?.email) setUserEmail(data.session.user.email);
+    });
     loadTarefas();
     const channel = supabase
       .channel("realtime_cot_v2")
@@ -289,6 +294,7 @@ export default function CotPage() {
         doc_externo: form.doc_externo || null,
         status: form.status,
         registro: form.registro,
+        last_modified_by: userEmail,
         updated_at: new Date().toISOString(),
       };
       if (editId) {
@@ -322,7 +328,7 @@ export default function CotPage() {
     try {
       const isConcluida = novoStatus === "concluida";
       const current = tarefas.find(t => t.id === id);
-      const update: any = { status: novoStatus, updated_at: new Date().toISOString() };
+      const update: any = { status: novoStatus, updated_at: new Date().toISOString(), last_modified_by: userEmail };
       if (isConcluida && !current?.concluida_em) update.concluida_em = new Date().toISOString();
       else if (!isConcluida) { update.concluida_em = null; update.arquivada = false; }
       const { error } = await supabase.from("cot_tarefas").update(update).eq("id", id);
@@ -334,7 +340,7 @@ export default function CotPage() {
   const alterarRegistro = async (id: string, novoRegistro: Registro) => {
     try {
       const { error } = await supabase.from("cot_tarefas")
-        .update({ registro: novoRegistro, updated_at: new Date().toISOString() }).eq("id", id);
+        .update({ registro: novoRegistro, updated_at: new Date().toISOString(), last_modified_by: userEmail }).eq("id", id);
       if (error) throw error;
       setTarefas(prev => prev.map(t => t.id === id ? { ...t, registro: novoRegistro } : t));
     } catch { toast.error("Erro ao atualizar registro."); }
@@ -379,7 +385,12 @@ export default function CotPage() {
           <p className="text-xs font-bold text-gray-800 dark:text-white whitespace-nowrap">{t.nome_projeto}</p>
         </td>
         {/* Atividade */}
-        <td className="px-2 py-3 align-top">
+        <td className="px-2 py-3 align-top relative">
+          {t.last_modified_by && (
+            <p className="text-[8px] text-gray-400/70 italic mb-1">
+              Modificado por {t.last_modified_by.split("@")[0]} em {new Date(t.updated_at).toLocaleString('pt-BR')}
+            </p>
+          )}
           <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words w-[200px] leading-relaxed">{t.atividade}</p>
         </td>
         {/* Agente (DOC EXT. only) */}

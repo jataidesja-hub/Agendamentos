@@ -39,6 +39,7 @@ interface Evento {
   status: StatusEvento;
   registro: Registro;
   arquivada: boolean;
+  last_modified_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -113,6 +114,7 @@ export default function GestaoEventosPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [statusDropdown, setStatusDropdown] = useState<{ id: string; top: number; left: number } | null>(null);
+  const [userEmail, setUserEmail] = useState("");
 
   const [filtroStatus, setFiltroStatus] = useState<StatusEvento | "todos">("todos");
 
@@ -128,6 +130,9 @@ export default function GestaoEventosPage() {
   }, []);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session?.user?.email) setUserEmail(data.session.user.email);
+    });
     loadEventos();
     const channel = supabase
       .channel("realtime_gestao_eventos")
@@ -215,6 +220,7 @@ export default function GestaoEventosPage() {
         data:       form.data || null,
         status:     form.status,
         registro:   form.registro,
+        last_modified_by: userEmail,
         updated_at: new Date().toISOString(),
       };
       if (editId) {
@@ -243,25 +249,25 @@ export default function GestaoEventosPage() {
   const alterarStatus = async (id: string, novoStatus: StatusEvento) => {
     try {
       const { error } = await supabase.from("anormalidades")
-        .update({ status: novoStatus, updated_at: new Date().toISOString() }).eq("id", id);
+        .update({ status: novoStatus, last_modified_by: userEmail, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
-      setEventos(prev => prev.map(e => e.id === id ? { ...e, status: novoStatus } : e));
+      setEventos(prev => prev.map(e => e.id === id ? { ...e, status: novoStatus, last_modified_by: userEmail } : e));
     } catch { toast.error("Erro ao atualizar status."); }
   };
 
   const alterarRegistro = async (id: string, novo: Registro) => {
     try {
       const { error } = await supabase.from("anormalidades")
-        .update({ registro: novo, updated_at: new Date().toISOString() }).eq("id", id);
+        .update({ registro: novo, last_modified_by: userEmail, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
-      setEventos(prev => prev.map(e => e.id === id ? { ...e, registro: novo } : e));
+      setEventos(prev => prev.map(e => e.id === id ? { ...e, registro: novo, last_modified_by: userEmail } : e));
     } catch { toast.error("Erro ao atualizar registro."); }
   };
 
   const arquivar = async (id: string) => {
     try {
       const { error } = await supabase.from("anormalidades")
-        .update({ arquivada: true, updated_at: new Date().toISOString() }).eq("id", id);
+        .update({ arquivada: true, last_modified_by: userEmail, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
       toast.success("Arquivado!"); loadEventos();
     } catch { toast.error("Erro ao arquivar."); }
@@ -499,6 +505,11 @@ export default function GestaoEventosPage() {
                         <p className="text-xs text-gray-500 whitespace-nowrap">{evento.ativo || "—"}</p>
                       </td>
                       <td className="px-3 py-3 align-top">
+                        {evento.last_modified_by && (
+                          <p className="text-[8px] text-gray-400/70 italic mb-1">
+                            Modificado por {evento.last_modified_by.split("@")[0]} em {new Date(evento.updated_at).toLocaleString('pt-BR')}
+                          </p>
+                        )}
                         <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words w-[220px] leading-relaxed">{evento.descricao}</p>
                       </td>
                       <td className="px-3 py-3 text-center align-middle whitespace-nowrap">
