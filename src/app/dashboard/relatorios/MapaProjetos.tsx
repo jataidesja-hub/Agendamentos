@@ -237,6 +237,40 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
       return groups;
     }, [filteredData]);
 
+    const projectHistoricalAverages = useMemo(() => {
+      const totals: Record<string, { total: number, months: Set<string> }> = {};
+      const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+      // @ts-ignore
+      const placaToProject = dataCache.placaToProject || new Map();
+      
+      // Mês atual no formato YYYY-MM para ignorar meses que ainda não acabaram
+      const currentMonth = new Date().toISOString().slice(0, 7);
+
+      abastecimentos.forEach((a: any) => {
+        if (!a.data_transacao) return;
+        const month = String(a.data_transacao).slice(0, 7);
+        // Filtra apenas meses estritamente anteriores ao mês atual
+        if (month >= currentMonth) return;
+        
+        const normPlaca = normalize(a.placa);
+        const projName = String(a.projeto || placaToProject.get(normPlaca) || "SEM PROJETO").toUpperCase();
+        
+        if (!totals[projName]) {
+          totals[projName] = { total: 0, months: new Set() };
+        }
+        
+        totals[projName].total += (Number(a.valor_emissao) || 0);
+        totals[projName].months.add(month);
+      });
+
+      const averages: Record<string, number> = {};
+      for (const proj in totals) {
+        const numMonths = totals[proj].months.size;
+        averages[proj] = numMonths > 0 ? totals[proj].total / numMonths : 0;
+      }
+      return averages;
+    }, [abastecimentos]);
+
     if (loading) {
       return (
         <div className="flex flex-col items-center justify-center p-20 animate-pulse bg-white/50 backdrop-blur-xl rounded-[3rem]">
@@ -324,6 +358,14 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                   </div>
 
                   <div className="flex gap-8 items-center">
+                    <div className="text-right hidden sm:block">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Média Mensal</p>
+                       <p className="font-black text-gray-500">
+                         {projectHistoricalAverages[projName] 
+                           ? projectHistoricalAverages[projName].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
+                           : '---'}
+                       </p>
+                    </div>
                     <div className="text-right">
                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ativos</p>
                        <p className="font-black text-gray-900">{Object.keys(groupedData[projName].vehicles).length}</p>
