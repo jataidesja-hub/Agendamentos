@@ -60,7 +60,7 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 pt-4 pb-28 md:pb-8 scrollbar-thin">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto px-2 md:px-4 py-4 md:py-6 pb-28 md:pb-8 scrollbar-thin">
           <div className="w-full max-w-none mx-auto h-full">
             {children}
           </div>
