@@ -31,6 +31,7 @@ const DEFAULT_NAV: NavItem[] = [
   { id: "km", name: "Relatório de KM", href: "/dashboard/km", iconName: "MapPinIcon" },
   { id: "cot", name: "COT – Tarefas", href: "/dashboard/cot", iconName: "TableCellsIcon" },
   { id: "gestao-eventos", name: "Gestão de Eventos", href: "/dashboard/gestao-eventos", iconName: "ExclamationTriangleIcon" },
+  { id: "multas", name: "Multas", href: "/dashboard/multas", iconName: "ClipboardDocumentCheckIcon" },
 ];
 
 // Nomes curtos para mobile
@@ -52,6 +53,7 @@ export const MOBILE_NAMES: Record<string, string> = {
   km: "KM",
   cot: "COT",
   "gestao-eventos": "Eventos",
+  multas: "Multas",
 };
 
 function getSavedOrder(): string[] | null {

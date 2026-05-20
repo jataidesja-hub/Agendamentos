@@ -38,6 +38,7 @@ export default function UsuariosPage() {
     { id: 'km', nome: 'Relatório de KM' },
     { id: 'cot', nome: 'COT – Tarefas' },
     { id: 'gestao-eventos', nome: 'Gestão de Eventos' },
+    { id: 'multas', nome: 'Gerenciamento de Multas' },
   ];
 
   useEffect(() => {
