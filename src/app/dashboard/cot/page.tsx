@@ -356,7 +356,7 @@ export default function CotPage() {
 
   const colCount = 13;
 
-  const renderRow = (t: CotTarefa, isArquivada = false) => {
+  const renderRow = (t: CotTarefa, isArquivada = false, isDocExt = false) => {
     const statusInfo = getStatusInfo(t.tipo_atividade, t.status);
     const isConcluida = t.status === "concluida" && !isArquivada;
     const countdown = isConcluida ? calcCountdown(t.concluida_em, nowMs) : null;
@@ -371,12 +371,6 @@ export default function CotPage() {
         <td className="px-2 py-3 text-center align-middle whitespace-nowrap">
           <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${TIPO_COLORS[t.tipo_atividade]}`}>
             {TIPO_LABELS[t.tipo_atividade]}
-          </span>
-        </td>
-        {/* Subtipo */}
-        <td className="px-2 py-3 text-center align-middle whitespace-nowrap">
-          <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${SUBTIPO_CONFIG[t.subtipo].color} border-current opacity-80`}>
-            {SUBTIPO_CONFIG[t.subtipo].label}
           </span>
         </td>
         {/* Nº Tipo */}
@@ -398,11 +392,14 @@ export default function CotPage() {
           )}
           <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words w-[200px] leading-relaxed">{t.atividade}</p>
         </td>
-        <td className="px-2 py-3 align-middle">
-          {t.nome_agente
-            ? <div className="flex items-center gap-1 text-xs text-cyan-400 whitespace-nowrap"><UserIcon className="w-3 h-3 flex-shrink-0" />{t.nome_agente}</div>
-            : <span className="text-gray-500 text-xs">—</span>}
-        </td>
+        {/* Agente */}
+        {isDocExt && (
+          <td className="px-2 py-3 align-middle">
+            {t.nome_agente
+              ? <div className="flex items-center gap-1 text-xs text-cyan-400 whitespace-nowrap"><UserIcon className="w-3 h-3 flex-shrink-0" />{t.nome_agente}</div>
+              : <span className="text-gray-500 text-xs">—</span>}
+          </td>
+        )}
         {/* Nº PES / Documento */}
         <td className="px-2 py-3 text-center align-middle">
           <div className="flex flex-col items-center gap-0.5">
@@ -505,197 +502,112 @@ export default function CotPage() {
     );
   };
 
-  const tableHeaders = [
-    { label: "Tipo",         align: "text-center" },
-    { label: "Subtipo",      align: "text-center" },
-    { label: "Nº Tipo",      align: "text-center" },
-    { label: "Projeto",      align: "text-left" },
-    { label: "Atividade",    align: "text-left" },
-    { label: "Agente",       align: "text-left" },
-    { label: "Nº PES / Doc.",align: "text-center" },
-    { label: "Data Fim",     align: "text-center" },
-    { label: "Status",       align: "text-center" },
-    { label: "Doc. Ext.",    align: "text-center" },
-    { label: "Registro",     align: "text-center" },
-    { label: "Obs.",         align: "text-left" },
-    { label: "",             align: "text-right" },
-  ];
-
-  return (
-    <div className="h-full flex flex-col px-2 md:px-4 pb-10">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 mt-8 gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">COT – Tarefas</h1>
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest transition-all duration-500 ${
-              realtimePulse
-                ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400 scale-105"
-                : "border-gray-200 dark:border-gray-700 text-gray-400"
-            }`}>
-              <SignalIcon className={`w-3 h-3 ${realtimePulse ? "text-emerald-400" : "text-gray-400"}`} />
-              {realtimePulse ? "Atualizado" : "Ao vivo"}
-            </div>
-          </div>
-          <p className="text-gray-500 text-sm mt-1 font-medium">Controle de atividades diárias e contínuas</p>
+      {/* Tabelas Lado a Lado */}
+      {loading ? (
+        <div className="flex-1 bg-white dark:bg-gray-900 rounded-[1.5rem] border border-gray-100 dark:border-gray-800 flex items-center justify-center min-h-[400px]">
+          <ArrowPathIcon className="w-8 h-8 text-[#0b7336] animate-spin" />
         </div>
-        <div className="flex gap-3 items-center">
-          <button onClick={() => loadTarefas()}
-            className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 transition-all shadow-sm">
-            <ArrowPathIcon className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
-          </button>
-          <button onClick={abrirNova}
-            className="flex items-center gap-2 px-6 py-3 bg-[#0b7336] text-white rounded-2xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-xl">
-            <PlusIcon className="w-5 h-5" />
-            Nova Tarefa
-          </button>
-        </div>
-      </div>
+      ) : (
+        <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-4 min-h-0">
+          {(["pes", "doc_ext"] as Subtipo[]).map(sub => {
+            const isDocExt = sub === "doc_ext";
+            const cfg = SUBTIPO_CONFIG[sub];
+            
+            // Re-filter tasks for this panel
+            const base = tarefas.filter(t => {
+              if (t.subtipo !== sub) return false;
+              if (filtroTipo !== "todos" && t.tipo_atividade !== filtroTipo) return false;
+              if (filtroStatus !== "todos" && t.status !== filtroStatus) return false;
+              return true;
+            });
+            const tArquivadas = base.filter(t => t.arquivada).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+            const tAtivas = base.filter(t => !t.arquivada && t.status !== "concluida").sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+            const tConcluidas = base.filter(t => !t.arquivada && t.status === "concluida").sort((a, b) => {
+              const ta = a.concluida_em ? new Date(a.concluida_em).getTime() : 0;
+              const tb = b.concluida_em ? new Date(b.concluida_em).getTime() : 0;
+              return tb - ta;
+            });
 
-      {/* Tabs PES / DOC EXT. */}
-      <div className="grid grid-cols-2 gap-4 mb-5">
-        {(["pes", "doc_ext"] as Subtipo[]).map(sub => {
-          const cfg = SUBTIPO_CONFIG[sub];
-          const s = stats[sub];
-          const isAtivo = subtipoAtivo === sub;
-          return (
-            <button key={sub} onClick={() => { setSubtipoAtivo(sub); setMostrarArquivados(false); }}
-              className={`rounded-2xl p-5 border-2 text-left transition-all ${isAtivo ? cfg.activeColor : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
-              <div className="flex items-center justify-between mb-4">
-                <span className={`text-lg font-black ${isAtivo ? cfg.color : "text-gray-400 dark:text-gray-500"}`}>{cfg.label}</span>
-                <div className="flex items-center gap-2">
-                  {s.arquivadas > 0 && (
-                    <span className="text-[9px] font-black px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center gap-1">
-                      <ArchiveBoxIcon className="w-3 h-3" />{s.arquivadas}
-                    </span>
+            const headers = [
+              { label: "Tipo",         align: "text-center" },
+              { label: "Nº Tipo",      align: "text-center" },
+              { label: "Projeto",      align: "text-left" },
+              { label: "Atividade",    align: "text-left" },
+              ...(isDocExt ? [{ label: "Agente", align: "text-left" }] : []),
+              { label: !isDocExt ? "Nº PES / Doc." : "Nº Documento", align: "text-center" },
+              { label: "Data Fim",     align: "text-center" },
+              { label: "Status",       align: "text-center" },
+              { label: "Doc. Ext.",    align: "text-center" },
+              { label: "Registro",     align: "text-center" },
+              { label: "Obs.",         align: "text-left" },
+              { label: "",             align: "text-right" },
+            ];
+
+            return (
+              <div key={sub} className="bg-white dark:bg-gray-900 rounded-[1.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden">
+                <div className={`px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between ${cfg.activeColor}`}>
+                  <span className={`text-lg font-black tracking-widest ${cfg.color}`}>{cfg.label}</span>
+                </div>
+                
+                <div className="flex-1 overflow-x-auto">
+                  {mostrarArquivados ? (
+                    tArquivadas.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-400">
+                        <ArchiveBoxIcon className="w-10 h-10" />
+                        <p className="font-bold text-sm">Nenhuma tarefa arquivada</p>
+                      </div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-gray-100 dark:border-gray-800">
+                            {headers.map((h, i) => (
+                              <th key={i} className={`${h.align} px-2 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>{tArquivadas.map(t => renderRow(t, true, isDocExt))}</tbody>
+                      </table>
+                    )
+                  ) : (tAtivas.length === 0 && tConcluidas.length === 0) ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-400">
+                      <DocumentTextIcon className="w-10 h-10" />
+                      <p className="font-bold text-sm">Nenhuma tarefa ativa</p>
+                    </div>
+                  ) : (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-100 dark:border-gray-800">
+                          {headers.map((h, i) => (
+                            <th key={i} className={`${h.align} px-2 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tAtivas.map(t => renderRow(t, false, isDocExt))}
+                        {tConcluidas.length > 0 && (
+                          <tr>
+                            <td colSpan={headers.length} className="px-4 pt-4 pb-2">
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 border-t border-dashed border-emerald-500/20" />
+                                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/8 border border-emerald-500/20">
+                                  <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Concluídas (24h)</span>
+                                </div>
+                                <div className="flex-1 border-t border-dashed border-emerald-500/20" />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {tConcluidas.map(t => renderRow(t, false, isDocExt))}
+                      </tbody>
+                    </table>
                   )}
-                  {isAtivo && <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${cfg.activeColor} ${cfg.color}`}>ATIVO</span>}
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-3">
-                <StatsCard label="Total"     value={s.total}      color={isAtivo ? cfg.color : "text-gray-500 dark:text-gray-400"} />
-                <StatsCard label="Diárias"   value={s.diarias}    color={isAtivo ? "text-orange-400" : "text-gray-500 dark:text-gray-400"} />
-                <StatsCard label="Contínuas" value={s.continuas}  color={isAtivo ? "text-teal-400"   : "text-gray-500 dark:text-gray-400"} />
-                <StatsCard label="Concluídas"value={s.concluidas} color={isAtivo ? "text-emerald-400": "text-gray-500 dark:text-gray-400"} />
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Filtros + Arquivados */}
-      <div className="flex flex-wrap gap-3 mb-4 items-center justify-between">
-        <div className="flex flex-wrap gap-3 items-center">
-          <FunnelIcon className="w-4 h-4 text-gray-400" />
-          <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
-            {(["todos", "diaria", "continua"] as const).map(v => (
-              <button key={v} onClick={() => setFiltroTipo(v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroTipo === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-                {v === "todos" ? "Todos" : v === "diaria" ? "Diárias" : "Contínuas"}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
-            {(["todos", "iniciada", "em_execucao", "interrompida", "concluida"] as const).map(v => (
-              <button key={v} onClick={() => setFiltroStatus(v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroStatus === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-                {v === "todos" ? "Todos" : v === "em_execucao" ? "Em execução" : v === "iniciada" ? "Iniciada" : v === "interrompida" ? "Interrompida" : "Concluída"}
-              </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-
-        <button
-          onClick={() => setMostrarArquivados(v => !v)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
-            mostrarArquivados
-              ? "border-gray-400 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
-              : "border-gray-200 dark:border-gray-700 text-gray-400 hover:border-gray-300 hover:text-gray-600 dark:hover:border-gray-600"
-          }`}>
-          {mostrarArquivados ? <ArrowLeftIcon className="w-3.5 h-3.5" /> : <ArchiveBoxIcon className="w-3.5 h-3.5" />}
-          {mostrarArquivados ? "Voltar" : "Arquivados"}
-          {!mostrarArquivados && tarefasArquivadas.length > 0 && (
-            <span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full text-[9px] font-black">
-              {tarefasArquivadas.length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Tabela */}
-      <div className="flex-1 bg-white dark:bg-gray-900 rounded-[1.5rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <ArrowPathIcon className="w-8 h-8 text-[#0b7336] animate-spin" />
-          </div>
-        ) : mostrarArquivados ? (
-          tarefasArquivadas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-              <ArchiveBoxIcon className="w-12 h-12" />
-              <p className="font-bold">Nenhuma tarefa arquivada em {SUBTIPO_CONFIG[subtipoAtivo].label}</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
-                <ArchiveBoxIcon className="w-4 h-4 text-gray-400" />
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                  Arquivados
-                </span>
-              </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-gray-800">
-                    {tableHeaders.map((h, i) => (
-                      <th key={i} className={`${h.align} px-2 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>{tarefasArquivadas.map(t => renderRow(t, true))}</tbody>
-              </table>
-            </div>
-          )
-        ) : (tarefasAtivas.length === 0 && tarefasConcluidas.length === 0) ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-            <DocumentTextIcon className="w-12 h-12" />
-            <p className="font-bold">Nenhuma tarefa encontrada</p>
-            <p className="text-sm">Clique em "Nova Tarefa" para começar</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100 dark:border-gray-800">
-                  {tableHeaders.map((h, i) => (
-                    <th key={i} className={`${h.align} px-2 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tarefasAtivas.map(t => renderRow(t))}
-
-                {tarefasConcluidas.length > 0 && (
-                  <tr>
-                    <td colSpan={colCount} className="px-6 pt-6 pb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 border-t border-dashed border-emerald-500/20" />
-                        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/8 border border-emerald-500/20">
-                          <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">
-                            Concluídas — arquivamento automático em 24h
-                          </span>
-                        </div>
-                        <div className="flex-1 border-t border-dashed border-emerald-500/20" />
-                      </div>
-                    </td>
-                  </tr>
-                )}
-
-                {tarefasConcluidas.map(t => renderRow(t))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Dropdown status fixo */}
       {statusDropdown && (() => {
