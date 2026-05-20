@@ -61,7 +61,7 @@ export default function DashboardLayout({
         </header>
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 pt-4 pb-28 md:pb-8 scrollbar-thin">
-          <div className="max-w-7xl mx-auto h-full">
+          <div className="w-full max-w-[1600px] mx-auto h-full">
             {children}
           </div>
         </main>

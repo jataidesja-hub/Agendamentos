@@ -23,7 +23,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 import { supabase } from "@/lib/supabase";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigation } from "@/lib/useNavigation";
 
 // Mapa de ícones
@@ -53,6 +53,19 @@ export default function Sidebar() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const dragNodeRef = useRef<HTMLDivElement | null>(null);
+
+  // Load sidebar state from local storage or default to expanded
+  const [isExpanded, setIsExpanded] = useState(true);
+  useEffect(() => {
+    const stored = localStorage.getItem("sidebarExpanded");
+    if (stored !== null) setIsExpanded(stored === "true");
+  }, []);
+
+  const toggleSidebar = () => {
+    const next = !isExpanded;
+    setIsExpanded(next);
+    localStorage.setItem("sidebarExpanded", String(next));
+  };
 
   // Drag handlers
   const handleDragStart = (e: React.DragEvent, id: string) => {
@@ -93,18 +106,28 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="w-72 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-r border-white/40 dark:border-gray-800/40 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex flex-col hidden md:flex transition-all duration-300 z-10 relative">
-      <div className="h-24 flex items-center px-8 border-b border-gray-100/50 dark:border-gray-800/50 bg-gradient-to-r from-[#0b7336]/10 to-transparent">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0b7336] to-[#298d4a] shadow-lg shadow-green-500/30 flex items-center justify-center">
+    <div className={`${isExpanded ? 'w-72' : 'w-20'} bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-r border-white/40 dark:border-gray-800/40 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex flex-col hidden md:flex transition-all duration-300 z-10 relative group`}>
+      {/* Toggle button */}
+      <button 
+        onClick={toggleSidebar}
+        className="absolute -right-3 top-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md rounded-full p-1 text-gray-500 hover:text-[#0b7336] z-50 transition-transform opacity-0 group-hover:opacity-100"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${isExpanded ? 'rotate-0' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
+      <div className="h-24 flex items-center px-6 border-b border-gray-100/50 dark:border-gray-800/50 bg-gradient-to-r from-[#0b7336]/10 to-transparent overflow-hidden">
+        <div className="flex items-center space-x-3 w-full">
+          <div className="w-10 h-10 min-w-[40px] rounded-xl bg-gradient-to-br from-[#0b7336] to-[#298d4a] shadow-lg shadow-green-500/30 flex items-center justify-center flex-shrink-0">
             <span className="text-white font-bold text-xl tracking-tighter">C</span>
           </div>
-          <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-[#0b7336] to-[#298d4a] tracking-tighter">CYMI - Gerenciamentos</h2>
+          <h2 className={`text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-[#0b7336] to-[#298d4a] tracking-tighter transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>CYMI - Gerenciamentos</h2>
         </div>
       </div>
       
-      <div className="px-6 py-4 flex-1 overflow-y-auto">
-        <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4 ml-2">Menu Principal</p>
+      <div className={`px-4 py-4 flex-1 overflow-y-auto overflow-x-hidden ${isExpanded ? '' : 'flex flex-col items-center'}`}>
+        <p className={`text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4 ml-2 transition-all ${isExpanded ? 'opacity-100' : 'opacity-0 h-0 mb-0 overflow-hidden'}`}>Menu Principal</p>
         <nav className="flex-1 space-y-1">
           {navigation.map((item) => {
             const isActive = pathname === item.href;
@@ -147,11 +170,13 @@ export default function Sidebar() {
                   <Icon
                     className={`${
                       isActive ? "text-[#0b7336] dark:text-green-400" : "text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300"
-                    } mr-3 flex-shrink-0 h-6 w-6 transition-colors duration-300`}
+                    } ${isExpanded ? 'mr-3' : 'mx-auto'} flex-shrink-0 h-6 w-6 transition-colors duration-300`}
                     aria-hidden="true"
                   />
-                  {item.name}
-                  {isActive && (
+                  <span className={`whitespace-nowrap transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
+                    {item.name}
+                  </span>
+                  {isActive && isExpanded && (
                     <div className="ml-auto w-1.5 h-6 bg-[#0b7336] dark:bg-green-400 rounded-full" />
                   )}
                 </Link>
@@ -161,16 +186,17 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      <div className="mt-auto px-6 py-6 border-t border-gray-100/50 dark:border-gray-800/50">
+      <div className="mt-auto px-4 py-6 border-t border-gray-100/50 dark:border-gray-800/50">
         <button
           onClick={async () => {
             await supabase.auth.signOut();
             window.location.href = "/";
           }}
-          className="w-full flex items-center px-4 py-3.5 text-sm font-semibold rounded-2xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-300"
+          className={`w-full flex items-center justify-center ${isExpanded ? 'px-4' : 'px-2'} py-3.5 text-sm font-semibold rounded-2xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-300`}
+          title={!isExpanded ? "Sair do Sistema" : undefined}
         >
-          <ArrowRightOnRectangleIcon className="mr-4 flex-shrink-0 h-6 w-6" />
-          Sair do Sistema
+          <ArrowRightOnRectangleIcon className={`${isExpanded ? 'mr-4' : ''} flex-shrink-0 h-6 w-6`} />
+          <span className={`whitespace-nowrap transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>Sair do Sistema</span>
         </button>
       </div>
     </div>

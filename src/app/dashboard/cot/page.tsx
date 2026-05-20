@@ -216,7 +216,6 @@ export default function CotPage() {
 
   const { tarefasAtivas, tarefasConcluidas, tarefasArquivadas } = useMemo(() => {
     const base = tarefas.filter(t => {
-      if (t.subtipo !== subtipoAtivo) return false;
       if (filtroTipo !== "todos" && t.tipo_atividade !== filtroTipo) return false;
       if (filtroStatus !== "todos" && t.status !== filtroStatus) return false;
       return true;
@@ -355,7 +354,7 @@ export default function CotPage() {
   const statusOptions = tipoSelecionado === "diaria" ? STATUS_DIARIA : STATUS_CONTINUA;
   const inputCls = "w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all";
 
-  const colCount = subtipoAtivo === "doc_ext" ? 12 : 11;
+  const colCount = 13;
 
   const renderRow = (t: CotTarefa, isArquivada = false) => {
     const statusInfo = getStatusInfo(t.tipo_atividade, t.status);
@@ -372,6 +371,12 @@ export default function CotPage() {
         <td className="px-2 py-3 text-center align-middle whitespace-nowrap">
           <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${TIPO_COLORS[t.tipo_atividade]}`}>
             {TIPO_LABELS[t.tipo_atividade]}
+          </span>
+        </td>
+        {/* Subtipo */}
+        <td className="px-2 py-3 text-center align-middle whitespace-nowrap">
+          <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${SUBTIPO_CONFIG[t.subtipo].color} border-current opacity-80`}>
+            {SUBTIPO_CONFIG[t.subtipo].label}
           </span>
         </td>
         {/* Nº Tipo */}
@@ -393,14 +398,11 @@ export default function CotPage() {
           )}
           <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words w-[200px] leading-relaxed">{t.atividade}</p>
         </td>
-        {/* Agente (DOC EXT. only) */}
-        {subtipoAtivo === "doc_ext" && (
-          <td className="px-2 py-3 align-middle">
-            {t.nome_agente
-              ? <div className="flex items-center gap-1 text-xs text-cyan-400 whitespace-nowrap"><UserIcon className="w-3 h-3 flex-shrink-0" />{t.nome_agente}</div>
-              : <span className="text-gray-500 text-xs">—</span>}
-          </td>
-        )}
+        <td className="px-2 py-3 align-middle">
+          {t.nome_agente
+            ? <div className="flex items-center gap-1 text-xs text-cyan-400 whitespace-nowrap"><UserIcon className="w-3 h-3 flex-shrink-0" />{t.nome_agente}</div>
+            : <span className="text-gray-500 text-xs">—</span>}
+        </td>
         {/* Nº PES / Documento */}
         <td className="px-2 py-3 text-center align-middle">
           <div className="flex flex-col items-center gap-0.5">
@@ -505,11 +507,12 @@ export default function CotPage() {
 
   const tableHeaders = [
     { label: "Tipo",         align: "text-center" },
+    { label: "Subtipo",      align: "text-center" },
     { label: "Nº Tipo",      align: "text-center" },
     { label: "Projeto",      align: "text-left" },
     { label: "Atividade",    align: "text-left" },
-    ...(subtipoAtivo === "doc_ext" ? [{ label: "Agente", align: "text-left" }] : []),
-    { label: subtipoAtivo === "pes" ? "Nº PES / Doc." : "Nº Documento", align: "text-center" },
+    { label: "Agente",       align: "text-left" },
+    { label: "Nº PES / Doc.",align: "text-center" },
     { label: "Data Fim",     align: "text-center" },
     { label: "Status",       align: "text-center" },
     { label: "Doc. Ext.",    align: "text-center" },
@@ -636,7 +639,7 @@ export default function CotPage() {
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
                 <ArchiveBoxIcon className="w-4 h-4 text-gray-400" />
                 <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                  Arquivados — {SUBTIPO_CONFIG[subtipoAtivo].label}
+                  Arquivados
                 </span>
               </div>
               <table className="w-full">
@@ -654,7 +657,7 @@ export default function CotPage() {
         ) : (tarefasAtivas.length === 0 && tarefasConcluidas.length === 0) ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
             <DocumentTextIcon className="w-12 h-12" />
-            <p className="font-bold">Nenhuma tarefa em {SUBTIPO_CONFIG[subtipoAtivo].label}</p>
+            <p className="font-bold">Nenhuma tarefa encontrada</p>
             <p className="text-sm">Clique em "Nova Tarefa" para começar</p>
           </div>
         ) : (
