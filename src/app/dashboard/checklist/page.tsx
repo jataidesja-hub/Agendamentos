@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { PlusIcon, ClipboardDocumentCheckIcon, EyeIcon, TrashIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
@@ -23,12 +23,6 @@ export default function ChecklistPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [gerandoPdfId, setGerandoPdfId] = useState<string | null>(null);
-  const [isMaster, setIsMaster] = useState(false);
-  const [showProjectModal, setShowProjectModal] = useState(false);
-  const [veiculos, setVeiculos] = useState<any[]>([]);
-  const [novoProjeto, setNovoProjeto] = useState("");
-  const [selectedPlacas, setSelectedPlacas] = useState<string[]>([]);
-  const [savingProject, setSavingProject] = useState(false);
 
   const handleDownloadPdf = async (id: string) => {
     setGerandoPdfId(id);
@@ -43,63 +37,8 @@ export default function ChecklistPage() {
   };
 
   useEffect(() => {
-    checkMaster();
     load();
   }, []);
-
-  const checkMaster = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    const { data } = await supabase
-      .from("perfis_acesso")
-      .select("master")
-      .eq("email", session.user.email)
-      .single();
-    if (data?.master) {
-      setIsMaster(true);
-    }
-  };
-
-  const loadVeiculos = async () => {
-    const { data } = await supabase.from("frota_veiculos").select("placa, projeto").order("placa");
-    if (data) {
-      setVeiculos(data);
-    }
-  };
-
-  const openProjectModal = () => {
-    loadVeiculos();
-    setSelectedPlacas([]);
-    setNovoProjeto("");
-    setShowProjectModal(true);
-  };
-
-  const saveProjectLink = async () => {
-    if (!novoProjeto.trim()) {
-      toast.error("Digite o nome do projeto");
-      return;
-    }
-    if (selectedPlacas.length === 0) {
-      toast.error("Selecione pelo menos um veículo");
-      return;
-    }
-    setSavingProject(true);
-    try {
-      const { error } = await supabase
-        .from("frota_veiculos")
-        .update({ projeto: novoProjeto.trim() })
-        .in("placa", selectedPlacas);
-      
-      if (error) throw error;
-      toast.success("Veículos vinculados com sucesso!");
-      setShowProjectModal(false);
-      load(); // Reload checklists to update project names if necessary
-    } catch (e: any) {
-      toast.error("Erro ao vincular veículos");
-    } finally {
-      setSavingProject(false);
-    }
-  };
 
   const load = async () => {
     setLoading(true);
@@ -125,6 +64,16 @@ export default function ChecklistPage() {
     c.projeto?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const groupedChecklists = useMemo(() => {
+    const groups: Record<string, Checklist[]> = {};
+    filtrado.forEach(c => {
+      const p = (c.projeto || "SEM PROJETO DEFINIDO").toUpperCase();
+      if (!groups[p]) groups[p] = [];
+      groups[p].push(c);
+    });
+    return groups;
+  }, [filtrado]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -138,14 +87,6 @@ export default function ChecklistPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {isMaster && (
-            <button
-              onClick={openProjectModal}
-              className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95"
-            >
-              Vincular Projetos
-            </button>
-          )}
           <button
             onClick={() => router.push("/dashboard/checklist/novo")}
             className="flex items-center gap-2 px-5 py-3 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95"
@@ -182,8 +123,14 @@ export default function ChecklistPage() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtrado.map(item => (
+        <div className="space-y-8">
+          {Object.entries(groupedChecklists).sort(([a], [b]) => a.localeCompare(b)).map(([projeto, items]) => (
+            <div key={projeto} className="space-y-4">
+              <h2 className="text-xl font-black text-gray-800 dark:text-gray-200 uppercase tracking-widest border-b border-gray-200 dark:border-gray-800 pb-2">
+                {projeto} <span className="text-sm text-gray-500 font-bold ml-2">({items.length})</span>
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {items.map(item => (
             <div
               key={item.id}
               className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all"
@@ -229,82 +176,10 @@ export default function ChecklistPage() {
               )}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Modal de Projetos */}
-      {showProjectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-2xl border border-gray-100 dark:border-gray-800 flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
-              <h2 className="text-xl font-black text-gray-900 dark:text-white">Vincular Veículos a Projeto</h2>
-              <p className="text-sm text-gray-500 mt-1">Defina o nome do projeto e selecione os veículos.</p>
-            </div>
-            
-            <div className="p-6 flex-1 overflow-y-auto space-y-6">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Nome do Projeto</label>
-                <input
-                  type="text"
-                  value={novoProjeto}
-                  onChange={e => setNovoProjeto(e.target.value.toUpperCase())}
-                  placeholder="EX: AGUA VERMELHA"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
-                />
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Selecione os Veículos ({selectedPlacas.length})</label>
-                  <button 
-                    onClick={() => {
-                      if (selectedPlacas.length === veiculos.length) setSelectedPlacas([]);
-                      else setSelectedPlacas(veiculos.map(v => v.placa));
-                    }}
-                    className="text-xs text-indigo-600 font-bold hover:underline"
-                  >
-                    {selectedPlacas.length === veiculos.length ? "Desmarcar Todos" : "Marcar Todos"}
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {veiculos.map(v => (
-                    <label key={v.placa} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selectedPlacas.includes(v.placa) ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                      <input 
-                        type="checkbox" 
-                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                        checked={selectedPlacas.includes(v.placa)}
-                        onChange={(e) => {
-                          if (e.target.checked) setSelectedPlacas(p => [...p, v.placa]);
-                          else setSelectedPlacas(p => p.filter(pl => pl !== v.placa));
-                        }}
-                      />
-                      <div>
-                        <p className="text-sm font-black text-gray-900 dark:text-white">{v.placa}</p>
-                        <p className="text-[10px] text-gray-500 truncate max-w-[100px]">{v.projeto || "Sem projeto"}</p>
-                      </div>
-                    </label>
-                  ))}
                 </div>
               </div>
             </div>
-
-            <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 bg-gray-50 dark:bg-gray-900/50 rounded-b-[2rem]">
-              <button
-                onClick={() => setShowProjectModal(false)}
-                className="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-800 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={saveProjectLink}
-                disabled={savingProject}
-                className="px-5 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 transition-all"
-              >
-                {savingProject && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                Salvar Vínculos
-              </button>
-            </div>
-          </div>
+          ))}
         </div>
       )}
     </div>
