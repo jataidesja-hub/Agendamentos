@@ -46,6 +46,7 @@ export default function MultasPage() {
   const [obs, setObs] = useState("");
   const [filesToAdd, setFilesToAdd] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Tabs: pendente | identificada | enviada_rh
   const [activeTab, setActiveTab] = useState<MultaStatus>("pendente");
@@ -167,6 +168,57 @@ export default function MultasPage() {
       toast.error(err.message || "Erro ao salvar");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function revertStatus(m: Multa) {
+    const confirmRevert = window.confirm(`Deseja reverter o status da multa ${m.placa}?`);
+    if (!confirmRevert) return;
+
+    let newStatus: MultaStatus = "pendente";
+    let updates: any = { updated_at: new Date().toISOString() };
+
+    if (m.status === "enviada_rh") {
+      newStatus = "identificada";
+      updates.data_enviada_rh = null;
+    } else if (m.status === "identificada") {
+      newStatus = "pendente";
+    }
+
+    updates.status = newStatus;
+
+    try {
+      const { error } = await supabase.from("multas").update(updates).eq("id", m.id);
+      if (error) throw error;
+      toast.success(`Status revertido para ${newStatus}`);
+      fetchMultas();
+    } catch (err: any) {
+      toast.error("Erro ao reverter status");
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      // Append files or replace. Let's append to allow multiple drops.
+      setFilesToAdd(prev => {
+        const newFiles = Array.from(e.dataTransfer.files);
+        // Avoid duplicates by name (basic check)
+        const existingNames = new Set(prev.map(f => f.name));
+        const filtered = newFiles.filter(f => !existingNames.has(f.name));
+        return [...prev, ...filtered];
+      });
     }
   }
 
@@ -364,10 +416,20 @@ export default function MultasPage() {
                         </button>
                       )}
                       {m.status === "identificada" && (
-                        <span className="text-xs font-bold text-emerald-500 bg-emerald-50 px-3 py-1.5 rounded-lg">Pronta p/ RH</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-emerald-500 bg-emerald-50 px-3 py-1.5 rounded-lg">Pronta p/ RH</span>
+                          <button onClick={() => revertStatus(m)} title="Reverter para Pendente" className="text-gray-400 hover:text-rose-500 transition-colors">
+                            <ArrowPathIcon className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                       {m.status === "enviada_rh" && (
-                        <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">Enviada em {m.data_enviada_rh ? new Date(m.data_enviada_rh).toLocaleDateString() : ""}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">Enviada em {m.data_enviada_rh ? new Date(m.data_enviada_rh).toLocaleDateString() : ""}</span>
+                          <button onClick={() => revertStatus(m)} title="Reverter para Identificada" className="text-gray-400 hover:text-rose-500 transition-colors">
+                            <ArrowPathIcon className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -410,12 +472,24 @@ export default function MultasPage() {
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexar Multa (PDF/Imagem)</label>
-                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <label 
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                        isDragging ? "border-rose-500 bg-rose-50" : "border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <DocumentArrowUpIcon className="w-6 h-6 text-gray-400 mb-2" />
-                        <p className="text-xs text-gray-500 font-bold">{filesToAdd.length > 0 ? `${filesToAdd.length} arquivo(s) selecionado(s)` : "Clique para anexar arquivo(s)"}</p>
+                        <DocumentArrowUpIcon className={`w-6 h-6 mb-2 ${isDragging ? "text-rose-500" : "text-gray-400"}`} />
+                        <p className="text-xs text-gray-500 font-bold">{filesToAdd.length > 0 ? `${filesToAdd.length} arquivo(s) selecionado(s)` : "Arraste e solte ou clique para anexar"}</p>
                       </div>
-                      <input type="file" multiple className="hidden" onChange={e => setFilesToAdd(Array.from(e.target.files || []))} />
+                      <input type="file" multiple className="hidden" onChange={e => setFilesToAdd(prev => {
+                        const newFiles = Array.from(e.target.files || []);
+                        const existingNames = new Set(prev.map(f => f.name));
+                        const filtered = newFiles.filter(f => !existingNames.has(f.name));
+                        return [...prev, ...filtered];
+                      })} />
                     </label>
                   </div>
                 </>
@@ -446,12 +520,24 @@ export default function MultasPage() {
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexar Formulário/Recursos (PDF/Imagem)</label>
-                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <label 
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                        isDragging ? "border-indigo-500 bg-indigo-50" : "border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <DocumentArrowUpIcon className="w-6 h-6 text-gray-400 mb-2" />
-                        <p className="text-xs text-gray-500 font-bold">{filesToAdd.length > 0 ? `${filesToAdd.length} arquivo(s) selecionado(s)` : "Clique para anexar arquivo(s) de retorno"}</p>
+                        <DocumentArrowUpIcon className={`w-6 h-6 mb-2 ${isDragging ? "text-indigo-500" : "text-gray-400"}`} />
+                        <p className="text-xs text-gray-500 font-bold">{filesToAdd.length > 0 ? `${filesToAdd.length} arquivo(s) selecionado(s)` : "Arraste e solte ou clique para anexar de retorno"}</p>
                       </div>
-                      <input type="file" multiple className="hidden" onChange={e => setFilesToAdd(Array.from(e.target.files || []))} />
+                      <input type="file" multiple className="hidden" onChange={e => setFilesToAdd(prev => {
+                        const newFiles = Array.from(e.target.files || []);
+                        const existingNames = new Set(prev.map(f => f.name));
+                        const filtered = newFiles.filter(f => !existingNames.has(f.name));
+                        return [...prev, ...filtered];
+                      })} />
                     </label>
                   </div>
                 </>
