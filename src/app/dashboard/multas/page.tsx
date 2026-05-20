@@ -56,6 +56,7 @@ export default function MultasPage() {
 
   // Tabs
   const [activeTab, setActiveTab] = useState<MultaStatus>("pendente");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchMultas();
@@ -315,37 +316,33 @@ export default function MultasPage() {
   }
 
   async function exportZip() {
-    if (identificadas.length === 0) return toast.error("Nenhuma multa identificada para exportar");
+    const toExport = identificadas.filter(m => selectedIds.has(m.id));
+    if (toExport.length === 0) return toast.error("Selecione ao menos uma multa para exportar");
     setIsExporting(true);
     
     try {
       const zip = new JSZip();
       let hasFiles = false;
 
-      // Iterar sobre cada multa identificada
-      for (const m of identificadas) {
+      for (const m of toExport) {
         const folderName = `${m.placa.toUpperCase()} - ${m.auto_infracao}`;
         const folder = zip.folder(folderName);
         
         if (!folder) continue;
 
-        // Função auxiliar para baixar e adicionar arquivo ao zip
         const addFileToZip = async (filePath: string, prefixName: string) => {
           const { data, error } = await supabase.storage.from("multas").download(filePath);
           if (data && !error) {
-            const ext = filePath.split(".").pop() || "pdf";
             const nomeFinal = `${prefixName}_${filePath.split("_").pop()}`;
             folder.file(nomeFinal, data);
             hasFiles = true;
           }
         };
 
-        // Baixar arquivos iniciais
         for (const path of (m.arquivos_iniciais || [])) {
           await addFileToZip(path, "INICIAL");
         }
         
-        // Baixar arquivos de retorno
         for (const path of (m.arquivos_retorno || [])) {
           await addFileToZip(path, "RETORNO");
         }
@@ -357,19 +354,18 @@ export default function MultasPage() {
         return;
       }
 
-      // Gerar e baixar ZIP
       const content = await zip.generateAsync({ type: "blob" });
       saveAs(content, `Multas_RH_${new Date().toISOString().split("T")[0]}.zip`);
 
-      // Marcar todas como enviadas
-      const ids = identificadas.map(m => m.id);
+      const ids = toExport.map(m => m.id);
       await supabase.from("multas").update({ 
         status: "enviada_rh", 
         data_enviada_rh: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }).in("id", ids);
 
-      toast.success("Arquivo ZIP gerado e multas marcadas como enviadas!");
+      toast.success(`${toExport.length} multa(s) exportada(s) e marcada(s) como enviadas!`);
+      setSelectedIds(new Set());
       fetchMultas();
       setActiveTab("enviada_rh");
 
@@ -407,11 +403,11 @@ export default function MultasPage() {
         <div className="flex items-center gap-3">
           {activeTab === "identificada" && (
             <button 
-              onClick={exportZip} disabled={isExporting || identificadas.length === 0}
+              onClick={exportZip} disabled={isExporting || selectedIds.size === 0}
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg transition-all"
             >
               {isExporting ? <ArrowPathIcon className="w-5 h-5 animate-spin" /> : <ArchiveBoxArrowDownIcon className="w-5 h-5" />}
-              Exportar para RH (ZIP)
+              Exportar Selecionadas ({selectedIds.size})
             </button>
           )}
           <button 
@@ -460,6 +456,22 @@ export default function MultasPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-800">
+                  {activeTab === "identificada" && (
+                    <th className="px-4 py-4">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        checked={identificadas.length > 0 && identificadas.every(m => selectedIds.has(m.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(new Set(identificadas.map(m => m.id)));
+                          } else {
+                            setSelectedIds(new Set());
+                          }
+                        }}
+                      />
+                    </th>
+                  )}
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Placa</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Auto da Infração</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Gestor</th>
@@ -471,7 +483,25 @@ export default function MultasPage() {
               </thead>
               <tbody>
                 {displayedMultas.map(m => (
-                  <tr key={m.id} className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                  <tr key={m.id} className={`border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors ${activeTab === "identificada" && selectedIds.has(m.id) ? "bg-indigo-50/50 dark:bg-indigo-900/10" : ""}`}>
+                    {activeTab === "identificada" && (
+                      <td className="px-4 py-4">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          checked={selectedIds.has(m.id)}
+                          onChange={(e) => {
+                            const newSet = new Set(selectedIds);
+                            if (e.target.checked) {
+                              newSet.add(m.id);
+                            } else {
+                              newSet.delete(m.id);
+                            }
+                            setSelectedIds(newSet);
+                          }}
+                        />
+                      </td>
+                    )}
                     <td className="px-6 py-4 font-mono font-bold text-sm text-gray-900 dark:text-white uppercase">
                       {m.placa}
                     </td>
