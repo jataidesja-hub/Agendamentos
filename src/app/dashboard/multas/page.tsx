@@ -12,7 +12,8 @@ import {
   DocumentArrowUpIcon,
   CheckCircleIcon,
   XMarkIcon,
-  PencilIcon
+  PencilIcon,
+  TrashIcon
 } from "@heroicons/react/24/outline";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
@@ -47,6 +48,8 @@ export default function MultasPage() {
   const [gestor, setGestor] = useState("");
   const [obs, setObs] = useState("");
   const [filesToAdd, setFilesToAdd] = useState<File[]>([]);
+  const [existingIniciais, setExistingIniciais] = useState<string[]>([]);
+  const [existingRetorno, setExistingRetorno] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -94,6 +97,8 @@ export default function MultasPage() {
     setGestor("");
     setObs("");
     setFilesToAdd([]);
+    setExistingIniciais([]);
+    setExistingRetorno([]);
     setModalOpen(true);
   }
 
@@ -105,6 +110,8 @@ export default function MultasPage() {
     setGestor(m.gestor_cobrado || "");
     setObs(m.observacao_retorno || "");
     setFilesToAdd([]);
+    setExistingIniciais(m.arquivos_iniciais || []);
+    setExistingRetorno(m.arquivos_retorno || []);
     setModalOpen(true);
   }
 
@@ -114,6 +121,8 @@ export default function MultasPage() {
     setPlaca(m.placa);
     setAutoInfracao(m.auto_infracao);
     setFilesToAdd([]);
+    setExistingIniciais(m.arquivos_iniciais || []);
+    setExistingRetorno([]);
     setModalOpen(true);
   }
 
@@ -153,7 +162,7 @@ export default function MultasPage() {
         const m = multas.find(x => x.id === editingId);
         if (!m) throw new Error("Multa não encontrada");
 
-        let novasUrlsRetorno = [...(m.arquivos_retorno || [])];
+        let novasUrlsRetorno = [...existingRetorno];
         if (filesToAdd.length > 0) {
           const up = await uploadFiles(filesToAdd, `retorno_${placa}`);
           novasUrlsRetorno = [...novasUrlsRetorno, ...up];
@@ -174,7 +183,7 @@ export default function MultasPage() {
         const m = multas.find(x => x.id === editingId);
         if (!m) throw new Error("Multa não encontrada");
 
-        let novasUrlsIniciais = [...(m.arquivos_iniciais || [])];
+        let novasUrlsIniciais = [...existingIniciais];
         if (filesToAdd.length > 0) {
           const up = await uploadFiles(filesToAdd, `inicial_${placa}`);
           novasUrlsIniciais = [...novasUrlsIniciais, ...up];
@@ -236,6 +245,18 @@ export default function MultasPage() {
       fetchMultas();
     } catch (err: any) {
       toast.error("Erro ao reverter status");
+    }
+  }
+
+  async function deleteMulta(id: string) {
+    if (!window.confirm("Tem certeza que deseja EXCLUIR esta multa? Esta ação não pode ser desfeita.")) return;
+    try {
+      const { error } = await supabase.from("multas").delete().eq("id", id);
+      if (error) throw error;
+      toast.success("Multa excluída com sucesso!");
+      fetchMultas();
+    } catch (err: any) {
+      toast.error("Erro ao excluir multa");
     }
   }
 
@@ -460,6 +481,9 @@ export default function MultasPage() {
                           <button onClick={() => openEditInitialModal(m)} title="Editar Dados Iniciais" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                             <PencilIcon className="w-4 h-4" />
                           </button>
+                          <button onClick={() => deleteMulta(m.id)} title="Excluir Multa" className="p-1.5 text-gray-400 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded-lg transition-colors">
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
                         </div>
                       )}
                       {m.status === "identificada" && (
@@ -471,6 +495,9 @@ export default function MultasPage() {
                           <button onClick={() => openEditInitialModal(m)} title="Editar Dados Iniciais" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                             <PencilIcon className="w-4 h-4" />
                           </button>
+                          <button onClick={() => deleteMulta(m.id)} title="Excluir Multa" className="p-1.5 text-gray-400 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded-lg transition-colors">
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
                         </div>
                       )}
                       {m.status === "enviada_rh" && (
@@ -481,6 +508,9 @@ export default function MultasPage() {
                           </button>
                           <button onClick={() => openEditInitialModal(m)} title="Editar Dados Iniciais" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                             <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => deleteMulta(m.id)} title="Excluir Multa" className="p-1.5 text-gray-400 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded-lg transition-colors">
+                            <TrashIcon className="w-4 h-4" />
                           </button>
                         </div>
                       )}
@@ -524,7 +554,25 @@ export default function MultasPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexar Multa (PDF/Imagem)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexos Atuais</label>
+                    {existingIniciais.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {existingIniciais.map((path, idx) => (
+                          <div key={idx} className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <button type="button" onClick={() => getPublicUrlAndOpen(path)} className="text-xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1">
+                              <DocumentIcon className="w-3 h-3" /> Ver {idx + 1}
+                            </button>
+                            <button type="button" onClick={() => setExistingIniciais(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 ml-1" title="Remover anexo">
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 mb-2">Nenhum anexo salvo.</p>
+                    )}
+                    
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Adicionar Novos (PDF/Imagem)</label>
                     <label 
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
@@ -572,7 +620,25 @@ export default function MultasPage() {
                       placeholder="Ex: Condutor já foi identificado e assinou..." />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexar Formulário/Recursos (PDF/Imagem)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexos de Retorno Atuais</label>
+                    {existingRetorno.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {existingRetorno.map((path, idx) => (
+                          <div key={idx} className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <button type="button" onClick={() => getPublicUrlAndOpen(path)} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                              <DocumentIcon className="w-3 h-3" /> Ver {idx + 1}
+                            </button>
+                            <button type="button" onClick={() => setExistingRetorno(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 ml-1" title="Remover anexo">
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 mb-2">Nenhum anexo de retorno salvo.</p>
+                    )}
+
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Adicionar Novos (PDF/Imagem)</label>
                     <label 
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
