@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -38,6 +38,7 @@ const MapaAbastecimentos = () => {
   const [geoJsonData, setGeoJsonData] = useState<any>(null);
   const [geoLoading, setGeoLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const fullscreenRef = useRef<HTMLDivElement>(null);
 
   const abastecimentos = dataCache.abastecimentos || [];
 
@@ -53,7 +54,7 @@ const MapaAbastecimentos = () => {
     if (!selectedMonth && availableMonths.length > 0) setSelectedMonth(availableMonths[0]);
   }, [availableMonths, selectedMonth]);
 
-  // Carrega GeoJSON real via CDN confiável
+  // Carrega GeoJSON real
   useEffect(() => {
     setGeoLoading(true);
     fetch('https://cdn.jsdelivr.net/gh/codeforamerica/click_that_hood@master/public/data/brazil-states.geojson')
@@ -67,7 +68,6 @@ const MapaAbastecimentos = () => {
         setGeoJsonData({ ...raw, features });
       })
       .catch(() => {
-        // tenta IBGE como fallback
         fetch('https://servicodados.ibge.gov.br/api/v3/malhas/paises/BR?formato=application/vnd.geo+json&qualidade=minima&intrarregiao=UF')
           .then(r => r.json())
           .then(raw => {
@@ -89,12 +89,23 @@ const MapaAbastecimentos = () => {
       .finally(() => setGeoLoading(false));
   }, []);
 
-  // ESC para sair do fullscreen
+  // Sincroniza estado do botão com eventos nativos de fullscreen (ESC, F11)
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsFullscreen(false); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const onFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
+
+  const toggleFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      // Entra em fullscreen nativo (como F11) usando o elemento raiz da div do mapa
+      await (fullscreenRef.current as any)?.requestFullscreen?.();
+    } else {
+      await document.exitFullscreen();
+    }
+  };
 
   const groupedData: GroupedData = useMemo(() => {
     const data: any = {};
@@ -164,8 +175,10 @@ const MapaAbastecimentos = () => {
     layer.bindTooltip(`
       <div style="background:#111827;color:#fff;border-radius:12px;padding:10px 14px;font-family:sans-serif;border:1px solid rgba(255,255,255,0.1)">
         <div style="font-weight:900;font-size:12px;letter-spacing:0.1em;text-transform:uppercase">${nome}</div>
-        ${sd ? `<div style="color:#4ade80;font-weight:700;font-size:11px;margin-top:4px">${sd.totalInvested.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div><div style="color:#6b7280;font-size:10px">${Object.keys(sd.cities).length} cidade(s)</div>` : `<div style="color:#4b5563;font-size:10px;margin-top:4px">Sem dados neste período</div>`}
-      </div>`, { permanent: false, sticky: true, opacity: 1, className: 'leaflet-tooltip-custom' });
+        ${sd
+          ? `<div style="color:#4ade80;font-weight:700;font-size:11px;margin-top:4px">${sd.totalInvested.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div><div style="color:#6b7280;font-size:10px">${Object.keys(sd.cities).length} cidade(s)</div>`
+          : `<div style="color:#4b5563;font-size:10px;margin-top:4px">Sem dados neste período</div>`}
+      </div>`, { permanent: false, sticky: true, opacity: 1 });
     layer.on({
       click: () => { if (sd) { setSelectedState(uf); setSelectedCity(null); setPanelVisible(true); } },
       mouseover: (e: any) => { e.target.setStyle({ weight: 2, color: '#f59e0b', fillOpacity: 0.9 }); e.target.bringToFront(); },
@@ -177,61 +190,10 @@ const MapaAbastecimentos = () => {
   const cityData = selectedState && selectedCity ? groupedData[selectedState]?.cities[selectedCity] : null;
   const statesWithData = Object.keys(groupedData);
   const totalInvestedAll = Object.values(groupedData).reduce((acc: number, s: any) => acc + s.totalInvested, 0);
-  const mapHeight = isFullscreen ? 'calc(100vh - 0px)' : '560px';
 
-  const MapSection = (
-    <div className={`relative ${isFullscreen ? 'flex-1 min-h-0' : ''}`}>
-      {/* Botões sobre o mapa */}
-      <div className="absolute top-3 right-3 z-[1000] flex gap-2">
-        <button
-          onClick={() => setIsFullscreen(f => !f)}
-          className="bg-gray-900/90 backdrop-blur-sm text-white w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center hover:bg-gray-800 transition-all shadow-lg"
-          title={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
-        >
-          {isFullscreen ? <ArrowsPointingInIcon className="w-4 h-4" /> : <ArrowsPointingOutIcon className="w-4 h-4" />}
-        </button>
-      </div>
-
-      {geoLoading ? (
-        <div className={`rounded-[2.5rem] bg-gray-900 border border-white/10 flex flex-col items-center justify-center gap-4`} style={{ height: mapHeight }}>
-          <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 font-black text-xs uppercase tracking-widest">Carregando mapa do Brasil...</p>
-        </div>
-      ) : (
-        <div className={`rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl`} style={{ height: mapHeight }}>
-          {geoJsonData && (
-            <MapContainer
-              center={[-14.2, -51.9]}
-              zoom={isFullscreen ? 5 : 4}
-              style={{ height: '100%', width: '100%', background: '#0f172a' }}
-              zoomControl={true}
-              scrollWheelZoom={true}
-            >
-              <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                attribution='&copy; OpenStreetMap'
-              />
-              <GeoJSON
-                key={`${selectedState}-${selectedMonth}-${geoJsonData?.features?.length}`}
-                data={geoJsonData}
-                style={styleFeature}
-                onEachFeature={onEachFeature}
-              />
-            </MapContainer>
-          )}
-        </div>
-      )}
-
-      {!geoLoading && !panelVisible && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-sm text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full border border-white/10 pointer-events-none z-[999]">
-          Clique em um estado para ver os detalhes
-        </div>
-      )}
-    </div>
-  );
-
+  // Painel lateral — igual nos dois modos
   const PainelLateral = panelVisible && selectedState && stateData ? (
-    <div className={`bg-white border border-gray-100 overflow-hidden flex flex-col shadow-2xl ${isFullscreen ? 'w-[380px] flex-shrink-0 h-full' : 'w-[380px] flex-shrink-0 rounded-[2.5rem]'}`}>
+    <div className={`bg-white border-l border-gray-200 overflow-hidden flex flex-col shadow-2xl flex-shrink-0 ${isFullscreen ? 'w-[400px]' : 'w-[380px] rounded-[2.5rem] border border-gray-100'}`}>
       <div className="bg-gray-900 px-6 py-5 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-black text-sm">{selectedState}</div>
@@ -377,77 +339,82 @@ const MapaAbastecimentos = () => {
   ) : null;
 
   return (
-    <>
-      {/* Modo tela cheia — overlay fixo */}
-      {isFullscreen && (
-        <div className="fixed inset-0 z-[9999] bg-gray-950 flex flex-col">
-          {/* Barra superior */}
-          <div className="bg-gray-900 px-6 py-4 flex items-center justify-between border-b border-white/5 flex-shrink-0">
-            <div className="flex items-center gap-4">
-              <h2 className="text-white font-black text-sm uppercase tracking-widest">Mapa de Abastecimentos</h2>
-              <div className="flex items-center px-4 py-2 bg-white/5 rounded-xl border border-white/10">
-                <FunnelIcon className="w-3 h-3 text-emerald-500 mr-2" />
-                <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
-                  className="bg-transparent text-white font-black text-xs outline-none uppercase tracking-widest">
-                  {availableMonths.map(m => (
-                    <option key={m} value={m} className="bg-gray-900">
-                      {new Date(m + '-02').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-black text-gray-400 uppercase">{statesWithData.length} estados · {totalInvestedAll.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-              <button onClick={() => setIsFullscreen(false)}
-                className="bg-white/10 text-white w-8 h-8 rounded-xl flex items-center justify-center hover:bg-white/20 transition-all">
-                <ArrowsPointingInIcon className="w-4 h-4" />
-              </button>
-            </div>
+    <div className="space-y-6 pb-20">
+      {/* Header */}
+      <div className="bg-gray-900 p-8 rounded-[3rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 border border-white/5">
+        <div>
+          <h2 className="text-2xl font-black text-white italic tracking-tighter">Mapa de Abastecimentos</h2>
+          <p className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest mt-1">Distribuição geográfica por estado e cidade</p>
+        </div>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="text-center">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estados Ativos</p>
+            <p className="text-2xl font-black text-white">{statesWithData.length}</p>
           </div>
-
-          {/* Legenda */}
-          <div className="px-6 py-2 flex items-center gap-3 bg-gray-900/60 border-b border-white/5 flex-shrink-0">
-            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Investimento:</span>
-            {[{ c: '#bbf7d0', l: 'Baixo' }, { c: '#4ade80', l: '' }, { c: '#22c55e', l: '' }, { c: '#16a34a', l: '' }, { c: '#0b7336', l: 'Alto' }, { c: '#1e293b', l: 'Sem dados' }].map((it, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <div className="w-4 h-2.5 rounded" style={{ backgroundColor: it.c }} />
-                {it.l && <span className="text-[8px] font-black text-gray-400 uppercase">{it.l}</span>}
-              </div>
-            ))}
+          <div className="w-px h-10 bg-white/10" />
+          <div className="text-center">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Investido</p>
+            <p className="text-lg font-black text-emerald-400">{totalInvestedAll.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
           </div>
-
-          {/* Corpo */}
-          <div className="flex flex-1 min-h-0 gap-0">
-            <div className="flex-1 min-h-0">{MapSection}</div>
-            {PainelLateral}
+          <div className="w-px h-10 bg-white/10" />
+          <div className="flex items-center px-6 py-4 bg-white/5 rounded-2xl border border-white/10 hover:border-emerald-500 transition-all cursor-pointer">
+            <FunnelIcon className="w-4 h-4 text-emerald-500 mr-3" />
+            <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
+              className="bg-transparent text-white font-black text-sm outline-none uppercase tracking-widest">
+              {availableMonths.map(m => (
+                <option key={m} value={m} className="bg-gray-900">
+                  {new Date(m + '-02').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Modo normal */}
-      <div className="space-y-6 pb-20">
-        {/* Header */}
-        <div className="bg-gray-900 p-8 rounded-[3rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 border border-white/5">
-          <div>
-            <h2 className="text-2xl font-black text-white italic tracking-tighter">Mapa de Abastecimentos</h2>
-            <p className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest mt-1">Distribuição geográfica por estado e cidade</p>
-          </div>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="text-center">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estados Ativos</p>
-              <p className="text-2xl font-black text-white">{statesWithData.length}</p>
+      {/* Legenda */}
+      <div className="flex items-center gap-3 px-2">
+        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento:</span>
+        <div className="flex items-center gap-1.5">
+          {[{ c: '#bbf7d0', l: 'Baixo' }, { c: '#4ade80', l: '' }, { c: '#22c55e', l: '' }, { c: '#16a34a', l: '' }, { c: '#0b7336', l: 'Alto' }].map((it, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <div className="w-5 h-3 rounded" style={{ backgroundColor: it.c }} />
+              {it.l && <span className="text-[9px] font-black text-gray-400 uppercase">{it.l}</span>}
             </div>
-            <div className="w-px h-10 bg-white/10" />
-            <div className="text-center">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Investido</p>
-              <p className="text-lg font-black text-emerald-400">{totalInvestedAll.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-            </div>
-            <div className="w-px h-10 bg-white/10" />
-            <div className="flex items-center px-6 py-4 bg-white/5 rounded-2xl border border-white/10 hover:border-emerald-500 transition-all cursor-pointer">
-              <FunnelIcon className="w-4 h-4 text-emerald-500 mr-3" />
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5 ml-4">
+          <div className="w-5 h-3 rounded bg-[#1e293b]" />
+          <span className="text-[9px] font-black text-gray-400 uppercase">Sem dados</span>
+        </div>
+      </div>
+
+      {/* Área do Mapa — este div vai para fullscreen nativo */}
+      <div
+        ref={fullscreenRef}
+        className="flex gap-0"
+        style={{
+          background: isFullscreen ? '#030712' : 'transparent',
+          height: isFullscreen ? '100vh' : 'auto',
+          width: isFullscreen ? '100vw' : 'auto',
+        }}
+      >
+        {/* Mapa */}
+        <div className={`relative ${isFullscreen ? 'flex-1' : panelVisible ? 'flex-1' : 'w-full'} transition-all duration-300`}>
+          {/* Botão tela cheia */}
+          <button
+            onClick={toggleFullscreen}
+            className="absolute top-3 right-3 z-[1000] bg-gray-900/90 backdrop-blur-sm text-white w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center hover:bg-gray-800 transition-all shadow-lg"
+            title={isFullscreen ? 'Sair da tela cheia (ESC)' : 'Tela cheia'}
+          >
+            {isFullscreen ? <ArrowsPointingInIcon className="w-4 h-4" /> : <ArrowsPointingOutIcon className="w-4 h-4" />}
+          </button>
+
+          {/* Filtro de mês visível apenas no fullscreen */}
+          {isFullscreen && (
+            <div className="absolute top-3 left-3 z-[1000] flex items-center px-4 py-2 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-white/10 shadow-lg gap-2">
+              <FunnelIcon className="w-3 h-3 text-emerald-500" />
               <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
-                className="bg-transparent text-white font-black text-sm outline-none uppercase tracking-widest">
+                className="bg-transparent text-white font-black text-xs outline-none uppercase tracking-widest">
                 {availableMonths.map(m => (
                   <option key={m} value={m} className="bg-gray-900">
                     {new Date(m + '-02').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
@@ -455,90 +422,105 @@ const MapaAbastecimentos = () => {
                 ))}
               </select>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Legenda */}
-        <div className="flex items-center gap-3 px-2">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento:</span>
-          <div className="flex items-center gap-1.5">
-            {[{ c: '#bbf7d0', l: 'Baixo' }, { c: '#4ade80', l: '' }, { c: '#22c55e', l: '' }, { c: '#16a34a', l: '' }, { c: '#0b7336', l: 'Alto' }].map((it, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <div className="w-5 h-3 rounded" style={{ backgroundColor: it.c }} />
-                {it.l && <span className="text-[9px] font-black text-gray-400 uppercase">{it.l}</span>}
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-1.5 ml-4">
-            <div className="w-5 h-3 rounded bg-[#1e293b]" />
-            <span className="text-[9px] font-black text-gray-400 uppercase">Sem dados</span>
-          </div>
-        </div>
-
-        {/* Mapa + Painel */}
-        <div className="flex gap-4" style={{ minHeight: 560 }}>
-          <div className={`${panelVisible ? 'flex-1' : 'w-full'} transition-all duration-500`}>
-            {MapSection}
-          </div>
-          {!isFullscreen && PainelLateral}
-        </div>
-
-        {/* Ranking */}
-        {statesWithData.length > 0 && (
-          <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-8 py-5 border-b border-gray-100">
-              <h3 className="font-black text-gray-900 text-sm uppercase tracking-widest">Ranking de Estados</h3>
+          {geoLoading ? (
+            <div className="rounded-[2.5rem] bg-gray-900 border border-white/10 flex flex-col items-center justify-center gap-4" style={{ height: isFullscreen ? '100vh' : '560px' }}>
+              <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-gray-400 font-black text-xs uppercase tracking-widest">Carregando mapa do Brasil...</p>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[10px]">
-                <thead>
-                  <tr className="text-gray-400 uppercase font-black tracking-widest border-b border-gray-50 bg-gray-50/50">
-                    <th className="py-3 px-8">#</th>
-                    <th className="py-3 px-4">Estado</th>
-                    <th className="py-3 px-4">Cidades</th>
-                    <th className="py-3 px-4">Postos</th>
-                    <th className="py-3 px-4 text-right">Total Investido</th>
-                    <th className="py-3 px-8 text-right">% do Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {Object.entries(groupedData)
-                    .sort(([, a], [, b]) => (b as StateData).totalInvested - (a as StateData).totalInvested)
-                    .map(([uf, data], idx) => {
-                      const sd = data as StateData;
-                      const totalPostos = Object.values(sd.cities).reduce((acc, c) => acc + Object.keys(c.posts).length, 0);
-                      const pct = totalInvestedAll > 0 ? (sd.totalInvested / totalInvestedAll) * 100 : 0;
-                      return (
-                        <tr key={uf} className="hover:bg-gray-50/50 transition-colors cursor-pointer"
-                          onClick={() => { setSelectedState(uf); setSelectedCity(null); setPanelVisible(true); }}>
-                          <td className="py-3 px-8 font-black text-gray-300">{idx + 1}</td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-black text-[9px]" style={{ backgroundColor: getStateColor(uf) }}>{uf}</div>
-                              <span className="font-black text-gray-700 uppercase">{NOME_MAP[uf] || uf}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 font-bold text-gray-500">{Object.keys(sd.cities).length}</td>
-                          <td className="py-3 px-4 font-bold text-gray-500">{totalPostos}</td>
-                          <td className="py-3 px-4 text-right font-black text-emerald-600">{sd.totalInvested.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                          <td className="py-3 px-8 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
-                              </div>
-                              <span className="font-black text-gray-500 w-10 text-right">{pct.toFixed(1)}%</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
+          ) : (
+            <div className={isFullscreen ? '' : 'rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl'}
+              style={{ height: isFullscreen ? '100vh' : '560px' }}>
+              {geoJsonData && (
+                <MapContainer
+                  center={[-14.2, -51.9]}
+                  zoom={4}
+                  style={{ height: '100%', width: '100%', background: '#0f172a' }}
+                  zoomControl={true}
+                  scrollWheelZoom={true}
+                >
+                  <TileLayer
+                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    attribution='&copy; OpenStreetMap'
+                  />
+                  <GeoJSON
+                    key={`${selectedState}-${selectedMonth}-${geoJsonData?.features?.length}`}
+                    data={geoJsonData}
+                    style={styleFeature}
+                    onEachFeature={onEachFeature}
+                  />
+                </MapContainer>
+              )}
             </div>
-          </div>
-        )}
+          )}
+
+          {!geoLoading && !panelVisible && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-sm text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full border border-white/10 pointer-events-none z-[999]">
+              Clique em um estado para ver os detalhes
+            </div>
+          )}
+        </div>
+
+        {/* Painel lateral */}
+        {PainelLateral}
       </div>
-    </>
+
+      {/* Ranking — só no modo normal */}
+      {!isFullscreen && statesWithData.length > 0 && (
+        <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-8 py-5 border-b border-gray-100">
+            <h3 className="font-black text-gray-900 text-sm uppercase tracking-widest">Ranking de Estados</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[10px]">
+              <thead>
+                <tr className="text-gray-400 uppercase font-black tracking-widest border-b border-gray-50 bg-gray-50/50">
+                  <th className="py-3 px-8">#</th>
+                  <th className="py-3 px-4">Estado</th>
+                  <th className="py-3 px-4">Cidades</th>
+                  <th className="py-3 px-4">Postos</th>
+                  <th className="py-3 px-4 text-right">Total Investido</th>
+                  <th className="py-3 px-8 text-right">% do Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {Object.entries(groupedData)
+                  .sort(([, a], [, b]) => (b as StateData).totalInvested - (a as StateData).totalInvested)
+                  .map(([uf, data], idx) => {
+                    const sd = data as StateData;
+                    const totalPostos = Object.values(sd.cities).reduce((acc, c) => acc + Object.keys(c.posts).length, 0);
+                    const pct = totalInvestedAll > 0 ? (sd.totalInvested / totalInvestedAll) * 100 : 0;
+                    return (
+                      <tr key={uf} className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                        onClick={() => { setSelectedState(uf); setSelectedCity(null); setPanelVisible(true); }}>
+                        <td className="py-3 px-8 font-black text-gray-300">{idx + 1}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-black text-[9px]" style={{ backgroundColor: getStateColor(uf) }}>{uf}</div>
+                            <span className="font-black text-gray-700 uppercase">{NOME_MAP[uf] || uf}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-gray-500">{Object.keys(sd.cities).length}</td>
+                        <td className="py-3 px-4 font-bold text-gray-500">{totalPostos}</td>
+                        <td className="py-3 px-4 text-right font-black text-emerald-600">{sd.totalInvested.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td className="py-3 px-8 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="font-black text-gray-500 w-10 text-right">{pct.toFixed(1)}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
