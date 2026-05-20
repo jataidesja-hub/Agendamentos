@@ -18,7 +18,7 @@ import {
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 
-type MultaStatus = "pendente" | "identificada" | "enviada_rh";
+type MultaStatus = "pendente" | "identificada" | "enviada_rh" | "sem_assinatura";
 
 interface Multa {
   id: string;
@@ -39,7 +39,8 @@ export default function MultasPage() {
   const [isExporting, setIsExporting] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<"new" | "edit_initial" | "identify">("new");
+  const [modalMode, setModalMode] = useState<"new" | "edit" | "identify">("new");
+  const [filesToAddRetorno, setFilesToAddRetorno] = useState<File[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // Form state
@@ -53,7 +54,7 @@ export default function MultasPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Tabs: pendente | identificada | enviada_rh
+  // Tabs
   const [activeTab, setActiveTab] = useState<MultaStatus>("pendente");
 
   useEffect(() => {
@@ -75,19 +76,21 @@ export default function MultasPage() {
     setLoading(false);
   }
 
-  const { pendentes, identificadas, enviadas } = useMemo(() => {
+  const { pendentes, identificadas, enviadas, semAssinatura } = useMemo(() => {
     return {
       pendentes: multas.filter((m) => m.status === "pendente"),
       identificadas: multas.filter((m) => m.status === "identificada"),
       enviadas: multas.filter((m) => m.status === "enviada_rh"),
+      semAssinatura: multas.filter((m) => m.status === "sem_assinatura"),
     };
   }, [multas]);
 
   const displayedMultas = useMemo(() => {
     if (activeTab === "pendente") return pendentes;
     if (activeTab === "identificada") return identificadas;
+    if (activeTab === "sem_assinatura") return semAssinatura;
     return enviadas;
-  }, [activeTab, pendentes, identificadas, enviadas]);
+  }, [activeTab, pendentes, identificadas, semAssinatura, enviadas]);
 
   function openNewModal() {
     setModalMode("new");
@@ -97,6 +100,7 @@ export default function MultasPage() {
     setGestor("");
     setObs("");
     setFilesToAdd([]);
+    setFilesToAddRetorno([]);
     setExistingIniciais([]);
     setExistingRetorno([]);
     setModalOpen(true);
@@ -110,19 +114,23 @@ export default function MultasPage() {
     setGestor(m.gestor_cobrado || "");
     setObs(m.observacao_retorno || "");
     setFilesToAdd([]);
+    setFilesToAddRetorno([]);
     setExistingIniciais(m.arquivos_iniciais || []);
     setExistingRetorno(m.arquivos_retorno || []);
     setModalOpen(true);
   }
 
-  function openEditInitialModal(m: Multa) {
-    setModalMode("edit_initial");
+  function openFullEditModal(m: Multa) {
+    setModalMode("edit");
     setEditingId(m.id);
     setPlaca(m.placa);
     setAutoInfracao(m.auto_infracao);
+    setGestor(m.gestor_cobrado || "");
+    setObs(m.observacao_retorno || "");
     setFilesToAdd([]);
+    setFilesToAddRetorno([]);
     setExistingIniciais(m.arquivos_iniciais || []);
-    setExistingRetorno([]);
+    setExistingRetorno(m.arquivos_retorno || []);
     setModalOpen(true);
   }
 
@@ -159,9 +167,6 @@ export default function MultasPage() {
     try {
       if (modalMode === "identify" && editingId) {
         // Modo identificação
-        const m = multas.find(x => x.id === editingId);
-        if (!m) throw new Error("Multa não encontrada");
-
         let novasUrlsRetorno = [...existingRetorno];
         if (filesToAdd.length > 0) {
           const up = await uploadFiles(filesToAdd, `retorno_${placa}`);
@@ -178,21 +183,27 @@ export default function MultasPage() {
 
         if (error) throw error;
         toast.success("Multa identificada!");
-      } else if (modalMode === "edit_initial" && editingId) {
-        // Modo editar dados iniciais
-        const m = multas.find(x => x.id === editingId);
-        if (!m) throw new Error("Multa não encontrada");
-
+      } else if (modalMode === "edit" && editingId) {
+        // Modo edição completa
         let novasUrlsIniciais = [...existingIniciais];
         if (filesToAdd.length > 0) {
           const up = await uploadFiles(filesToAdd, `inicial_${placa}`);
           novasUrlsIniciais = [...novasUrlsIniciais, ...up];
         }
 
+        let novasUrlsRetorno = [...existingRetorno];
+        if (filesToAddRetorno.length > 0) {
+          const up = await uploadFiles(filesToAddRetorno, `retorno_${placa}`);
+          novasUrlsRetorno = [...novasUrlsRetorno, ...up];
+        }
+
         const { error } = await supabase.from("multas").update({
           placa,
           auto_infracao: autoInfracao,
+          gestor_cobrado: gestor || null,
+          observacao_retorno: obs || null,
           arquivos_iniciais: novasUrlsIniciais,
+          arquivos_retorno: novasUrlsRetorno,
           updated_at: new Date().toISOString()
         }).eq("id", editingId);
 
@@ -227,12 +238,12 @@ export default function MultasPage() {
     if (!confirmRevert) return;
 
     let newStatus: MultaStatus = "pendente";
-    let updates: any = { updated_at: new Date().toISOString() };
+    const updates: any = { updated_at: new Date().toISOString() };
 
     if (m.status === "enviada_rh") {
       newStatus = "identificada";
       updates.data_enviada_rh = null;
-    } else if (m.status === "identificada") {
+    } else if (m.status === "identificada" || m.status === "sem_assinatura") {
       newStatus = "pendente";
     }
 
@@ -245,6 +256,24 @@ export default function MultasPage() {
       fetchMultas();
     } catch (err: any) {
       toast.error("Erro ao reverter status");
+    }
+  }
+
+  async function markSemAssinatura(m: Multa) {
+    const obsInput = window.prompt("Observação (motivo de não ter coletado assinatura):");
+    if (obsInput === null) return; // cancelled
+
+    try {
+      const { error } = await supabase.from("multas").update({
+        status: "sem_assinatura",
+        observacao_retorno: obsInput || "Não foi possível coletar assinatura",
+        updated_at: new Date().toISOString()
+      }).eq("id", m.id);
+      if (error) throw error;
+      toast.success("Marcada como sem assinatura");
+      fetchMultas();
+    } catch (err: any) {
+      toast.error("Erro ao atualizar status");
     }
   }
 
@@ -397,7 +426,7 @@ export default function MultasPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-2 mb-6 border-b border-gray-200 dark:border-gray-800 pb-2 overflow-x-auto">
-        {(["pendente", "identificada", "enviada_rh"] as MultaStatus[]).map(tab => (
+        {(["pendente", "identificada", "sem_assinatura", "enviada_rh"] as MultaStatus[]).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -409,6 +438,7 @@ export default function MultasPage() {
           >
             {tab === "pendente" && `Pendentes (${pendentes.length})`}
             {tab === "identificada" && `Identificadas (${identificadas.length})`}
+            {tab === "sem_assinatura" && `Sem Assinatura (${semAssinatura.length})`}
             {tab === "enviada_rh" && `Enviadas ao RH (${enviadas.length})`}
           </button>
         ))}
@@ -433,6 +463,7 @@ export default function MultasPage() {
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Placa</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Auto da Infração</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Gestor</th>
+                  {activeTab === "sem_assinatura" && <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Observação</th>}
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Anexos Iniciais</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Anexos de Retorno</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Ações</th>
@@ -450,6 +481,11 @@ export default function MultasPage() {
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 font-bold">
                       {m.gestor_cobrado || "—"}
                     </td>
+                    {activeTab === "sem_assinatura" && (
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 max-w-[200px]">
+                        <span className="truncate block" title={m.observacao_retorno || ""}>{m.observacao_retorno || "—"}</span>
+                      </td>
+                    )}
                     <td className="px-6 py-4">
                       {m.arquivos_iniciais && m.arquivos_iniciais.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
@@ -474,11 +510,14 @@ export default function MultasPage() {
                     </td>
                     <td className="px-6 py-4">
                       {m.status === "pendente" && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <button onClick={() => openIdentifyModal(m)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
                             Identificar / Retorno
                           </button>
-                          <button onClick={() => openEditInitialModal(m)} title="Editar Dados Iniciais" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                          <button onClick={() => markSemAssinatura(m)} className="text-xs font-bold text-amber-600 hover:text-amber-800 bg-amber-50 px-3 py-1.5 rounded-lg transition-colors" title="Marcar como sem assinatura">
+                            Sem Assinatura
+                          </button>
+                          <button onClick={() => openFullEditModal(m)} title="Editar" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                             <PencilIcon className="w-4 h-4" />
                           </button>
                           <button onClick={() => deleteMulta(m.id)} title="Excluir Multa" className="p-1.5 text-gray-400 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded-lg transition-colors">
@@ -492,7 +531,21 @@ export default function MultasPage() {
                           <button onClick={() => revertStatus(m)} title="Reverter para Pendente" className="text-gray-400 hover:text-rose-500 transition-colors">
                             <ArrowPathIcon className="w-4 h-4" />
                           </button>
-                          <button onClick={() => openEditInitialModal(m)} title="Editar Dados Iniciais" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                          <button onClick={() => openFullEditModal(m)} title="Editar" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => deleteMulta(m.id)} title="Excluir Multa" className="p-1.5 text-gray-400 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded-lg transition-colors">
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                      {m.status === "sem_assinatura" && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-amber-500 bg-amber-50 px-3 py-1.5 rounded-lg">Sem Assinatura</span>
+                          <button onClick={() => revertStatus(m)} title="Reverter para Pendente" className="text-gray-400 hover:text-rose-500 transition-colors">
+                            <ArrowPathIcon className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => openFullEditModal(m)} title="Editar" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                             <PencilIcon className="w-4 h-4" />
                           </button>
                           <button onClick={() => deleteMulta(m.id)} title="Excluir Multa" className="p-1.5 text-gray-400 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded-lg transition-colors">
@@ -506,7 +559,7 @@ export default function MultasPage() {
                           <button onClick={() => revertStatus(m)} title="Reverter para Identificada" className="text-gray-400 hover:text-rose-500 transition-colors">
                             <ArrowPathIcon className="w-4 h-4" />
                           </button>
-                          <button onClick={() => openEditInitialModal(m)} title="Editar Dados Iniciais" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                          <button onClick={() => openFullEditModal(m)} title="Editar" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                             <PencilIcon className="w-4 h-4" />
                           </button>
                           <button onClick={() => deleteMulta(m.id)} title="Excluir Multa" className="p-1.5 text-gray-400 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded-lg transition-colors">
@@ -526,10 +579,10 @@ export default function MultasPage() {
       {/* Modal Nova/Editar */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-800">
-            <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 dark:border-gray-800">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-800">
+            <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
               <h2 className="text-xl font-black text-gray-900 dark:text-white">
-                {modalMode === "identify" ? "Informar Retorno (Identificar)" : modalMode === "edit_initial" ? "Editar Multa" : "Nova Multa"}
+                {modalMode === "identify" ? "Informar Retorno (Identificar)" : modalMode === "edit" ? "Editar Multa" : "Nova Multa"}
               </h2>
               <button onClick={() => setModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-xl">
                 <XMarkIcon className="w-5 h-5" />
@@ -537,8 +590,9 @@ export default function MultasPage() {
             </div>
             
             <form onSubmit={handleSave} className="p-7 space-y-5">
-              {modalMode === "new" || modalMode === "edit_initial" ? (
+              {modalMode === "new" ? (
                 <>
+                  {/* --- NOVA MULTA --- */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Placa</label>
@@ -554,25 +608,7 @@ export default function MultasPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexos Atuais</label>
-                    {existingIniciais.length > 0 ? (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {existingIniciais.map((path, idx) => (
-                          <div key={idx} className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
-                            <button type="button" onClick={() => getPublicUrlAndOpen(path)} className="text-xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1">
-                              <DocumentIcon className="w-3 h-3" /> Ver {idx + 1}
-                            </button>
-                            <button type="button" onClick={() => setExistingIniciais(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 ml-1" title="Remover anexo">
-                              <XMarkIcon className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-gray-400 mb-2">Nenhum anexo salvo.</p>
-                    )}
-                    
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Adicionar Novos (PDF/Imagem)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexar Multa (PDF/Imagem)</label>
                     <label 
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
@@ -594,8 +630,9 @@ export default function MultasPage() {
                     </label>
                   </div>
                 </>
-              ) : (
+              ) : modalMode === "identify" ? (
                 <>
+                  {/* --- IDENTIFICAR / RETORNO --- */}
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-4 flex gap-4 items-center">
                     <div>
                       <p className="text-[10px] text-gray-500 font-black uppercase">Placa</p>
@@ -649,9 +686,115 @@ export default function MultasPage() {
                     >
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
                         <DocumentArrowUpIcon className={`w-6 h-6 mb-2 ${isDragging ? "text-indigo-500" : "text-gray-400"}`} />
-                        <p className="text-xs text-gray-500 font-bold">{filesToAdd.length > 0 ? `${filesToAdd.length} arquivo(s) selecionado(s)` : "Arraste e solte ou clique para anexar de retorno"}</p>
+                        <p className="text-xs text-gray-500 font-bold">{filesToAdd.length > 0 ? `${filesToAdd.length} arquivo(s) selecionado(s)` : "Arraste e solte ou clique para anexar"}</p>
                       </div>
                       <input type="file" multiple className="hidden" onChange={e => setFilesToAdd(prev => {
+                        const newFiles = Array.from(e.target.files || []);
+                        const existingNames = new Set(prev.map(f => f.name));
+                        const filtered = newFiles.filter(f => !existingNames.has(f.name));
+                        return [...prev, ...filtered];
+                      })} />
+                    </label>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* --- EDIÇÃO COMPLETA --- */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Placa</label>
+                      <input type="text" required value={placa} onChange={e => setPlaca(e.target.value)} 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-rose-500 outline-none uppercase" 
+                        placeholder="ABC1234" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Auto da Infração</label>
+                      <input type="text" required value={autoInfracao} onChange={e => setAutoInfracao(e.target.value)} 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-rose-500 outline-none" 
+                        placeholder="Nº do Auto" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Gestor Responsável</label>
+                    <input type="text" value={gestor} onChange={e => setGestor(e.target.value)} 
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+                      placeholder="Nome do Gestor" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Observações</label>
+                    <textarea value={obs} onChange={e => setObs(e.target.value)} rows={2}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none" 
+                      placeholder="Observações..." />
+                  </div>
+
+                  {/* Anexos Iniciais */}
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexos Iniciais</label>
+                    {existingIniciais.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {existingIniciais.map((path, idx) => (
+                          <div key={idx} className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <button type="button" onClick={() => getPublicUrlAndOpen(path)} className="text-xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1">
+                              <DocumentIcon className="w-3 h-3" /> Ver {idx + 1}
+                            </button>
+                            <button type="button" onClick={() => setExistingIniciais(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 ml-1" title="Remover">
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 mb-2">Nenhum.</p>
+                    )}
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Adicionar Iniciais</label>
+                    <label 
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                        isDragging ? "border-rose-500 bg-rose-50" : "border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex flex-col items-center justify-center py-3">
+                        <DocumentArrowUpIcon className={`w-5 h-5 mb-1 ${isDragging ? "text-rose-500" : "text-gray-400"}`} />
+                        <p className="text-xs text-gray-500 font-bold">{filesToAdd.length > 0 ? `${filesToAdd.length} novo(s)` : "Arraste ou clique"}</p>
+                      </div>
+                      <input type="file" multiple className="hidden" onChange={e => setFilesToAdd(prev => {
+                        const newFiles = Array.from(e.target.files || []);
+                        const existingNames = new Set(prev.map(f => f.name));
+                        const filtered = newFiles.filter(f => !existingNames.has(f.name));
+                        return [...prev, ...filtered];
+                      })} />
+                    </label>
+                  </div>
+
+                  {/* Anexos de Retorno */}
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexos de Retorno</label>
+                    {existingRetorno.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {existingRetorno.map((path, idx) => (
+                          <div key={idx} className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <button type="button" onClick={() => getPublicUrlAndOpen(path)} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                              <DocumentIcon className="w-3 h-3" /> Ver {idx + 1}
+                            </button>
+                            <button type="button" onClick={() => setExistingRetorno(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 ml-1" title="Remover">
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 mb-2">Nenhum.</p>
+                    )}
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Adicionar Retorno</label>
+                    <label className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded-xl cursor-pointer transition-colors border-gray-300 hover:bg-gray-50`}>
+                      <div className="flex flex-col items-center justify-center py-3">
+                        <DocumentArrowUpIcon className="w-5 h-5 mb-1 text-gray-400" />
+                        <p className="text-xs text-gray-500 font-bold">{filesToAddRetorno.length > 0 ? `${filesToAddRetorno.length} novo(s)` : "Arraste ou clique"}</p>
+                      </div>
+                      <input type="file" multiple className="hidden" onChange={e => setFilesToAddRetorno(prev => {
                         const newFiles = Array.from(e.target.files || []);
                         const existingNames = new Set(prev.map(f => f.name));
                         const filtered = newFiles.filter(f => !existingNames.has(f.name));
@@ -664,7 +807,7 @@ export default function MultasPage() {
               
               <button type="submit" disabled={isSaving} className="w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-xl shadow-lg transition-all flex justify-center items-center gap-2">
                 {isSaving ? <ArrowPathIcon className="w-5 h-5 animate-spin" /> : <CheckCircleIcon className="w-5 h-5" />}
-                {modalMode === "identify" ? "Salvar Identificação" : modalMode === "edit_initial" ? "Salvar Edição" : "Registrar Multa"}
+                {modalMode === "identify" ? "Salvar Identificação" : modalMode === "edit" ? "Salvar Edição" : "Registrar Multa"}
               </button>
             </form>
           </div>
