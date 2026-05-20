@@ -120,11 +120,20 @@ export default function MultasPage() {
   async function uploadFiles(files: File[], prefix: string): Promise<string[]> {
     const urls: string[] = [];
     for (const file of files) {
-      const fileName = `${prefix}_${Date.now()}_${file.name}`;
+      // Remover acentos e caracteres especiais do nome do arquivo
+      const safeName = file.name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+        .replace(/[^a-zA-Z0-9.\-]/g, "_"); // Substitui espaços e caracteres não alfanuméricos por underline
+      
+      const fileName = `${prefix}_${Date.now()}_${safeName}`;
+      
       const { data, error } = await supabase.storage
         .from("multas")
         .upload(fileName, file, { cacheControl: "3600", upsert: false });
+        
       if (error) {
+        console.error("Erro upload:", error);
         toast.error(`Erro ao subir arquivo ${file.name}`);
       } else if (data?.path) {
         urls.push(data.path);
