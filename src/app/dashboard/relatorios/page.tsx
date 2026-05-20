@@ -4,17 +4,19 @@ import { useState, useEffect } from "react";
 import {
   ChartBarSquareIcon,
   BuildingStorefrontIcon,
-  TruckIcon
+  TruckIcon,
+  MapIcon,
+  UserGroupIcon
 } from "@heroicons/react/24/outline";
 import MapaRelatorio from "./MapaRelatorio";
 import RelatorioPostos from "./RelatorioPostos";
 import RelatorioGestores from "./RelatorioGestores";
-import { UserGroupIcon } from "@heroicons/react/24/outline";
+import MapaAbastecimentosRelatorio from "./MapaAbastecimentosRelatorio";
 import { supabase } from "@/lib/supabase";
 
 export default function Relatorios() {
-  const [activeTab, setActiveTab] = useState<'projetos' | 'postos' | 'gestores'>('projetos');
-  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(['projetos', 'postos', 'gestores']);
+  const [activeTab, setActiveTab] = useState<'projetos' | 'postos' | 'gestores' | 'mapa'>('projetos');
+  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(['projetos', 'postos', 'gestores', 'mapa']);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -80,6 +82,16 @@ export default function Relatorios() {
               <UserGroupIcon className="w-4 h-4" /> GESTORES
             </button>
           )}
+          {abasPermitidas.includes('mapa') && (
+            <button
+              onClick={() => setActiveTab('mapa')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-2.5xl text-xs font-black tracking-widest transition-all ${
+                activeTab === 'mapa' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'text-gray-500 hover:text-purple-600'
+              }`}
+            >
+              <MapIcon className="w-4 h-4" /> MAPA
+            </button>
+          )}
         </div>
       </div>
 
@@ -91,8 +103,10 @@ export default function Relatorios() {
           </div>
         ) : activeTab === 'postos' ? (
           <RelatorioPostos />
-        ) : (
+        ) : activeTab === 'gestores' ? (
           <RelatorioGestores />
+        ) : (
+          <MapaAbastecimentosRelatorio />
         )}
       </div>
     </div>
