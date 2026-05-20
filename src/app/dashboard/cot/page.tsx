@@ -502,6 +502,123 @@ export default function CotPage() {
     );
   };
 
+  const tableHeaders = [
+    { label: "Tipo",         align: "text-center" },
+    { label: "Subtipo",      align: "text-center" },
+    { label: "Nº Tipo",      align: "text-center" },
+    { label: "Projeto",      align: "text-left" },
+    { label: "Atividade",    align: "text-left" },
+    { label: "Agente",       align: "text-left" },
+    { label: "Nº PES / Doc.",align: "text-center" },
+    { label: "Data Fim",     align: "text-center" },
+    { label: "Status",       align: "text-center" },
+    { label: "Doc. Ext.",    align: "text-center" },
+    { label: "Registro",     align: "text-center" },
+    { label: "Obs.",         align: "text-left" },
+    { label: "",             align: "text-right" },
+  ];
+
+  return (
+    <div className="h-full flex flex-col px-2 md:px-4 pb-10">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 mt-8 gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">COT – Tarefas</h1>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest transition-all duration-500 ${
+              realtimePulse
+                ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400 scale-105"
+                : "border-gray-200 dark:border-gray-700 text-gray-400"
+            }`}>
+              <SignalIcon className={`w-3 h-3 ${realtimePulse ? "text-emerald-400" : "text-gray-400"}`} />
+              {realtimePulse ? "Atualizado" : "Ao vivo"}
+            </div>
+          </div>
+          <p className="text-gray-500 text-sm mt-1 font-medium">Controle de atividades diárias e contínuas</p>
+        </div>
+        <div className="flex gap-3 items-center">
+          <button onClick={() => loadTarefas()}
+            className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 transition-all shadow-sm">
+            <ArrowPathIcon className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
+          </button>
+          <button onClick={abrirNova}
+            className="flex items-center gap-2 px-6 py-3 bg-[#0b7336] text-white rounded-2xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-xl">
+            <PlusIcon className="w-5 h-5" />
+            Nova Tarefa
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs PES / DOC EXT. */}
+      <div className="grid grid-cols-2 gap-4 mb-5">
+        {(["pes", "doc_ext"] as Subtipo[]).map(sub => {
+          const cfg = SUBTIPO_CONFIG[sub];
+          const s = stats[sub];
+          const isAtivo = subtipoAtivo === sub;
+          return (
+            <button key={sub} onClick={() => { setSubtipoAtivo(sub); setMostrarArquivados(false); }}
+              className={`rounded-2xl p-5 border-2 text-left transition-all ${isAtivo ? cfg.activeColor : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
+              <div className="flex items-center justify-between mb-4">
+                <span className={`text-lg font-black ${isAtivo ? cfg.color : "text-gray-400 dark:text-gray-500"}`}>{cfg.label}</span>
+                <div className="flex items-center gap-2">
+                  {s.arquivadas > 0 && (
+                    <span className="text-[9px] font-black px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center gap-1">
+                      <ArchiveBoxIcon className="w-3 h-3" />{s.arquivadas}
+                    </span>
+                  )}
+                  {isAtivo && <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${cfg.activeColor} ${cfg.color}`}>ATIVO</span>}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                <StatsCard label="Total"     value={s.total}      color={isAtivo ? cfg.color : "text-gray-500 dark:text-gray-400"} />
+                <StatsCard label="Diárias"   value={s.diarias}    color={isAtivo ? "text-orange-400" : "text-gray-500 dark:text-gray-400"} />
+                <StatsCard label="Contínuas" value={s.continuas}  color={isAtivo ? "text-teal-400"   : "text-gray-500 dark:text-gray-400"} />
+                <StatsCard label="Concluídas"value={s.concluidas} color={isAtivo ? "text-emerald-400": "text-gray-500 dark:text-gray-400"} />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filtros + Arquivados */}
+      <div className="flex flex-wrap gap-3 mb-4 items-center justify-between">
+        <div className="flex flex-wrap gap-3 items-center">
+          <FunnelIcon className="w-4 h-4 text-gray-400" />
+          <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+            {(["todos", "diaria", "continua"] as const).map(v => (
+              <button key={v} onClick={() => setFiltroTipo(v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroTipo === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                {v === "todos" ? "Todos" : v === "diaria" ? "Diárias" : "Contínuas"}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+            {(["todos", "iniciada", "em_execucao", "interrompida", "concluida"] as const).map(v => (
+              <button key={v} onClick={() => setFiltroStatus(v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroStatus === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                {v === "todos" ? "Todos" : v === "em_execucao" ? "Em execução" : v === "iniciada" ? "Iniciada" : v === "interrompida" ? "Interrompida" : "Concluída"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={() => setMostrarArquivados(v => !v)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+            mostrarArquivados
+              ? "border-gray-400 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+              : "border-gray-200 dark:border-gray-700 text-gray-400 hover:border-gray-300 hover:text-gray-600 dark:hover:border-gray-600"
+          }`}>
+          {mostrarArquivados ? <ArrowLeftIcon className="w-3.5 h-3.5" /> : <ArchiveBoxIcon className="w-3.5 h-3.5" />}
+          {mostrarArquivados ? "Voltar" : "Arquivados"}
+          {!mostrarArquivados && tarefasArquivadas.length > 0 && (
+            <span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full text-[9px] font-black">
+              {tarefasArquivadas.length}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Tabelas Lado a Lado */}
       {loading ? (
         <div className="flex-1 bg-white dark:bg-gray-900 rounded-[1.5rem] border border-gray-100 dark:border-gray-800 flex items-center justify-center min-h-[400px]">
