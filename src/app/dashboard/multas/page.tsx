@@ -11,7 +11,8 @@ import {
   DocumentIcon,
   DocumentArrowUpIcon,
   CheckCircleIcon,
-  XMarkIcon
+  XMarkIcon,
+  PencilIcon
 } from "@heroicons/react/24/outline";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
@@ -37,6 +38,7 @@ export default function MultasPage() {
   const [isExporting, setIsExporting] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"new" | "edit_initial" | "identify">("new");
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // Form state
@@ -85,6 +87,7 @@ export default function MultasPage() {
   }, [activeTab, pendentes, identificadas, enviadas]);
 
   function openNewModal() {
+    setModalMode("new");
     setEditingId(null);
     setPlaca("");
     setAutoInfracao("");
@@ -94,12 +97,22 @@ export default function MultasPage() {
     setModalOpen(true);
   }
 
-  function openEditModal(m: Multa) {
+  function openIdentifyModal(m: Multa) {
+    setModalMode("identify");
     setEditingId(m.id);
     setPlaca(m.placa);
     setAutoInfracao(m.auto_infracao);
     setGestor(m.gestor_cobrado || "");
     setObs(m.observacao_retorno || "");
+    setFilesToAdd([]);
+    setModalOpen(true);
+  }
+
+  function openEditInitialModal(m: Multa) {
+    setModalMode("edit_initial");
+    setEditingId(m.id);
+    setPlaca(m.placa);
+    setAutoInfracao(m.auto_infracao);
     setFilesToAdd([]);
     setModalOpen(true);
   }
@@ -126,8 +139,8 @@ export default function MultasPage() {
     
     setIsSaving(true);
     try {
-      if (editingId) {
-        // Modo edição -> estamos identificando a multa
+      if (modalMode === "identify" && editingId) {
+        // Modo identificação
         const m = multas.find(x => x.id === editingId);
         if (!m) throw new Error("Multa não encontrada");
 
@@ -147,6 +160,26 @@ export default function MultasPage() {
 
         if (error) throw error;
         toast.success("Multa identificada!");
+      } else if (modalMode === "edit_initial" && editingId) {
+        // Modo editar dados iniciais
+        const m = multas.find(x => x.id === editingId);
+        if (!m) throw new Error("Multa não encontrada");
+
+        let novasUrlsIniciais = [...(m.arquivos_iniciais || [])];
+        if (filesToAdd.length > 0) {
+          const up = await uploadFiles(filesToAdd, `inicial_${placa}`);
+          novasUrlsIniciais = [...novasUrlsIniciais, ...up];
+        }
+
+        const { error } = await supabase.from("multas").update({
+          placa,
+          auto_infracao: autoInfracao,
+          arquivos_iniciais: novasUrlsIniciais,
+          updated_at: new Date().toISOString()
+        }).eq("id", editingId);
+
+        if (error) throw error;
+        toast.success("Multa atualizada!");
       } else {
         // Modo criação
         let novasUrlsIniciais: string[] = [];
@@ -411,15 +444,23 @@ export default function MultasPage() {
                     </td>
                     <td className="px-6 py-4">
                       {m.status === "pendente" && (
-                        <button onClick={() => openEditModal(m)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
-                          Identificar / Retorno
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => openIdentifyModal(m)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
+                            Identificar / Retorno
+                          </button>
+                          <button onClick={() => openEditInitialModal(m)} title="Editar Dados Iniciais" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                       {m.status === "identificada" && (
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-emerald-500 bg-emerald-50 px-3 py-1.5 rounded-lg">Pronta p/ RH</span>
                           <button onClick={() => revertStatus(m)} title="Reverter para Pendente" className="text-gray-400 hover:text-rose-500 transition-colors">
                             <ArrowPathIcon className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => openEditInitialModal(m)} title="Editar Dados Iniciais" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                            <PencilIcon className="w-4 h-4" />
                           </button>
                         </div>
                       )}
@@ -428,6 +469,9 @@ export default function MultasPage() {
                           <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">Enviada em {m.data_enviada_rh ? new Date(m.data_enviada_rh).toLocaleDateString() : ""}</span>
                           <button onClick={() => revertStatus(m)} title="Reverter para Identificada" className="text-gray-400 hover:text-rose-500 transition-colors">
                             <ArrowPathIcon className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => openEditInitialModal(m)} title="Editar Dados Iniciais" className="p-1.5 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                            <PencilIcon className="w-4 h-4" />
                           </button>
                         </div>
                       )}
@@ -446,7 +490,7 @@ export default function MultasPage() {
           <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-800">
             <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 dark:border-gray-800">
               <h2 className="text-xl font-black text-gray-900 dark:text-white">
-                {editingId ? "Informar Retorno (Identificar)" : "Nova Multa"}
+                {modalMode === "identify" ? "Informar Retorno (Identificar)" : modalMode === "edit_initial" ? "Editar Multa" : "Nova Multa"}
               </h2>
               <button onClick={() => setModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-xl">
                 <XMarkIcon className="w-5 h-5" />
@@ -454,7 +498,7 @@ export default function MultasPage() {
             </div>
             
             <form onSubmit={handleSave} className="p-7 space-y-5">
-              {!editingId ? (
+              {modalMode === "new" || modalMode === "edit_initial" ? (
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -545,7 +589,7 @@ export default function MultasPage() {
               
               <button type="submit" disabled={isSaving} className="w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-xl shadow-lg transition-all flex justify-center items-center gap-2">
                 {isSaving ? <ArrowPathIcon className="w-5 h-5 animate-spin" /> : <CheckCircleIcon className="w-5 h-5" />}
-                {editingId ? "Salvar Identificação" : "Registrar Multa"}
+                {modalMode === "identify" ? "Salvar Identificação" : modalMode === "edit_initial" ? "Salvar Edição" : "Registrar Multa"}
               </button>
             </form>
           </div>
