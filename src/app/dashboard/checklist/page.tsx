@@ -67,7 +67,7 @@ export default function ChecklistPage() {
   const groupedChecklists = useMemo(() => {
     const groups: Record<string, Checklist[]> = {};
     filtrado.forEach(c => {
-      const p = (c.projeto || "SEM PROJETO DEFINIDO").toUpperCase();
+      const p = (c.projeto || "SEM PROJETO DEFINIDO").trim().toUpperCase().replace(/\s+/g, ' ');
       if (!groups[p]) groups[p] = [];
       groups[p].push(c);
     });
