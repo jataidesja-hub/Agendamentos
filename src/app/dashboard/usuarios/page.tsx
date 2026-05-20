@@ -18,7 +18,7 @@ export default function UsuariosPage() {
   const [telas, setTelas] = useState<string[]>([]);
   const [projetos, setProjetos] = useState<string[]>([]);
   const [master, setMaster] = useState(false);
-  const [abasRelatorio, setAbasRelatorio] = useState<string[]>(['projetos', 'postos', 'gestores']);
+  const [abasRelatorio, setAbasRelatorio] = useState<string[]>(['projetos', 'postos', 'gestores', 'mapa']);
 
   const telasDisponiveis = [
     { id: 'agenda', nome: 'Agenda/Agendamentos' },
@@ -115,7 +115,7 @@ export default function UsuariosPage() {
 
   const resetForm = () => {
     setEmail(''); setSenha(''); setTelas([]); setProjetos([]); setMaster(false);
-    setAbasRelatorio(['projetos', 'postos', 'gestores']); setEditId(null);
+    setAbasRelatorio(['projetos', 'postos', 'gestores', 'mapa']); setEditId(null);
   };
 
   const handleEdit = (u: any) => {
@@ -125,7 +125,7 @@ export default function UsuariosPage() {
     setTelas(u.telas_acesso || []);
     setProjetos(u.projetos_acesso || []);
     setMaster(u.master || false);
-    setAbasRelatorio(u.abas_relatorio || ['projetos', 'postos', 'gestores']);
+    setAbasRelatorio(u.abas_relatorio || ['projetos', 'postos', 'gestores', 'mapa']);
     setShowForm(true);
   };
 
@@ -201,6 +201,7 @@ export default function UsuariosPage() {
                   { id: 'projetos', nome: 'Projetos', cor: 'border-[#0b7336] bg-green-50 dark:bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400' },
                   { id: 'postos', nome: 'Postos', cor: 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' },
                   { id: 'gestores', nome: 'Gestores', cor: 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400' },
+                  { id: 'mapa', nome: 'Mapa', cor: 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400' },
                 ].map(a => (
                   <label key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
                     abasRelatorio.includes(a.id) ? a.cor : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
