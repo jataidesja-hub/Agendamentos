@@ -321,6 +321,45 @@ export default function MultasPage() {
     }
   }
 
+  function renderStatusPrazo(prazo: string | null) {
+    if (!prazo) return "—";
+
+    const dataPrazo = new Date(prazo);
+    if (isNaN(dataPrazo.getTime())) return "—";
+
+    const hoje = new Date();
+    const hojeUTC = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const dataPrazoUTC = dataPrazo.getTime();
+
+    const diffTime = dataPrazoUTC - hojeUTC;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    const dateStr = dataPrazo.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+
+    if (diffDays < 0) {
+      return (
+        <div className="flex flex-col gap-1 items-start">
+          <span>{dateStr}</span>
+          <span className="text-[9px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-black uppercase inline-block">Vencido</span>
+        </div>
+      );
+    } else if (diffDays <= 3) {
+      return (
+        <div className="flex flex-col gap-1 items-start">
+          <span>{dateStr}</span>
+          <span className="text-[9px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-black uppercase inline-block">Prestes a Vencer</span>
+        </div>
+      );
+    } else {
+      return (
+        <div className="flex flex-col gap-1 items-start">
+          <span>{dateStr}</span>
+          <span className="text-[9px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase inline-block">No Prazo</span>
+        </div>
+      );
+    }
+  }
+
   async function exportZip() {
     const toExport = identificadas.filter(m => selectedIds.has(m.id));
     if (toExport.length === 0) return toast.error("Selecione ao menos uma multa para exportar");
