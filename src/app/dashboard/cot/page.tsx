@@ -966,8 +966,10 @@ export default function CotPage() {
                   {isAtivo && <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${cfg.activeColor} ${cfg.color}`}>ATIVO</span>}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-4 gap-3">
                 <StatsCard label="Total"     value={s.total}      color={isAtivo ? cfg.color : "text-gray-500 dark:text-gray-400"} />
+                <StatsCard label="Diárias"   value={s.diarias}    color={isAtivo ? "text-orange-400" : "text-gray-500 dark:text-gray-400"} />
+                <StatsCard label="Contínuas" value={s.continuas}  color={isAtivo ? "text-teal-400"   : "text-gray-500 dark:text-gray-400"} />
                 <StatsCard label="Concluídas"value={s.concluidas} color={isAtivo ? "text-emerald-400": "text-gray-500 dark:text-gray-400"} />
               </div>
             </button>
