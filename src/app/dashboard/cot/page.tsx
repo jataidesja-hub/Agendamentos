@@ -385,23 +385,23 @@ export default function CotPage() {
             : <span className="text-gray-500 text-xs">—</span>}
         </td>
         {/* Projeto */}
-        <td className="px-1.5 py-2 align-middle">
-          <p className="text-[11px] font-bold text-gray-800 dark:text-white leading-tight min-w-[70px]">{t.nome_projeto}</p>
+        <td className="px-1.5 py-2 text-center align-middle">
+          <p className="text-[11px] font-bold text-gray-800 dark:text-white leading-tight min-w-[70px] mx-auto">{t.nome_projeto}</p>
         </td>
         {/* Atividade */}
-        <td className="px-1.5 py-2 align-top relative">
+        <td className="px-1.5 py-2 text-center align-top relative">
           {t.last_modified_by && (
-            <p className="text-[8px] font-bold text-rose-500/90 dark:text-rose-400/90 mb-1 uppercase tracking-wide leading-tight">
+            <p className="text-[8px] font-bold text-rose-500/90 dark:text-rose-400/90 mb-1 uppercase tracking-wide leading-tight text-center">
               Modificado por {t.last_modified_by.split("@")[0]}
             </p>
           )}
-          <p className="text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[120px] max-w-[200px] leading-snug">{t.atividade}</p>
+          <p className="text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[120px] max-w-[200px] leading-snug mx-auto text-center">{t.atividade}</p>
         </td>
         {/* Agente */}
         {isDocExt && (
-          <td className="px-1.5 py-2 align-middle">
+          <td className="px-1.5 py-2 text-center align-middle">
             {t.nome_agente
-              ? <div className="flex items-center gap-1 text-[11px] text-cyan-400 whitespace-nowrap"><UserIcon className="w-3 h-3 flex-shrink-0" />{t.nome_agente}</div>
+              ? <div className="inline-flex items-center justify-center gap-1 text-[11px] text-cyan-400 whitespace-nowrap"><UserIcon className="w-3 h-3 flex-shrink-0" />{t.nome_agente}</div>
               : <span className="text-gray-500 text-xs">—</span>}
           </td>
         )}
@@ -423,7 +423,7 @@ export default function CotPage() {
         {/* Status */}
         <td className="px-1.5 py-2 text-center align-middle">
           {isArquivada ? (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] bg-gray-500/10 text-gray-400 border-gray-500/20 whitespace-nowrap">
+            <span className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] bg-gray-500/10 text-gray-400 border-gray-500/20 whitespace-nowrap">
               <ArchiveBoxIcon className="w-3 h-3 flex-shrink-0" /> Arquivada
             </span>
           ) : (
@@ -432,7 +432,7 @@ export default function CotPage() {
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 setStatusDropdown(statusDropdown?.id === t.id ? null : { id: t.id, top: rect.bottom + 6, left: rect.left + rect.width / 2 });
               }}
-              className={`flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] transition-all hover:opacity-80 whitespace-nowrap ${statusInfo.badge}`}>
+              className={`inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] transition-all hover:opacity-80 whitespace-nowrap ${statusInfo.badge}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} flex-shrink-0`} />
               {statusInfo.label}
               <svg className="w-2.5 h-2.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -453,10 +453,9 @@ export default function CotPage() {
             );
           })()}
         </td>
-        {/* Registro */}
         <td className="px-1.5 py-2 text-center align-middle">
           {isArquivada ? (
-            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border font-black text-[9px] whitespace-nowrap ${
+            <span className={`inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded-full border font-black text-[9px] whitespace-nowrap ${
               reg === "registrada" ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30" : "bg-gray-500/10 text-gray-500 border-gray-500/20"
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${reg === "registrada" ? "bg-indigo-400" : "bg-gray-500"}`} />
@@ -465,7 +464,7 @@ export default function CotPage() {
           ) : (
             <button
               onClick={() => alterarRegistro(t.id, reg === "registrada" ? "nao_registrada" : "registrada")}
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border font-black text-[9px] transition-all hover:opacity-80 whitespace-nowrap ${
+              className={`inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded-full border font-black text-[9px] transition-all hover:opacity-80 whitespace-nowrap ${
                 reg === "registrada"
                   ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
                   : "bg-gray-500/10 text-gray-400 border-gray-500/20 hover:border-indigo-500/30 hover:text-indigo-400"
@@ -476,9 +475,9 @@ export default function CotPage() {
           )}
         </td>
         {/* Obs. */}
-        <td className="px-1.5 py-2 align-top w-[100px] xl:w-[120px]">
+        <td className="px-1.5 py-2 text-center align-middle w-[100px] xl:w-[120px]">
           {t.observacao
-            ? <p className="text-[9px] text-gray-400 whitespace-pre-wrap break-words hover:text-gray-200 transition-colors cursor-default leading-tight">{t.observacao}</p>
+            ? <p className="text-[9px] text-gray-400 whitespace-pre-wrap break-words hover:text-gray-200 transition-colors cursor-default leading-tight mx-auto text-center">{t.observacao}</p>
             : <span className="text-gray-600 text-[10px]">—</span>}
         </td>
         {/* Countdown / Ações */}
@@ -511,16 +510,16 @@ export default function CotPage() {
     { label: "Tipo",         align: "text-center" },
     { label: "Subtipo",      align: "text-center" },
     { label: "Nº Tipo",      align: "text-center" },
-    { label: "Projeto",      align: "text-left" },
-    { label: "Atividade",    align: "text-left" },
-    { label: "Agente",       align: "text-left" },
+    { label: "Projeto",      align: "text-center" },
+    { label: "Atividade",    align: "text-center" },
+    { label: "Agente",       align: "text-center" },
     { label: "Nº PES / Doc.",align: "text-center" },
     { label: "Data Fim",     align: "text-center" },
     { label: "Status",       align: "text-center" },
     { label: "Doc. Ext.",    align: "text-center" },
     { label: "Registro",     align: "text-center" },
-    { label: "Obs.",         align: "text-left" },
-    { label: "",             align: "text-right" },
+    { label: "Obs.",         align: "text-center" },
+    { label: "",             align: "text-center" },
   ];
 
   return (
@@ -665,16 +664,16 @@ export default function CotPage() {
             const headers = [
               { label: "Tipo",         align: "text-center" },
               { label: "Nº Tipo",      align: "text-center" },
-              { label: "Projeto",      align: "text-left" },
-              { label: "Atividade",    align: "text-left" },
-              ...(isDocExt ? [{ label: "Agente", align: "text-left" }] : []),
+              { label: "Projeto",      align: "text-center" },
+              { label: "Atividade",    align: "text-center" },
+              ...(isDocExt ? [{ label: "Agente", align: "text-center" }] : []),
               { label: !isDocExt ? "Nº PES / Doc." : "Nº Documento", align: "text-center" },
               { label: "Data Fim",     align: "text-center" },
               { label: "Status",       align: "text-center" },
               { label: "Doc. Ext.",    align: "text-center" },
               { label: "Registro",     align: "text-center" },
-              { label: "Obs.",         align: "text-left" },
-              { label: "",             align: "text-right" },
+              { label: "Obs.",         align: "text-center" },
+              { label: "",             align: "text-center" },
             ];
 
             return (
