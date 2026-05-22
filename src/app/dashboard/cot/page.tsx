@@ -839,53 +839,6 @@ export default function CotPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
-                    {form.subtipo === "pes" ? "Nº do PES" : "Nº Documento"}
-                  </label>
-                  <input type="text" value={form.numero_documento} onChange={e => setForm(p => ({ ...p, numero_documento: e.target.value }))}
-                    placeholder={form.subtipo === "pes" ? "Ex: PES-001" : "Ex: 24.532-26"} className={inputCls} />
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Projeto <span className="text-red-400">*</span></label>
-                    <input type="text" value={form.nome_projeto} onChange={e => setForm(p => ({ ...p, nome_projeto: e.target.value }))}
-                      placeholder="Nome do projeto..." required className={inputCls} />
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Nº Tipo</label>
-                      <select value={form.tipo_numero} onChange={e => setForm(p => ({ ...p, tipo_numero: e.target.value }))} className={inputCls}>
-                        <option value="">—</option>
-                        {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                    </div>
-                    {["1", "2", "3"].includes(form.tipo_numero) && (
-                      <div>
-                        <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1.5 block">Nº SGI <span className="text-red-400">*</span></label>
-                        <input type="text" value={form.numero_sgi} onChange={e => setForm(p => ({ ...p, numero_sgi: e.target.value }))}
-                          placeholder="SGI..." required className={inputCls + " ring-1 ring-emerald-500/50"} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Atividade <span className="text-red-400">*</span></label>
-                  <textarea value={form.atividade} onChange={e => setForm(p => ({ ...p, atividade: e.target.value }))}
-                    placeholder="Descrição da atividade..." required rows={3}
-                    className={inputCls + " resize-none"} />
-                </div>
-
-                {form.subtipo === "doc_ext" && (
-                  <div>
-                    <label className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-1.5 block">Nome do Agente</label>
-                    <input type="text" value={form.nome_agente} onChange={e => setForm(p => ({ ...p, nome_agente: e.target.value }))}
-                      placeholder="Nome do agente responsável..." className={inputCls} />
-                  </div>
-                )}
-
                 {/* Doc. Externo */}
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
@@ -919,24 +872,74 @@ export default function CotPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data de Fim</label>
-                  <input type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className={inputCls} />
-                </div>
-
-                {/* Nº do Documento vinculado — só para PES quando tem doc. externo */}
-                {form.subtipo === "pes" && form.doc_externo !== "nao_possui" && (
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
-                      Nº Documento
-                      <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full border font-black ${DOC_EXT_COLORS[form.doc_externo] ?? ""}`}>
-                        {form.doc_externo}
-                      </span>
+                      {form.subtipo === "pes" ? "Nº do PES" : "Nº Documento"}
                     </label>
-                    <input type="text" value={form.numero_doc_ext} onChange={e => setForm(p => ({ ...p, numero_doc_ext: e.target.value }))}
-                      placeholder={`Nº do documento ${form.doc_externo}...`} className={inputCls} />
+                    <input type="text" value={form.numero_documento} onChange={e => setForm(p => ({ ...p, numero_documento: e.target.value }))}
+                      placeholder={form.subtipo === "pes" ? "Ex: PES-001" : "Ex: 24.532-26"} className={inputCls} />
                   </div>
-                )}
+                  
+                  {form.subtipo === "pes" && form.doc_externo !== "nao_possui" ? (
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
+                        Nº Documento <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded-full border font-black ${DOC_EXT_COLORS[form.doc_externo] ?? ""}`}>{form.doc_externo}</span>
+                      </label>
+                      <input type="text" value={form.numero_doc_ext} onChange={e => setForm(p => ({ ...p, numero_doc_ext: e.target.value }))}
+                        placeholder={`Nº do documento ${form.doc_externo}...`} className={inputCls} />
+                    </div>
+                  ) : form.subtipo === "doc_ext" ? (
+                    <div>
+                      <label className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-1.5 block">Nome do Agente</label>
+                      <input type="text" value={form.nome_agente} onChange={e => setForm(p => ({ ...p, nome_agente: e.target.value }))}
+                        placeholder="Nome do agente responsável..." className={inputCls} />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data de Fim</label>
+                      <input type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className={inputCls} />
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Projeto <span className="text-red-400">*</span></label>
+                    <input type="text" value={form.nome_projeto} onChange={e => setForm(p => ({ ...p, nome_projeto: e.target.value }))}
+                      placeholder="Nome do projeto..." required className={inputCls} />
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Nº Tipo</label>
+                      <select value={form.tipo_numero} onChange={e => setForm(p => ({ ...p, tipo_numero: e.target.value }))} className={inputCls}>
+                        <option value="">—</option>
+                        {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                    {["1", "2", "3"].includes(form.tipo_numero) && (
+                      <div>
+                        <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1.5 block">Nº SGI <span className="text-red-400">*</span></label>
+                        <input type="text" value={form.numero_sgi} onChange={e => setForm(p => ({ ...p, numero_sgi: e.target.value }))}
+                          placeholder="SGI..." required className={inputCls + " ring-1 ring-emerald-500/50"} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Atividade <span className="text-red-400">*</span></label>
+                  <textarea value={form.atividade} onChange={e => setForm(p => ({ ...p, atividade: e.target.value }))}
+                    placeholder="Descrição da atividade..." required rows={3}
+                    className={inputCls + " resize-none"} />
+                </div>
+
+                {(form.subtipo === "pes" && form.doc_externo !== "nao_possui") || form.subtipo === "doc_ext" ? (
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data de Fim</label>
+                    <input type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className={inputCls} />
+                  </div>
+                ) : null}
 
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Status</label>
