@@ -7,6 +7,8 @@ import {
   ChevronLeftIcon, ChevronRightIcon, CheckIcon,
   CameraIcon, XMarkIcon, ArrowUpTrayIcon,
 } from "@heroicons/react/24/outline";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 // ─── Dados do checklist ────────────────────────────────────────────────────────
 
@@ -173,9 +175,21 @@ type FotoState = Record<string, { url: string | null; sem_foto: boolean; uploadi
 // ─── Componente ────────────────────────────────────────────────────────────────
 
 export default function NovoChecklist() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Carregando...</div>}>
+      <ChecklistForm />
+    </Suspense>
+  );
+}
+
+function ChecklistForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("id");
+
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(!!editId);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [dados, setDados] = useState({
@@ -198,6 +212,34 @@ export default function NovoChecklist() {
   const [fotos, setFotos] = useState<FotoState>({});
   const [expandedObs, setExpandedObs] = useState<number | null>(null);
   const [observacaoGeral, setObservacaoGeral] = useState("");
+
+  useEffect(() => {
+    if (editId) {
+      supabase.from("informe_checklist").select("*").eq("id", editId).single().then(({ data }) => {
+        if (data) {
+          setDados({
+            placa: data.placa || "",
+            condutor: data.condutor || "",
+            cpf: data.cpf || "",
+            projeto: data.projeto || "",
+            ano_fab: data.ano_fab || "",
+            km: data.km || "",
+            tipo_marca: data.tipo_marca || "",
+            modelo: data.modelo || "",
+            centro_custo: data.centro_custo || "",
+            funcao: data.funcao || "",
+            local_inspecao: data.local_inspecao || "",
+            data_inspecao: data.data_inspecao || new Date().toISOString().split("T")[0],
+            km_inspecao: data.km_inspecao || "",
+          });
+          if (data.respostas) setRespostas(data.respostas);
+          if (data.fotos) setFotos(data.fotos);
+          if (data.observacao_geral) setObservacaoGeral(data.observacao_geral);
+        }
+        setLoading(false);
+      });
+    }
+  }, [editId]);
 
   // ── handlers ──────────────────────────────────────────────────────────────
 
@@ -253,14 +295,23 @@ export default function NovoChecklist() {
       for (const [k, v] of Object.entries(fotos)) {
         fotosJson[k] = { url: v.url, sem_foto: v.sem_foto };
       }
-      const { error } = await supabase.from("informe_checklist").insert({
+      const payload = {
         ...dados,
         respostas,
         fotos: fotosJson,
         observacao_geral: observacaoGeral.trim() || null,
-      });
-      if (error) throw error;
-      toast.success("Checklist salvo!");
+      };
+
+      if (editId) {
+        const { error } = await supabase.from("informe_checklist").update(payload).eq("id", editId);
+        if (error) throw error;
+        toast.success("Checklist atualizado!");
+      } else {
+        const { error } = await supabase.from("informe_checklist").insert(payload);
+        if (error) throw error;
+        toast.success("Checklist salvo!");
+      }
+      
       router.push("/dashboard/checklist");
     } catch (e: any) {
       toast.error("Erro ao salvar: " + e.message);
@@ -277,6 +328,14 @@ export default function NovoChecklist() {
 
   // ── render ─────────────────────────────────────────────────────────────────
 
+  if (loading) {
+    return (
+      <div className="flex justify-center py-20">
+        <div className="w-8 h-8 border-2 border-[#0b7336] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-10">
       {/* Header */}
@@ -288,7 +347,7 @@ export default function NovoChecklist() {
           <ChevronLeftIcon className="w-5 h-5" />
         </button>
         <div className="flex-1">
-          <h1 className="text-xl font-black text-gray-900 dark:text-white">Novo Checklist</h1>
+          <h1 className="text-xl font-black text-gray-900 dark:text-white">{editId ? "Editar Checklist" : "Novo Checklist"}</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">Passo {step} de 3</p>
         </div>
         {dados.placa && (
@@ -694,7 +753,7 @@ export default function NovoChecklist() {
               ) : (
                 <>
                   <CheckIcon className="w-5 h-5" />
-                  Salvar Checklist
+                  {editId ? "Atualizar Checklist" : "Salvar Checklist"}
                 </>
               )}
             </button>
