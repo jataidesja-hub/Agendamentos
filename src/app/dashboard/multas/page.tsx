@@ -30,6 +30,7 @@ interface Multa {
   gestor_cobrado: string | null;
   observacao_retorno: string | null;
   data_enviada_rh: string | null;
+  prazo_indicacao_condutor: string | null;
   created_at: string;
 }
 
@@ -48,6 +49,7 @@ export default function MultasPage() {
   const [autoInfracao, setAutoInfracao] = useState("");
   const [gestor, setGestor] = useState("");
   const [obs, setObs] = useState("");
+  const [prazoIndicacao, setPrazoIndicacao] = useState("");
   const [filesToAdd, setFilesToAdd] = useState<File[]>([]);
   const [existingIniciais, setExistingIniciais] = useState<string[]>([]);
   const [existingRetorno, setExistingRetorno] = useState<string[]>([]);
@@ -100,6 +102,7 @@ export default function MultasPage() {
     setAutoInfracao("");
     setGestor("");
     setObs("");
+    setPrazoIndicacao("");
     setFilesToAdd([]);
     setFilesToAddRetorno([]);
     setExistingIniciais([]);
@@ -114,6 +117,7 @@ export default function MultasPage() {
     setAutoInfracao(m.auto_infracao);
     setGestor(m.gestor_cobrado || "");
     setObs(m.observacao_retorno || "");
+    setPrazoIndicacao(m.prazo_indicacao_condutor || "");
     setFilesToAdd([]);
     setFilesToAddRetorno([]);
     setExistingIniciais(m.arquivos_iniciais || []);
@@ -128,6 +132,7 @@ export default function MultasPage() {
     setAutoInfracao(m.auto_infracao);
     setGestor(m.gestor_cobrado || "");
     setObs(m.observacao_retorno || "");
+    setPrazoIndicacao(m.prazo_indicacao_condutor || "");
     setFilesToAdd([]);
     setFilesToAddRetorno([]);
     setExistingIniciais(m.arquivos_iniciais || []);
@@ -203,6 +208,7 @@ export default function MultasPage() {
           auto_infracao: autoInfracao,
           gestor_cobrado: gestor || null,
           observacao_retorno: obs || null,
+          prazo_indicacao_condutor: prazoIndicacao || null,
           arquivos_iniciais: novasUrlsIniciais,
           arquivos_retorno: novasUrlsRetorno,
           updated_at: new Date().toISOString()
@@ -220,6 +226,7 @@ export default function MultasPage() {
         const { error } = await supabase.from("multas").insert({
           placa,
           auto_infracao: autoInfracao,
+          prazo_indicacao_condutor: prazoIndicacao || null,
           arquivos_iniciais: novasUrlsIniciais
         });
         if (error) throw error;
@@ -474,6 +481,7 @@ export default function MultasPage() {
                   )}
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Placa</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Auto da Infração</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Prazo Condutor</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Gestor</th>
                   {activeTab === "sem_assinatura" && <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Observação</th>}
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Anexos Iniciais</th>
@@ -507,6 +515,9 @@ export default function MultasPage() {
                     </td>
                     <td className="px-6 py-4 font-mono text-sm text-gray-600 dark:text-gray-300">
                       {m.auto_infracao}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-bold text-gray-700 dark:text-gray-200">
+                      {m.prazo_indicacao_condutor ? new Date(m.prazo_indicacao_condutor).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : "—"}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 font-bold">
                       {m.gestor_cobrado || "—"}
@@ -638,6 +649,11 @@ export default function MultasPage() {
                     </div>
                   </div>
                   <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Prazo Indicação Condutor</label>
+                    <input type="date" value={prazoIndicacao} onChange={e => setPrazoIndicacao(e.target.value)} 
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-rose-500 outline-none" />
+                  </div>
+                  <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexar Multa (PDF/Imagem)</label>
                     <label 
                       onDragOver={handleDragOver}
@@ -745,12 +761,20 @@ export default function MultasPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Gestor Responsável</label>
-                    <input type="text" value={gestor} onChange={e => setGestor(e.target.value)} 
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
-                      placeholder="Nome do Gestor" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Prazo Indicação Condutor</label>
+                      <input type="date" value={prazoIndicacao} onChange={e => setPrazoIndicacao(e.target.value)} 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Gestor Responsável</label>
+                      <input type="text" value={gestor} onChange={e => setGestor(e.target.value)} 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+                        placeholder="Nome do Gestor" />
+                    </div>
                   </div>
+
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Observações</label>
                     <textarea value={obs} onChange={e => setObs(e.target.value)} rows={2}
