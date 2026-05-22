@@ -343,7 +343,7 @@ export default function MultasPage() {
           <span className="text-[9px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-black uppercase inline-block">Vencido</span>
         </div>
       );
-    } else if (diffDays <= 3) {
+    } else if (diffDays <= 7) {
       return (
         <div className="flex flex-col gap-1 items-start">
           <span>{dateStr}</span>
