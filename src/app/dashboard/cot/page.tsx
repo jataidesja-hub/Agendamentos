@@ -2,22 +2,11 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  PlusIcon,
-  XMarkIcon,
-  PencilSquareIcon,
-  TrashIcon,
-  FunnelIcon,
-  ArrowPathIcon,
-  CalendarDaysIcon,
-  DocumentTextIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  PlayIcon,
-  UserIcon,
-  ArchiveBoxIcon,
-  ArrowLeftIcon,
-  SignalIcon,
+  PlusIcon, XMarkIcon, PencilSquareIcon, TrashIcon,
+  FunnelIcon, ArrowPathIcon, CalendarDaysIcon, DocumentTextIcon,
+  ClockIcon, CheckCircleIcon, ExclamationTriangleIcon, PlayIcon,
+  UserIcon, ArchiveBoxIcon, ArrowLeftIcon, SignalIcon, EnvelopeIcon,
+  BoltIcon, ClipboardDocumentIcon
 } from "@heroicons/react/24/outline";
 import { CheckIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-hot-toast";
@@ -63,6 +52,25 @@ interface CotTarefa {
   updated_at: string;
 }
 
+type TipoEvento = "indisponibilidade" | "anormalidade";
+type StatusEvento = "ativa" | "sem_previsao" | "previsao_vencida" | "normalizada";
+
+interface Evento {
+  id: string;
+  tipo: TipoEvento;
+  subestacao: string;
+  concessao: string | null;
+  ativo: string | null;
+  descricao: string;
+  data: string | null;
+  status: StatusEvento;
+  registro: Registro;
+  arquivada: boolean;
+  last_modified_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 const STATUS_DIARIA: { id: StatusDiaria; label: string; badge: string; dot: string; icon: any }[] = [
   { id: "iniciada",     label: "Iniciada",     badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: PlayIcon },
   { id: "em_execucao",  label: "Em execução",  badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",         dot: "bg-amber-400",   icon: ClockIcon },
@@ -94,6 +102,34 @@ const SUBTIPO_CONFIG: Record<Subtipo, { label: string; color: string; activeColo
   doc_ext: { label: "DOC EXT.", color: "text-cyan-400",   activeColor: "border-cyan-500 bg-cyan-500/10" },
 };
 
+const TIPO_EVENTO_CONFIG: Record<TipoEvento, { label: string; color: string; activeColor: string; accent: string; statBg: string }> = {
+  indisponibilidade: {
+    label:       "INDISPONIBILIDADE",
+    color:       "text-amber-400",
+    activeColor: "border-amber-500 bg-amber-500/10",
+    accent:      "bg-amber-500",
+    statBg:      "bg-amber-500/8 border-amber-500/20",
+  },
+  anormalidade: {
+    label:       "ANORMALIDADE",
+    color:       "text-rose-400",
+    activeColor: "border-rose-500 bg-rose-500/10",
+    accent:      "bg-rose-500",
+    statBg:      "bg-rose-500/8 border-rose-500/20",
+  },
+};
+
+const STATUS_EVENTO_LIST: { id: StatusEvento; label: string; badge: string; dot: string; icon: any }[] = [
+  { id: "ativa",            label: "Ativa",            badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: ExclamationTriangleIcon },
+  { id: "sem_previsao",     label: "Sem Previsão",     badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",         dot: "bg-amber-400",   icon: ClockIcon },
+  { id: "previsao_vencida", label: "Prev. Vencida",    badge: "bg-rose-500/15 text-rose-400 border-rose-500/30",            dot: "bg-rose-400",    icon: ExclamationTriangleIcon },
+  { id: "normalizada",      label: "Normalizada",      badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",   dot: "bg-emerald-400", icon: CheckCircleIcon },
+];
+
+function getStatusEvento(s: StatusEvento) {
+  return STATUS_EVENTO_LIST.find(x => x.id === s) ?? STATUS_EVENTO_LIST[0];
+}
+
 const ARCHIVE_MS = 24 * 60 * 60 * 1000;
 
 const EMPTY_FORM = {
@@ -110,6 +146,17 @@ const EMPTY_FORM = {
   numero_sgi: "",
   status: "iniciada" as StatusTarefa,
   registro: "nao_registrada" as Registro,
+};
+
+const EMPTY_EVENTO_FORM = {
+  tipo:        "indisponibilidade" as TipoEvento,
+  subestacao:  "",
+  concessao:   "",
+  ativo:       "",
+  descricao:   "",
+  data:        "",
+  status:      "ativa" as StatusEvento,
+  registro:    "nao_registrada" as Registro,
 };
 
 function StatsCard({ label, value, color }: { label: string; value: number; color: string }) {
@@ -136,9 +183,10 @@ function calcCountdown(concluida_em: string | null, nowMs: number): { text: stri
 
 export default function CotPage() {
   const [tarefas, setTarefas] = useState<CotTarefa[]>([]);
+  const [eventos, setEventos] = useState<Evento[]>([]);
   const [loading, setLoading] = useState(true);
   const [subtipoAtivo, setSubtipoAtivo] = useState<Subtipo>("pes");
-  const [viewMode, setViewMode] = useState<"geral" | "pes" | "doc_ext">("geral");
+  const [viewMode, setViewMode] = useState<"geral" | "pes" | "doc_ext" | "indisponibilidade" | "anormalidade">("geral");
   const [mostrarArquivados, setMostrarArquivados] = useState(false);
   const [realtimePulse, setRealtimePulse] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -152,6 +200,17 @@ export default function CotPage() {
   const [tipoSelecionado, setTipoSelecionado] = useState<TipoAtividade>("diaria");
   const [form, setForm] = useState(EMPTY_FORM);
   const [editId, setEditId] = useState<string | null>(null);
+  
+  // Eventos states
+  const [showFormEvento, setShowFormEvento] = useState(false);
+  const [formEvento, setFormEvento] = useState(EMPTY_EVENTO_FORM);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [modalEmail, setModalEmail] = useState(false);
+  const [emailDest, setEmailDest] = useState("");
+  const [emailCc, setEmailCc] = useState("");
+  const [statusEventoDropdown, setStatusEventoDropdown] = useState<{ id: string; top: number; left: number } | null>(null);
+  const [filtroStatusEvento, setFiltroStatusEvento] = useState<StatusEvento | "todos">("todos");
+
   const [saving, setSaving] = useState(false);
   const [statusDropdown, setStatusDropdown] = useState<{ id: string; top: number; left: number } | null>(null);
   const [userEmail, setUserEmail] = useState("");
@@ -162,11 +221,23 @@ export default function CotPage() {
   const loadTarefas = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("cot_tarefas").select("*").order("updated_at", { ascending: false });
-      if (error) throw error;
-      setTarefas(data || []);
-    } catch { toast.error("Erro ao carregar tarefas."); }
+      const [resCot, resEventos] = await Promise.all([
+        supabase.from("cot_tarefas").select("*").order("updated_at", { ascending: false }),
+        supabase.from("anormalidades").select("*").order("updated_at", { ascending: false })
+      ]);
+      if (resCot.error) throw resCot.error;
+      if (resEventos.error) throw resEventos.error;
+      
+      setTarefas(resCot.data || []);
+      
+      // Mapear status antigos (pendente/em_analise) para "ativa" na visualizacao
+      const eventosMapped = (resEventos.data || []).map((d: any) => {
+        let st = d.status;
+        if (st === "pendente" || st === "em_analise") st = "ativa";
+        return { ...d, tipo: d.tipo ?? "anormalidade", status: st };
+      });
+      setEventos(eventosMapped);
+    } catch { toast.error("Erro ao carregar dados."); }
     finally { setLoading(false); }
   }, []);
 
@@ -178,6 +249,11 @@ export default function CotPage() {
     const channel = supabase
       .channel("realtime_cot_v2")
       .on("postgres_changes", { event: "*", schema: "public", table: "cot_tarefas" }, () => {
+        setRealtimePulse(true);
+        setTimeout(() => setRealtimePulse(false), 2000);
+        loadTarefas(true);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "anormalidades" }, () => {
         setRealtimePulse(true);
         setTimeout(() => setRealtimePulse(false), 2000);
         loadTarefas(true);
@@ -236,6 +312,40 @@ export default function CotPage() {
     return { tarefasAtivas: ativas, tarefasConcluidas: concluidas, tarefasArquivadas: arquivadas };
   }, [tarefas, subtipoAtivo, filtroTipo, filtroStatus]);
 
+  const statsEventos = useMemo(() => {
+    const calc = (tipo: TipoEvento) => {
+      const t = eventos.filter(e => e.tipo === tipo && !e.arquivada);
+      return {
+        total:       t.length,
+        ativas:      t.filter(e => e.status === "ativa").length,
+        sem_previsao:t.filter(e => e.status === "sem_previsao").length,
+        prev_vencida:t.filter(e => e.status === "previsao_vencida").length,
+        normalizadas:t.filter(e => e.status === "normalizada").length,
+        arquivadas:  eventos.filter(e => e.tipo === tipo && e.arquivada).length,
+      };
+    };
+    return { indisponibilidade: calc("indisponibilidade"), anormalidade: calc("anormalidade") };
+  }, [eventos]);
+
+  const { eventosAtivos, eventosArquivados } = useMemo(() => {
+    const base = eventos.filter(e => {
+      if (viewMode !== "indisponibilidade" && viewMode !== "anormalidade") return false;
+      if (e.tipo !== viewMode) return false;
+      if (filtroStatusEvento !== "todos" && e.status !== filtroStatusEvento) return false;
+      return true;
+    });
+    const normalizados = (e: Evento) => e.status === "normalizada" && !e.arquivada;
+    const ativosList = base.filter(e => !e.arquivada)
+      .sort((a, b) => {
+        if (normalizados(a) && !normalizados(b)) return 1;
+        if (!normalizados(a) && normalizados(b)) return -1;
+        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+      });
+    const arquivadosList = base.filter(e => e.arquivada)
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    return { eventosAtivos: ativosList, eventosArquivados: arquivadosList };
+  }, [eventos, viewMode, filtroStatusEvento]);
+
   const abrirNova = () => {
     setEditId(null);
     setForm({
@@ -244,6 +354,12 @@ export default function CotPage() {
       doc_externo: subtipoAtivo === "doc_ext" ? "MO" : "nao_possui",
     });
     setModalStep(1);
+  };
+
+  const abrirNovoEvento = () => {
+    setEditId(null);
+    setFormEvento({ ...EMPTY_EVENTO_FORM, tipo: viewMode as TipoEvento });
+    setShowFormEvento(true);
   };
 
   const abrirEdicao = (t: CotTarefa) => {
@@ -267,6 +383,21 @@ export default function CotPage() {
     setModalStep(2);
   };
 
+  const abrirEdicaoEvento = (e: Evento) => {
+    setEditId(e.id);
+    setFormEvento({
+      tipo:       e.tipo,
+      subestacao: e.subestacao,
+      concessao:  e.concessao ?? "",
+      ativo:      e.ativo ?? "",
+      descricao:  e.descricao,
+      data:       e.data ?? "",
+      status:     e.status,
+      registro:   e.registro ?? "nao_registrada",
+    });
+    setShowFormEvento(true);
+  };
+
   const confirmarTipo = (tipo: TipoAtividade) => {
     setTipoSelecionado(tipo);
     setForm(prev => ({ ...prev, status: "iniciada" }));
@@ -274,6 +405,7 @@ export default function CotPage() {
   };
 
   const fecharModal = () => { setModalStep(0); setEditId(null); setForm(EMPTY_FORM); };
+  const fecharFormEvento = () => { setShowFormEvento(false); setEditId(null); setFormEvento(EMPTY_EVENTO_FORM); };
 
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -319,12 +451,54 @@ export default function CotPage() {
     finally { setSaving(false); }
   };
 
+  const salvarEvento = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (!formEvento.subestacao.trim() || !formEvento.descricao.trim()) {
+      toast.error("Subestação e Descrição são obrigatórios."); return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        tipo:       formEvento.tipo,
+        subestacao: formEvento.subestacao.trim(),
+        concessao:  formEvento.concessao.trim() || null,
+        ativo:      formEvento.ativo.trim() || null,
+        descricao:  formEvento.descricao.trim(),
+        data:       formEvento.data || null,
+        status:     formEvento.status,
+        registro:   formEvento.registro,
+        last_modified_by: userEmail,
+        updated_at: new Date().toISOString(),
+      };
+      if (editId) {
+        const { error } = await supabase.from("anormalidades").update(payload).eq("id", editId);
+        if (error) throw error;
+        toast.success("Evento atualizado!");
+      } else {
+        const { error } = await supabase.from("anormalidades").insert(payload);
+        if (error) throw error;
+        toast.success("Evento registrado!");
+      }
+      fecharFormEvento(); loadTarefas();
+    } catch (err: any) { toast.error("Erro ao salvar: " + (err?.message || err)); }
+    finally { setSaving(false); }
+  };
+
   const excluir = async (id: string) => {
     if (!window.confirm("Deseja excluir esta tarefa?")) return;
     try {
       const { error } = await supabase.from("cot_tarefas").delete().eq("id", id);
       if (error) throw error;
       toast.success("Tarefa excluída!"); loadTarefas();
+    } catch { toast.error("Erro ao excluir."); }
+  };
+
+  const excluirEvento = async (id: string) => {
+    if (!window.confirm("Deseja excluir este evento?")) return;
+    try {
+      const { error } = await supabase.from("anormalidades").delete().eq("id", id);
+      if (error) throw error;
+      toast.success("Excluído!"); loadTarefas();
     } catch { toast.error("Erro ao excluir."); }
   };
 
@@ -348,6 +522,94 @@ export default function CotPage() {
       if (error) throw error;
       setTarefas(prev => prev.map(t => t.id === id ? { ...t, registro: novoRegistro } : t));
     } catch { toast.error("Erro ao atualizar registro."); }
+  };
+
+  const alterarStatusEvento = async (id: string, novoStatus: StatusEvento) => {
+    try {
+      const { error } = await supabase.from("anormalidades")
+        .update({ status: novoStatus, last_modified_by: userEmail, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      setEventos(prev => prev.map(e => e.id === id ? { ...e, status: novoStatus, last_modified_by: userEmail } : e));
+    } catch { toast.error("Erro ao atualizar status."); }
+  };
+
+  const alterarRegistroEvento = async (id: string, novo: Registro) => {
+    try {
+      const { error } = await supabase.from("anormalidades")
+        .update({ registro: novo, last_modified_by: userEmail, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      setEventos(prev => prev.map(e => e.id === id ? { ...e, registro: novo, last_modified_by: userEmail } : e));
+    } catch { toast.error("Erro ao atualizar registro."); }
+  };
+
+  const arquivarEvento = async (id: string) => {
+    try {
+      const { error } = await supabase.from("anormalidades")
+        .update({ arquivada: true, last_modified_by: userEmail, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      toast.success("Arquivado!"); loadTarefas();
+    } catch { toast.error("Erro ao arquivar."); }
+  };
+
+  const toggleSelectEvento = (id: string) => {
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllEventos = (lista: Evento[]) => {
+    const allIds = lista.map(e => e.id);
+    const allSelected = allIds.every(id => selecionados.has(id));
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      allIds.forEach(id => allSelected ? next.delete(id) : next.add(id));
+      return next;
+    });
+  };
+
+  const itensSelecionados = useMemo(() => eventos.filter(e => selecionados.has(e.id)), [eventos, selecionados]);
+
+  const gerarCorpoEmail = () => {
+    const now = new Date().toLocaleString("pt-BR");
+    const linhas = itensSelecionados.map((e, idx) => {
+      const s = getStatusEvento(e.status);
+      const tipo = TIPO_EVENTO_CONFIG[e.tipo].label;
+      return [
+        `${idx + 1}. TIPO: ${tipo}`,
+        `   SUBESTAÇÃO: ${e.subestacao}`,
+        `   CONCESSÃO: ${e.concessao || "—"}`,
+        `   ATIVO: ${e.ativo || "—"}`,
+        `   DATA: ${formatDate(e.data)}`,
+        `   STATUS: ${s.label}`,
+        `   DESCRIÇÃO: ${e.descricao}`,
+        `   REGISTRO: ${e.registro === "registrada" ? "Registrada" : "Não registrada"}`,
+        "   ─────────────────────────────────────",
+      ].join("\n");
+    });
+    return [
+      `RELATÓRIO DE GESTÃO DE EVENTOS`,
+      `Gerado em: ${now}`,
+      `Total de registros: ${itensSelecionados.length}`,
+      `═══════════════════════════════════════`,
+      "",
+      ...linhas,
+    ].join("\n");
+  };
+
+  const enviarEmail = () => {
+    if (!emailDest.trim()) { toast.error("Informe o e-mail de destino."); return; }
+    const assunto = encodeURIComponent(`Relatório de Gestão de Eventos — ${new Date().toLocaleDateString("pt-BR")}`);
+    const corpo = encodeURIComponent(gerarCorpoEmail());
+    const cc = emailCc.trim() ? `&cc=${encodeURIComponent(emailCc.trim())}` : "";
+    window.open(`mailto:${emailDest.trim()}?subject=${assunto}${cc}&body=${corpo}`);
+  };
+
+  const copiarRelatorio = () => {
+    navigator.clipboard.writeText(gerarCorpoEmail())
+      .then(() => toast.success("Relatório copiado!"))
+      .catch(() => toast.error("Erro ao copiar."));
   };
 
   const formatDate = (d: string | null) => {
@@ -506,6 +768,105 @@ export default function CotPage() {
     );
   };
 
+  const renderRowEvento = (e: Evento) => {
+    const st = getStatusEvento(e.status);
+    const reg = e.registro ?? "nao_registrada";
+    const isNorm = e.status === "normalizada" && !e.arquivada;
+    const isSelected = selecionados.has(e.id);
+
+    return (
+      <tr key={e.id} className={`border-b border-gray-100 dark:border-gray-800 transition-colors group
+        ${isSelected ? "bg-indigo-500/[0.04] dark:bg-indigo-500/[0.06]" : isNorm ? "opacity-60 hover:opacity-80 bg-emerald-500/[0.02]" : "hover:bg-gray-50/40 dark:hover:bg-gray-800/30"}
+        ${e.arquivada ? "opacity-40 hover:opacity-60" : ""}
+      `}>
+        <td className="px-3 py-3 text-center align-middle">
+          <input type="checkbox" checked={isSelected} onChange={() => toggleSelectEvento(e.id)}
+            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+        </td>
+        <td className="px-3 py-3 align-middle">
+          <p className="text-xs font-black text-gray-800 dark:text-white whitespace-nowrap">{e.subestacao}</p>
+        </td>
+        <td className="px-3 py-3 align-middle">
+          <p className="text-xs text-gray-500 whitespace-nowrap">{e.concessao || "—"}</p>
+        </td>
+        <td className="px-3 py-3 align-middle">
+          <p className="text-xs text-gray-500 whitespace-nowrap">{e.ativo || "—"}</p>
+        </td>
+        <td className="px-3 py-3 align-top">
+          {e.last_modified_by && (
+            <p className="text-[9px] font-bold text-rose-500/90 dark:text-rose-400/90 mb-1 uppercase tracking-wide">
+              Modificado por {e.last_modified_by.split("@")[0]}
+            </p>
+          )}
+          <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words w-[220px] leading-relaxed">{e.descricao}</p>
+        </td>
+        <td className="px-3 py-3 text-center align-middle whitespace-nowrap">
+          <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
+            <CalendarDaysIcon className="w-3.5 h-3.5" />{formatDate(e.data)}
+          </div>
+        </td>
+        <td className="px-3 py-3 text-center align-middle">
+          {e.arquivada ? (
+            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] ${st.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
+            </span>
+          ) : (
+            <button
+              onClick={(ev) => {
+                const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+                setStatusEventoDropdown(statusEventoDropdown?.id === e.id ? null : { id: e.id, top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] transition-all hover:opacity-80 whitespace-nowrap ${st.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${st.dot} flex-shrink-0`} />
+              {st.label}
+              <svg className="w-2.5 h-2.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
+        </td>
+        <td className="px-3 py-3 text-center align-middle">
+          {e.arquivada ? (
+            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] whitespace-nowrap ${reg === "registrada" ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30" : "bg-gray-500/10 text-gray-500 border-gray-500/20"}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${reg === "registrada" ? "bg-indigo-400" : "bg-gray-500"}`} />
+              {reg === "registrada" ? "Registrada" : "Não reg."}
+            </span>
+          ) : (
+            <button onClick={() => alterarRegistroEvento(e.id, reg === "registrada" ? "nao_registrada" : "registrada")}
+              className={`flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] transition-all hover:opacity-80 whitespace-nowrap ${
+                reg === "registrada"
+                  ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
+                  : "bg-gray-500/10 text-gray-400 border-gray-500/20 hover:border-indigo-500/30 hover:text-indigo-400"
+              }`}>
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${reg === "registrada" ? "bg-indigo-400" : "bg-gray-500"}`} />
+              {reg === "registrada" ? "Registrada" : "Não reg."}
+            </button>
+          )}
+        </td>
+        <td className="px-3 py-3 text-right align-middle">
+          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {!e.arquivada && (
+              <>
+                <button onClick={() => abrirEdicaoEvento(e)}
+                  className={`p-1.5 text-gray-400 rounded-lg transition-colors ${e.tipo === "indisponibilidade" ? "hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10" : "hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"}`}>
+                  <PencilSquareIcon className="w-4 h-4" />
+                </button>
+                <button onClick={() => arquivarEvento(e.id)} title="Arquivar"
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                  <ArchiveBoxIcon className="w-4 h-4" />
+                </button>
+              </>
+            )}
+            <button onClick={() => excluirEvento(e.id)}
+              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
+              <TrashIcon className="w-4 h-4" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
   const tableHeaders = [
     { label: "Tipo",         align: "text-center" },
     { label: "Subtipo",      align: "text-center" },
@@ -545,18 +906,38 @@ export default function CotPage() {
             className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 transition-all shadow-sm">
             <ArrowPathIcon className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
           </button>
-          <button onClick={abrirNova}
-            className="flex items-center gap-2 px-6 py-3 bg-[#0b7336] text-white rounded-2xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-xl">
-            <PlusIcon className="w-5 h-5" />
-            Nova Tarefa
-          </button>
+          
+          {selecionados.size > 0 && (viewMode === "indisponibilidade" || viewMode === "anormalidade") && (
+            <button onClick={() => setModalEmail(true)}
+              className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm transition-all shadow-xl">
+              <EnvelopeIcon className="w-5 h-5" />
+              Enviar Relatório
+              <span className="bg-white/20 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{selecionados.size}</span>
+            </button>
+          )}
+
+          {viewMode === "indisponibilidade" || viewMode === "anormalidade" ? (
+            <button onClick={abrirNovoEvento}
+              className={`flex items-center gap-2 px-6 py-3 text-white rounded-2xl font-bold text-sm transition-all shadow-xl ${
+                viewMode === "indisponibilidade" ? "bg-amber-500 hover:bg-amber-600" : "bg-rose-500 hover:bg-rose-600"
+              }`}>
+              <PlusIcon className="w-5 h-5" />
+              Novo Evento
+            </button>
+          ) : (
+            <button onClick={abrirNova}
+              className="flex items-center gap-2 px-6 py-3 bg-[#0b7336] text-white rounded-2xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-xl">
+              <PlusIcon className="w-5 h-5" />
+              Nova Tarefa
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Tabs PES / DOC EXT. */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-        <button onClick={() => { setViewMode("geral"); setMostrarArquivados(false); }}
-          className={`rounded-2xl p-5 border-2 text-left transition-all ${viewMode === "geral" ? "border-[#0b7336] bg-[#0b7336]/10" : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
+      {/* Tabs PES / DOC EXT. / EVENTOS */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-5">
+        <button onClick={() => { setViewMode("geral"); setMostrarArquivados(false); setSelecionados(new Set()); }}
+          className={`col-span-1 rounded-2xl p-5 border-2 text-left transition-all ${viewMode === "geral" ? "border-[#0b7336] bg-[#0b7336]/10" : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
           <div className="flex items-center justify-between mb-4">
             <span className={`text-lg font-black ${viewMode === "geral" ? "text-[#0b7336]" : "text-gray-400 dark:text-gray-500"}`}>GERAL</span>
             {viewMode === "geral" && <span className="text-[9px] font-black px-2 py-1 rounded-full border border-[#0b7336] text-[#0b7336]">ATIVO</span>}
@@ -572,8 +953,8 @@ export default function CotPage() {
           const s = stats[sub];
           const isAtivo = viewMode === sub;
           return (
-            <button key={sub} onClick={() => { setViewMode(sub); setSubtipoAtivo(sub); setMostrarArquivados(false); }}
-              className={`rounded-2xl p-5 border-2 text-left transition-all ${isAtivo ? cfg.activeColor : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
+            <button key={sub} onClick={() => { setViewMode(sub); setSubtipoAtivo(sub); setMostrarArquivados(false); setSelecionados(new Set()); }}
+              className={`col-span-1 md:col-span-1 rounded-2xl p-5 border-2 text-left transition-all ${isAtivo ? cfg.activeColor : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
               <div className="flex items-center justify-between mb-4">
                 <span className={`text-lg font-black ${isAtivo ? cfg.color : "text-gray-400 dark:text-gray-500"}`}>{cfg.label}</span>
                 <div className="flex items-center gap-2">
@@ -585,11 +966,38 @@ export default function CotPage() {
                   {isAtivo && <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${cfg.activeColor} ${cfg.color}`}>ATIVO</span>}
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <StatsCard label="Total"     value={s.total}      color={isAtivo ? cfg.color : "text-gray-500 dark:text-gray-400"} />
-                <StatsCard label="Diárias"   value={s.diarias}    color={isAtivo ? "text-orange-400" : "text-gray-500 dark:text-gray-400"} />
-                <StatsCard label="Contínuas" value={s.continuas}  color={isAtivo ? "text-teal-400"   : "text-gray-500 dark:text-gray-400"} />
                 <StatsCard label="Concluídas"value={s.concluidas} color={isAtivo ? "text-emerald-400": "text-gray-500 dark:text-gray-400"} />
+              </div>
+            </button>
+          );
+        })}
+
+        {(["indisponibilidade", "anormalidade"] as TipoEvento[]).map(tipo => {
+          const c = TIPO_EVENTO_CONFIG[tipo];
+          const s = statsEventos[tipo];
+          const isAtivo = viewMode === tipo;
+          return (
+            <button key={tipo} onClick={() => { setViewMode(tipo); setMostrarArquivados(false); setSelecionados(new Set()); }}
+              className={`col-span-1 md:col-span-1 rounded-2xl p-5 border-2 text-left transition-all ${isAtivo ? c.activeColor : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-1">
+                  {tipo === "indisponibilidade" ? <BoltIcon className={`w-4 h-4 ${isAtivo ? c.color : "text-gray-400"}`} /> : <ExclamationTriangleIcon className={`w-4 h-4 ${isAtivo ? c.color : "text-gray-400"}`} />}
+                  <span className={`text-[12px] font-black ${isAtivo ? c.color : "text-gray-400 dark:text-gray-500"}`}>{c.label}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {s.arquivadas > 0 && (
+                    <span className="text-[9px] font-black px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center gap-1">
+                      <ArchiveBoxIcon className="w-3 h-3" />{s.arquivadas}
+                    </span>
+                  )}
+                  {isAtivo && <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${c.activeColor} ${c.color}`}>ATIVO</span>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <StatsCard label="Total"  value={s.total} color={isAtivo ? c.color : "text-gray-500 dark:text-gray-400"} />
+                <StatsCard label="Ativas" value={s.ativas} color={isAtivo ? "text-sky-400" : "text-gray-500 dark:text-gray-400"} />
               </div>
             </button>
           );
@@ -600,26 +1008,43 @@ export default function CotPage() {
       <div className="flex flex-wrap gap-3 mb-4 items-center justify-between">
         <div className="flex flex-wrap gap-3 items-center">
           <FunnelIcon className="w-4 h-4 text-gray-400" />
-          <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
-            {(["todos", "diaria", "continua"] as const).map(v => (
-              <button key={v} onClick={() => setFiltroTipo(v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroTipo === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-                {v === "todos" ? "Todos" : v === "diaria" ? "Diárias" : "Contínuas"}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
-            {(["todos", "iniciada", "em_execucao", "interrompida", "concluida"] as const).map(v => (
-              <button key={v} onClick={() => setFiltroStatus(v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroStatus === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-                {v === "todos" ? "Todos" : v === "em_execucao" ? "Em execução" : v === "iniciada" ? "Iniciada" : v === "interrompida" ? "Interrompida" : "Concluída"}
-              </button>
-            ))}
-          </div>
+          {viewMode === "indisponibilidade" || viewMode === "anormalidade" ? (
+            <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+              {(["todos", "ativa", "sem_previsao", "previsao_vencida", "normalizada"] as const).map(v => (
+                <button key={v} onClick={() => setFiltroStatusEvento(v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    filtroStatusEvento === v
+                      ? viewMode === "indisponibilidade" ? "bg-amber-500 text-white shadow" : "bg-rose-500 text-white shadow"
+                      : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}>
+                  {v === "todos" ? "Todos" : v === "ativa" ? "Ativa" : v === "sem_previsao" ? "Sem Previsão" : v === "previsao_vencida" ? "Prev. Vencida" : "Normalizada"}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+                {(["todos", "diaria", "continua"] as const).map(v => (
+                  <button key={v} onClick={() => setFiltroTipo(v)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroTipo === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                    {v === "todos" ? "Todos" : v === "diaria" ? "Diárias" : "Contínuas"}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+                {(["todos", "iniciada", "em_execucao", "interrompida", "concluida"] as const).map(v => (
+                  <button key={v} onClick={() => setFiltroStatus(v)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroStatus === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                    {v === "todos" ? "Todos" : v === "em_execucao" ? "Em execução" : v === "iniciada" ? "Iniciada" : v === "interrompida" ? "Interrompida" : "Concluída"}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <button
-          onClick={() => setMostrarArquivados(v => !v)}
+          onClick={() => { setMostrarArquivados(v => !v); setSelecionados(new Set()); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
             mostrarArquivados
               ? "border-gray-400 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
@@ -627,9 +1052,14 @@ export default function CotPage() {
           }`}>
           {mostrarArquivados ? <ArrowLeftIcon className="w-3.5 h-3.5" /> : <ArchiveBoxIcon className="w-3.5 h-3.5" />}
           {mostrarArquivados ? "Voltar" : "Arquivados"}
-          {!mostrarArquivados && tarefasArquivadas.length > 0 && (
+          {!mostrarArquivados && (viewMode === "indisponibilidade" || viewMode === "anormalidade") && statsEventos[viewMode as TipoEvento]?.arquivadas > 0 && (
             <span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full text-[9px] font-black">
-              {tarefasArquivadas.length}
+              {statsEventos[viewMode as TipoEvento].arquivadas}
+            </span>
+          )}
+          {!mostrarArquivados && (viewMode === "pes" || viewMode === "doc_ext") && stats[viewMode]?.arquivadas > 0 && (
+            <span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-full text-[9px] font-black">
+              {stats[viewMode].arquivadas}
             </span>
           )}
         </button>
@@ -642,9 +1072,76 @@ export default function CotPage() {
         </div>
       ) : (
         <div className={`flex-1 grid gap-4 min-h-0 ${viewMode === "geral" ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1"}`}>
-          {(viewMode === "geral" ? ["pes", "doc_ext"] : [viewMode] as Subtipo[]).map(sub => {
+          {(viewMode === "geral" ? ["pes", "doc_ext"] : [viewMode]).map(sub => {
             const isDocExt = sub === "doc_ext";
-            const cfg = SUBTIPO_CONFIG[sub];
+            const isEvento = sub === "indisponibilidade" || sub === "anormalidade";
+            const cfg = isEvento ? TIPO_EVENTO_CONFIG[sub as TipoEvento] : SUBTIPO_CONFIG[sub as Subtipo];
+            
+            if (isEvento) {
+              const evtAtivos = eventosAtivos.filter(e => e.tipo === sub);
+              const evtArquivados = eventosArquivados.filter(e => e.tipo === sub);
+              const evHeaders = [
+                { label: "Subestação", align: "text-left" },
+                { label: "Concessão",  align: "text-left" },
+                { label: "Ativo",      align: "text-left" },
+                { label: "Descrição",  align: "text-left" },
+                { label: "Data",       align: "text-center" },
+                { label: "Status",     align: "text-center" },
+                { label: "Registro",   align: "text-center" },
+                { label: "",           align: "text-center" },
+              ];
+              
+              return (
+                <div key={sub} className="bg-white dark:bg-gray-900 rounded-[1.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden">
+                  <div className={`px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between ${cfg.activeColor}`}>
+                    <span className={`text-lg font-black tracking-widest ${cfg.color}`}>{cfg.label}</span>
+                  </div>
+                  <div className="flex-1 overflow-x-auto">
+                    {mostrarArquivados ? (
+                      evtArquivados.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-400">
+                          <ArchiveBoxIcon className="w-10 h-10" />
+                          <p className="font-bold text-sm">Nenhum evento arquivado</p>
+                        </div>
+                      ) : (
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-100 dark:border-gray-800">
+                              <th className="px-3 py-3 w-10">
+                                <input type="checkbox" checked={evtArquivados.length > 0 && evtArquivados.every(e => selecionados.has(e.id))} onChange={() => toggleSelectAllEventos(evtArquivados)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                              </th>
+                              {evHeaders.map((h, i) => (
+                                <th key={i} className={`${h.align} px-3 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>{evtArquivados.map(e => renderRowEvento(e))}</tbody>
+                        </table>
+                      )
+                    ) : evtAtivos.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-400">
+                        <DocumentTextIcon className="w-10 h-10" />
+                        <p className="font-bold text-sm">Nenhum evento em {cfg.label}</p>
+                      </div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-gray-100 dark:border-gray-800">
+                            <th className="px-3 py-3 w-10">
+                              <input type="checkbox" checked={evtAtivos.length > 0 && evtAtivos.every(e => selecionados.has(e.id))} onChange={() => toggleSelectAllEventos(evtAtivos)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                            </th>
+                            {evHeaders.map((h, i) => (
+                              <th key={i} className={`${h.align} px-3 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>{evtAtivos.map(e => renderRowEvento(e))}</tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              );
+            }
             
             // Re-filter tasks for this panel
             const base = tarefas.filter(t => {
@@ -997,6 +1494,153 @@ export default function CotPage() {
                 </button>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EVENTO */}
+      {showFormEvento && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-xl border border-gray-100 dark:border-gray-800 overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-7 pt-7 pb-5 sticky top-0 bg-white dark:bg-gray-900 z-10 border-b border-gray-100 dark:border-gray-800">
+              <h2 className="text-xl font-black text-gray-900 dark:text-white">
+                {editId ? "Editar Evento" : "Novo Evento"}
+              </h2>
+              <button onClick={fecharFormEvento} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={salvarEvento} className="p-7 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Subestação <span className="text-red-400">*</span></label>
+                  <input type="text" value={formEvento.subestacao} onChange={e => setFormEvento(p => ({ ...p, subestacao: e.target.value.toUpperCase() }))}
+                    placeholder="Ex: SE MESSEJANA" required className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Concessão</label>
+                  <input type="text" value={formEvento.concessao} onChange={e => setFormEvento(p => ({ ...p, concessao: e.target.value.toUpperCase() }))}
+                    placeholder="Ex: CHESF" className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Ativo</label>
+                  <input type="text" value={formEvento.ativo} onChange={e => setFormEvento(p => ({ ...p, ativo: e.target.value.toUpperCase() }))}
+                    placeholder="Ex: 04T4" className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data do Evento</label>
+                  <input type="date" value={formEvento.data} onChange={e => setFormEvento(p => ({ ...p, data: e.target.value }))} className={inputCls} />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Descrição <span className="text-red-400">*</span></label>
+                <textarea value={formEvento.descricao} onChange={e => setFormEvento(p => ({ ...p, descricao: e.target.value }))}
+                  placeholder="Detalhes do evento..." required rows={3} className={inputCls + " resize-none"} />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Status</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {STATUS_EVENTO_LIST.map(s => {
+                    const SIcon = s.icon;
+                    return (
+                      <button key={s.id} type="button" onClick={() => setFormEvento(p => ({ ...p, status: s.id }))}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                          formEvento.status === s.id
+                            ? s.badge + " ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-indigo-500"
+                            : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300"
+                        }`}>
+                        <SIcon className="w-4 h-4 flex-shrink-0" />{s.label}
+                        {formEvento.status === s.id && <CheckIcon className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Registro</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { id: "registrada",     label: "Registrada",     cls: "border-indigo-500 bg-indigo-500/10 text-indigo-400", dot: "bg-indigo-400" },
+                    { id: "nao_registrada", label: "Não Registrada", cls: "border-gray-400 bg-gray-500/10 text-gray-400",       dot: "bg-gray-400" },
+                  ] as { id: Registro; label: string; cls: string; dot: string }[]).map(r => (
+                    <button key={r.id} type="button" onClick={() => setFormEvento(p => ({ ...p, registro: r.id }))}
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                        formEvento.registro === r.id
+                          ? r.cls + " ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-indigo-500"
+                          : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300"
+                      }`}>
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${formEvento.registro === r.id ? r.dot : "bg-gray-400"}`} />
+                      {r.label}
+                      {formEvento.registro === r.id && <CheckIcon className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button type="submit" disabled={saving}
+                className="w-full py-3.5 bg-indigo-600 disabled:opacity-50 text-white rounded-xl font-black text-sm hover:bg-indigo-700 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                {saving ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
+                {editId ? "Salvar Alterações" : "Salvar Evento"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Dropdown status evento */}
+      {statusEventoDropdown && (() => {
+        const e = eventos.find(x => x.id === statusEventoDropdown.id);
+        if (!e) return null;
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setStatusEventoDropdown(null)} />
+            <div className="fixed z-50 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-1.5 min-w-[160px] -translate-x-1/2"
+              style={{ top: statusEventoDropdown.top, left: statusEventoDropdown.left }}>
+              {STATUS_EVENTO_LIST.map(s => (
+                <button key={s.id}
+                  onClick={() => { alterarStatusEvento(e.id, s.id); setStatusEventoDropdown(null); }}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[11px] font-bold transition-all hover:bg-gray-800 ${e.status === s.id ? s.badge : "text-gray-400 hover:text-gray-200"}`}>
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
+                  {s.label}
+                  {e.status === s.id && <CheckIcon className="w-3 h-3 ml-auto" />}
+                </button>
+              ))}
+            </div>
+          </>
+        );
+      })()}
+
+      {/* MODAL EMAIL */}
+      {modalEmail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-lg border border-gray-100 dark:border-gray-800 p-7">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-black text-gray-900 dark:text-white">Enviar Relatório</h2>
+              <button onClick={() => setModalEmail(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">E-mail Destino <span className="text-red-400">*</span></label>
+                <input type="email" value={emailDest} onChange={e => setEmailDest(e.target.value)} placeholder="email@exemplo.com" className={inputCls} />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">E-mail Cópia (CC)</label>
+                <input type="email" value={emailCc} onChange={e => setEmailCc(e.target.value)} placeholder="copia@exemplo.com (opcional)" className={inputCls} />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={copiarRelatorio} className="flex-1 py-3.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-black text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2">
+                <DocumentTextIcon className="w-4 h-4" />Copiar
+              </button>
+              <button onClick={enviarEmail} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-black text-sm hover:bg-indigo-700 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                <EnvelopeIcon className="w-4 h-4" />Enviar
+              </button>
+            </div>
           </div>
         </div>
       )}
