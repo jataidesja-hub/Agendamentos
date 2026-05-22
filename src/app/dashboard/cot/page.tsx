@@ -136,6 +136,7 @@ export default function CotPage() {
   const [tarefas, setTarefas] = useState<CotTarefa[]>([]);
   const [loading, setLoading] = useState(true);
   const [subtipoAtivo, setSubtipoAtivo] = useState<Subtipo>("pes");
+  const [viewMode, setViewMode] = useState<"geral" | "pes" | "doc_ext">("geral");
   const [mostrarArquivados, setMostrarArquivados] = useState(false);
   const [realtimePulse, setRealtimePulse] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -550,13 +551,25 @@ export default function CotPage() {
       </div>
 
       {/* Tabs PES / DOC EXT. */}
-      <div className="grid grid-cols-2 gap-4 mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+        <button onClick={() => { setViewMode("geral"); setMostrarArquivados(false); }}
+          className={`rounded-2xl p-5 border-2 text-left transition-all ${viewMode === "geral" ? "border-[#0b7336] bg-[#0b7336]/10" : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
+          <div className="flex items-center justify-between mb-4">
+            <span className={`text-lg font-black ${viewMode === "geral" ? "text-[#0b7336]" : "text-gray-400 dark:text-gray-500"}`}>GERAL</span>
+            {viewMode === "geral" && <span className="text-[9px] font-black px-2 py-1 rounded-full border border-[#0b7336] text-[#0b7336]">ATIVO</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <StatsCard label="Total"     value={tarefas.filter(t => !t.arquivada).length} color={viewMode === "geral" ? "text-[#0b7336]" : "text-gray-500"} />
+            <StatsCard label="Concluídas"value={tarefas.filter(t => t.status === "concluida" && !t.arquivada).length} color={viewMode === "geral" ? "text-[#0b7336]" : "text-gray-500"} />
+          </div>
+        </button>
+
         {(["pes", "doc_ext"] as Subtipo[]).map(sub => {
           const cfg = SUBTIPO_CONFIG[sub];
           const s = stats[sub];
-          const isAtivo = subtipoAtivo === sub;
+          const isAtivo = viewMode === sub;
           return (
-            <button key={sub} onClick={() => { setSubtipoAtivo(sub); setMostrarArquivados(false); }}
+            <button key={sub} onClick={() => { setViewMode(sub); setSubtipoAtivo(sub); setMostrarArquivados(false); }}
               className={`rounded-2xl p-5 border-2 text-left transition-all ${isAtivo ? cfg.activeColor : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
               <div className="flex items-center justify-between mb-4">
                 <span className={`text-lg font-black ${isAtivo ? cfg.color : "text-gray-400 dark:text-gray-500"}`}>{cfg.label}</span>
@@ -625,8 +638,8 @@ export default function CotPage() {
           <ArrowPathIcon className="w-8 h-8 text-[#0b7336] animate-spin" />
         </div>
       ) : (
-        <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-4 min-h-0">
-          {(["pes", "doc_ext"] as Subtipo[]).map(sub => {
+        <div className={`flex-1 grid gap-4 min-h-0 ${viewMode === "geral" ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1"}`}>
+          {(viewMode === "geral" ? ["pes", "doc_ext"] : [viewMode] as Subtipo[]).map(sub => {
             const isDocExt = sub === "doc_ext";
             const cfg = SUBTIPO_CONFIG[sub];
             
