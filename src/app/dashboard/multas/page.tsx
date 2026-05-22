@@ -227,6 +227,7 @@ export default function MultasPage() {
           placa,
           auto_infracao: autoInfracao,
           prazo_indicacao_condutor: prazoIndicacao || null,
+          gestor_cobrado: gestor || null,
           arquivos_iniciais: novasUrlsIniciais
         });
         if (error) throw error;
@@ -311,10 +312,8 @@ export default function MultasPage() {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      // Append files or replace. Let's append to allow multiple drops.
       setFilesToAdd(prev => {
         const newFiles = Array.from(e.dataTransfer.files);
-        // Avoid duplicates by name (basic check)
         const existingNames = new Set(prev.map(f => f.name));
         const filtered = newFiles.filter(f => !existingNames.has(f.name));
         return [...prev, ...filtered];
@@ -517,7 +516,7 @@ export default function MultasPage() {
                       {m.auto_infracao}
                     </td>
                     <td className="px-6 py-4 text-sm font-bold text-gray-700 dark:text-gray-200">
-                      {m.prazo_indicacao_condutor ? new Date(m.prazo_indicacao_condutor).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : "—"}
+                      {renderStatusPrazo(m.prazo_indicacao_condutor)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 font-bold">
                       {m.gestor_cobrado || "—"}
@@ -648,10 +647,18 @@ export default function MultasPage() {
                         placeholder="Nº do Auto" />
                     </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Prazo Indicação Condutor</label>
-                    <input type="date" value={prazoIndicacao} onChange={e => setPrazoIndicacao(e.target.value)} 
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-rose-500 outline-none" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Prazo Indicação Condutor</label>
+                      <input type="date" value={prazoIndicacao} onChange={e => setPrazoIndicacao(e.target.value)} 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-rose-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Gestor Responsável</label>
+                      <input type="text" value={gestor} onChange={e => setGestor(e.target.value)} 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-rose-500 outline-none" 
+                        placeholder="Nome do Gestor" />
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexar Multa (PDF/Imagem)</label>
