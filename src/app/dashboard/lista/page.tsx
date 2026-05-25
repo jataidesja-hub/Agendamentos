@@ -293,26 +293,8 @@ export default function ListaTarefas() {
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Notas & Tarefas</h1>
-          <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Anote provisões e ações decididas em reuniões.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => abrirOutlook()}
-            title="Enviar lista p/ Outlook"
-            className="flex items-center px-5 py-3.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-bold rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-300"
-          >
-            <EnvelopeIcon className="w-5 h-5 mr-2" />
-            Enviar p/ Email
-          </button>
-
-          <button 
-            onClick={abrirModalNovo}
-            className="group flex items-center px-6 py-3.5 bg-[#0b7336] hover:bg-[#09602c] text-white text-sm font-bold rounded-2xl shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-green-500/50 hover:-translate-y-0.5"
-          >
-            <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
-            Nova Nota/Tarefa
-          </button>
+          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Notas Pessoais</h1>
+          <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">Anote suas provisões, pensamentos e rascunhos livres.</p>
         </div>
       </div>
 
@@ -322,13 +304,13 @@ export default function ListaTarefas() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0b7336]"></div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-20">
+          <div className="flex-1 pb-20 h-full">
             {/* BLOCO DE NOTAS PESSOAIS */}
-            <div className="lg:col-span-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-2xl rounded-3xl p-6 border border-white/50 dark:border-gray-700 shadow-[0_10px_40px_rgb(0,0,0,0.06)] flex flex-col min-h-[400px] lg:h-[calc(100vh-200px)] lg:sticky lg:top-4">
+            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-2xl rounded-3xl p-6 border border-white/50 dark:border-gray-700 shadow-[0_10px_40px_rgb(0,0,0,0.06)] flex flex-col h-full min-h-[600px]">
               <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-4">
                 <h2 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
                   <PencilIcon className="w-5 h-5 text-[#0b7336]" />
-                  Notas Pessoais
+                  Bloco de Notas
                 </h2>
                 {salvandoNota && <span className="text-[10px] uppercase font-bold text-gray-400 animate-pulse bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">Salvando...</span>}
               </div>
@@ -336,178 +318,8 @@ export default function ListaTarefas() {
                 value={notaPessoal}
                 onChange={e => handleNotaChange(e.target.value)}
                 placeholder="Digite suas anotações livres, pensamentos, rascunhos..."
-                className="flex-1 w-full bg-transparent border-none resize-none focus:ring-0 text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 p-0 leading-relaxed font-medium"
+                className="flex-1 w-full bg-transparent border-none resize-none focus:ring-0 text-lg text-gray-700 dark:text-gray-300 placeholder-gray-400 p-0 leading-relaxed font-medium h-full"
               />
-            </div>
-
-            {/* LISTA DE PLANOS DE AÇÃO */}
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              {planos.length === 0 ? (
-                <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-3xl p-12 text-center border border-white/40 shadow-xl flex flex-col items-center justify-center min-h-[300px]">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Nenhum plano ativo</h3>
-                  <p className="mt-2 text-gray-500">Crie seu primeiro plano de ação acima.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {planos.map((plano) => {
-               const estaAtrasado = plano.status === 'Pendente' && plano.prazo && new Date(plano.prazo) < new Date();
-               const isExpanded = expandedId === plano.id;
-
-                return (
-                  <div 
-                    key={plano.id} 
-                    className="group bg-white/80 dark:bg-gray-800/80 backdrop-blur-2xl rounded-3xl p-7 border border-white/50 dark:border-gray-700 shadow-[0_10px_40px_rgb(0,0,0,0.06)] hover:shadow-[0_10px_40px_rgb(11,115,54,0.15)] transition-all duration-500 relative overflow-hidden flex flex-col"
-                  >
-                    <div className={`absolute left-0 top-0 w-2 h-full ${
-                      plano.status === 'Concluído' ? 'bg-green-600' : 
-                      plano.prioridade === 'Alta' ? 'bg-red-600' :
-                      plano.prioridade === 'Média' ? 'bg-amber-600' :
-                      'bg-emerald-600'
-                    }`}></div>
-                   
-                   <div className="relative z-10">
-                     <div className="flex justify-between items-start mb-3 pl-2">
-                        <div 
-                          className="flex-1 cursor-pointer"
-                          onClick={() => setExpandedId(isExpanded ? null : plano.id)}
-                        >
-                          <h3 className={`text-2xl font-black leading-tight tracking-tight ${plano.status === 'Concluído' ? 'text-gray-500 line-through opacity-60' : 'text-gray-900 dark:text-white'}`}>
-                            {plano.nome}
-                          </h3>
-                        </div>
-                      <div className="flex space-x-1 items-center ml-4">
-                        <button 
-                          onClick={() => abrirOutlook(plano)}
-                          className="p-2 rounded-xl text-gray-500 hover:text-[#0b7336] hover:bg-green-50 dark:hover:bg-green-900/20 transition-all" 
-                          title="Enviar esta tarefa via Outlook"
-                        >
-                          <EnvelopeIcon className="w-6 h-6" />
-                        </button>
-                        <button onClick={() => abrirModalEditar(plano)} className="p-2 rounded-xl text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" title="Editar">
-                          <PencilIcon className="w-6 h-6" />
-                        </button>
-                        <button onClick={() => alternarStatus(plano.id, plano.status)} className={`p-1 rounded-xl transition-all ${plano.status === 'Concluído' ? 'text-[#0b7336] bg-green-50' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`} title="Concluir">
-                          <CheckCircleIcon className="w-9 h-9" />
-                        </button>
-                        <button onClick={() => excluirPlano(plano.id)} className="p-2 rounded-xl text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all" title="Excluir">
-                          <TrashIcon className="w-6 h-6" />
-                        </button>
-                      </div>
-                     </div>
-
-                     <p 
-                       className={`pl-2 text-base font-medium mb-5 cursor-pointer line-clamp-2 ${plano.status === 'Concluído' ? 'text-gray-400' : 'text-gray-700 dark:text-gray-200'}`}
-                       onClick={() => setExpandedId(isExpanded ? null : plano.id)}
-                     >
-                       {plano.descricao}
-                     </p>
-
-                     {/* Informações de Prazo Iniciais */}
-                     <div className="pl-2 flex items-center space-x-2 mb-6 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : plano.id)}>
-                        <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider border ${
-                          plano.prioridade === 'Alta' ? 'bg-red-100 text-red-700 border-red-200' :
-                          plano.prioridade === 'Média' ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                          'bg-emerald-100 text-emerald-700 border-emerald-200'
-                        }`}>
-                          {plano.prioridade}
-                        </span>
-                        {estaAtrasado && (
-                          <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-red-600 text-white shadow-lg shadow-red-500/20 animate-pulse">Atrasado</span>
-                        )}
-                        {!isExpanded && plano.checklist && plano.checklist.length > 0 && (
-                          <span className="text-[11px] font-bold text-gray-500 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
-                            {plano.checklist.filter(c => c.status === 'Concluido').length}/{plano.checklist.length} tarefas
-                          </span>
-                        )}
-                        <div className={`ml-auto transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                          <PlusIcon className="w-5 h-5 text-gray-400" />
-                        </div>
-                     </div>
-
-                     {/* Lista de sub-tarefas - APENAS SE EXPANDIDO */}
-                     {isExpanded && (
-                       <div className="pl-2 mb-8 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                         {plano.checklist && plano.checklist.length > 0 ? (
-                           <>
-                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Lista de Tarefas Internas</h4>
-                             {plano.checklist.map((item, idx) => (
-                               <div 
-                                 key={idx} 
-                                 className={`flex flex-col sm:flex-row items-start sm:items-center p-4 rounded-2xl border transition-all ${
-                                   item.status === 'Concluido' ? 'bg-green-50/30 border-green-200 text-gray-500' :
-                                   item.status === 'Andamento' ? 'bg-blue-50/50 border-blue-200 text-gray-900 dark:text-white' :
-                                   'bg-gray-50/50 border-gray-200 text-gray-900 dark:text-white shadow-sm'
-                                 }`}
-                               >
-                                 <div className="flex items-center flex-1 w-full sm:w-auto">
-                                   <div className={`w-6 h-6 rounded-lg border-2 mr-4 flex items-center justify-center transition-all flex-shrink-0 ${
-                                     item.status === 'Concluido' ? 'bg-[#0b7336] border-[#0b7336]' :
-                                     item.status === 'Andamento' ? 'bg-blue-600 border-blue-600' :
-                                     'bg-white dark:bg-gray-800 border-gray-300'
-                                   }`}>
-                                     {item.status === 'Concluido' && <CheckCircleIcon className="w-4 h-4 text-white" />}
-                                     {item.status === 'Andamento' && <ClockIcon className="w-4 h-4 text-white" />}
-                                   </div>
-                                   <span className={`text-sm font-bold leading-tight ${item.status === 'Concluido' ? 'line-through opacity-70' : ''}`}>
-                                     {item.texto}
-                                   </span>
-                                 </div>
-
-                                 <div className="mt-4 sm:mt-0 ml-0 sm:ml-4 flex items-center justify-between w-full sm:w-auto gap-4">
-                                   {item.prazo && (
-                                     <span className="text-[10px] font-black text-gray-400 bg-white/50 dark:bg-gray-900/50 px-2.5 py-1 rounded-lg">
-                                       {new Date(item.prazo + "T00:00:00").toLocaleDateString('pt-BR')}
-                                     </span>
-                                   )}
-                                   <select 
-                                     value={item.status}
-                                     onChange={(e) => {
-                                       const novoStatus = e.target.value as any;
-                                       const list = [...(plano.checklist || [])];
-                                       list[idx].status = novoStatus;
-                                       list[idx].concluido = novoStatus === "Concluido";
-                                       supabase.from("planos_acao").update({ checklist: list }).eq("id", plano.id).then(() => {
-                                         if (user) fetchPlanos(user.id);
-                                       });
-                                     }}
-                                     className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border-0 focus:ring-2 focus:ring-[#0b7336] appearance-none cursor-pointer ${
-                                       item.status === 'Concluido' ? 'bg-green-100 text-green-700' :
-                                       item.status === 'Andamento' ? 'bg-blue-100 text-blue-700' :
-                                       'bg-gray-100 text-gray-700'
-                                     }`}
-                                   >
-                                     <option value="Pendente">PENDENTE</option>
-                                     <option value="Andamento">ANDAMENTO</option>
-                                     <option value="Concluido">CONCLUÍDO</option>
-                                   </select>
-                                 </div>
-                               </div>
-                             ))}
-                           </>
-                         ) : (
-                           <p className="text-sm font-medium text-gray-400 italic">Nenhuma sub-tarefa registrada.</p>
-                         )}
-                       </div>
-                     )}
-
-                     <div className="pl-2 pt-5 border-t border-gray-100 dark:border-gray-700 flex items-center">
-                       <span className={`flex items-center text-sm font-black px-4 py-2 rounded-2xl ${plano.status === 'Concluído' ? 'bg-gray-100 text-gray-400' : estaAtrasado ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
-                         <CalendarIcon className="w-4 h-4 mr-2" />
-                         Prazo: {plano.prazo ? new Date(plano.prazo + "T00:00:00").toLocaleDateString('pt-BR') : 'Sem prazo'}
-                       </span>
-                       {plano.horaOpcional && (
-                         <span className="ml-3 flex items-center text-sm font-black px-4 py-2 rounded-2xl bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                           <ClockIcon className="w-4 h-4 mr-2" />
-                           {plano.horaOpcional}
-                         </span>
-                       )}
-                     </div>
-                   </div>
-                  </div>
-                 );
-            })}
-                </div>
-              )}
             </div>
           </div>
         )}
