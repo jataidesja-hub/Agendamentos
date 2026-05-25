@@ -71,11 +71,10 @@ export default function ChecklistPage() {
     toast.success("Excluído!");
     setLista(prev => prev.filter(c => c.id !== id));
   };
-
   const filtrado = lista.filter(c =>
-    c.placa?.toLowerCase().includes(search.toLowerCase()) ||
-    c.condutor?.toLowerCase().includes(search.toLowerCase()) ||
-    c.projeto?.toLowerCase().includes(search.toLowerCase())
+    (c.placa || "").toLowerCase().includes(search.toLowerCase()) ||
+    (c.condutor || "").toLowerCase().includes(search.toLowerCase()) ||
+    (c.projeto || "").toLowerCase().includes(search.toLowerCase())
   );
 
   // Group by "projeto" -> "placa" -> checklists[]
