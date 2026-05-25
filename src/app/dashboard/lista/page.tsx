@@ -45,11 +45,17 @@ export default function ListaTarefas() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Notas Pessoais
+  const [notaPessoal, setNotaPessoal] = useState("");
+  const [salvandoNota, setSalvandoNota] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setUser(session.user);
         fetchPlanos(session.user.id);
+        fetchNotaPessoal(session.user.id);
         // Busca email de notificação
         supabase
           .from("perfis")
@@ -89,6 +95,23 @@ export default function ListaTarefas() {
       setPlanos(data || []);
     }
     setLoading(false);
+  };
+
+  const fetchNotaPessoal = async (userId: string) => {
+    const { data, error } = await supabase.from("notas_pessoais").select("texto").eq("user_id", userId).single();
+    if (data) setNotaPessoal(data.texto || "");
+  };
+
+  const handleNotaChange = (val: string) => {
+    setNotaPessoal(val);
+    if (typingTimeout) clearTimeout(typingTimeout);
+    setSalvandoNota(true);
+    setTypingTimeout(setTimeout(async () => {
+      if (user) {
+        await supabase.from("notas_pessoais").upsert({ user_id: user.id, texto: val, updated_at: new Date().toISOString() });
+      }
+      setSalvandoNota(false);
+    }, 1000));
   };
 
   const enviarNotificacaoEmail = async (nomePlano: string, acao: 'Criado' | 'Atualizado') => {
@@ -298,14 +321,35 @@ export default function ListaTarefas() {
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0b7336]"></div>
           </div>
-        ) : planos.length === 0 ? (
-           <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-3xl p-12 text-center border border-white/40 shadow-xl flex flex-col items-center justify-center min-h-[300px]">
-             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Nenhum plano ativo</h3>
-             <p className="mt-2 text-gray-500">Crie seu primeiro plano de ação acima.</p>
-           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
-            {planos.map((plano) => {
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-20">
+            {/* BLOCO DE NOTAS PESSOAIS */}
+            <div className="lg:col-span-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-2xl rounded-3xl p-6 border border-white/50 dark:border-gray-700 shadow-[0_10px_40px_rgb(0,0,0,0.06)] flex flex-col min-h-[400px] lg:h-[calc(100vh-200px)] lg:sticky lg:top-4">
+              <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-4">
+                <h2 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                  <PencilIcon className="w-5 h-5 text-[#0b7336]" />
+                  Notas Pessoais
+                </h2>
+                {salvandoNota && <span className="text-[10px] uppercase font-bold text-gray-400 animate-pulse bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">Salvando...</span>}
+              </div>
+              <textarea
+                value={notaPessoal}
+                onChange={e => handleNotaChange(e.target.value)}
+                placeholder="Digite suas anotações livres, pensamentos, rascunhos..."
+                className="flex-1 w-full bg-transparent border-none resize-none focus:ring-0 text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 p-0 leading-relaxed font-medium"
+              />
+            </div>
+
+            {/* LISTA DE PLANOS DE AÇÃO */}
+            <div className="lg:col-span-2 flex flex-col gap-6">
+              {planos.length === 0 ? (
+                <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-3xl p-12 text-center border border-white/40 shadow-xl flex flex-col items-center justify-center min-h-[300px]">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Nenhum plano ativo</h3>
+                  <p className="mt-2 text-gray-500">Crie seu primeiro plano de ação acima.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {planos.map((plano) => {
                const estaAtrasado = plano.status === 'Pendente' && plano.prazo && new Date(plano.prazo) < new Date();
                const isExpanded = expandedId === plano.id;
 
@@ -462,6 +506,9 @@ export default function ListaTarefas() {
                   </div>
                  );
             })}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

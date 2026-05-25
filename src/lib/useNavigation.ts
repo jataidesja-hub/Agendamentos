@@ -15,7 +15,7 @@ export interface NavItem {
 // Lista padrão de navegação (ordem original)
 const DEFAULT_NAV: NavItem[] = [
   { id: "agenda", name: "Agendamentos", href: "/dashboard", iconName: "CalendarIcon" },
-  { id: "tarefas", name: "Lista de Tarefas", href: "/dashboard/lista", iconName: "QueueListIcon" },
+  { id: "tarefas", name: "Notas Pessoais", href: "/dashboard/lista", iconName: "QueueListIcon" },
   { id: "alertas", name: "Alertas", href: "/dashboard/alertas", iconName: "BellAlertIcon" },
   { id: "relatorios", name: "Relatórios", href: "/dashboard/relatorios", iconName: "ChartBarIcon" },
   { id: "sustentabilidade", name: "Sustentabilidade", href: "/dashboard/sustentabilidade", iconName: "GlobeAmericasIcon" },
@@ -29,14 +29,14 @@ const DEFAULT_NAV: NavItem[] = [
   { id: "compras", name: "Gestão de Compras", href: "/dashboard/compras", iconName: "ShoppingCartIcon" },
   { id: "checklist", name: "Checklist Veículos", href: "/dashboard/checklist", iconName: "ClipboardDocumentCheckIcon" },
   { id: "km", name: "Relatório de KM", href: "/dashboard/km", iconName: "MapPinIcon" },
-  { id: "cot", name: "COT – Tarefas", href: "/dashboard/cot", iconName: "TableCellsIcon" },
+  { id: "cot", name: "PORTAL – COT", href: "/dashboard/cot", iconName: "TableCellsIcon" },
   { id: "multas", name: "Multas", href: "/dashboard/multas", iconName: "ClipboardDocumentCheckIcon" },
 ];
 
 // Nomes curtos para mobile
 export const MOBILE_NAMES: Record<string, string> = {
   agenda: "Agenda",
-  tarefas: "Tarefas",
+  tarefas: "Notas",
   alertas: "Alertas",
   relatorios: "Painel",
   sustentabilidade: "Sustent.",

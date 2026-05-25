@@ -14,8 +14,8 @@ import { supabase } from "@/lib/supabase";
 
 type Subtipo = "pes" | "doc_ext";
 type TipoAtividade = "diaria" | "continua";
-type StatusDiaria = "iniciada" | "em_execucao" | "interrompida" | "concluida";
-type StatusContinua = "iniciada" | "em_execucao" | "concluida";
+type StatusDiaria = "programada" | "em_execucao" | "interrompida" | "concluida";
+type StatusContinua = "programada" | "em_execucao" | "concluida";
 type StatusTarefa = StatusDiaria | StatusContinua;
 type Registro = "registrada" | "nao_registrada";
 
@@ -45,6 +45,9 @@ interface CotTarefa {
   status: StatusTarefa;
   registro: Registro;
   concluida_em: string | null;
+  interrompida_em: string | null;
+  hora_fim: string | null;
+  data_programacao: string | null;
   arquivada: boolean;
   numero_sgi: string | null;
   last_modified_by: string | null;
@@ -72,14 +75,14 @@ interface Evento {
 }
 
 const STATUS_DIARIA: { id: StatusDiaria; label: string; badge: string; dot: string; icon: any }[] = [
-  { id: "iniciada",     label: "Iniciada",     badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: PlayIcon },
+  { id: "programada",   label: "Programada",   badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: CalendarDaysIcon },
   { id: "em_execucao",  label: "Em execução",  badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",         dot: "bg-amber-400",   icon: ClockIcon },
   { id: "interrompida", label: "Interrompida", badge: "bg-rose-500/15 text-rose-400 border-rose-500/30",            dot: "bg-rose-400",    icon: ExclamationTriangleIcon },
   { id: "concluida",    label: "Concluída",    badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",   dot: "bg-emerald-400", icon: CheckCircleIcon },
 ];
 
 const STATUS_CONTINUA: { id: StatusContinua; label: string; badge: string; dot: string; icon: any }[] = [
-  { id: "iniciada",    label: "Iniciada",    badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: PlayIcon },
+  { id: "programada",  label: "Programada",  badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: CalendarDaysIcon },
   { id: "em_execucao", label: "Em execução", badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",         dot: "bg-amber-400",   icon: ClockIcon },
   { id: "concluida",   label: "Concluída",   badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",   dot: "bg-emerald-400", icon: CheckCircleIcon },
 ];
@@ -144,8 +147,10 @@ const EMPTY_FORM = {
   nome_agente: "",
   doc_externo: "nao_possui" as string,
   numero_sgi: "",
-  status: "iniciada" as StatusTarefa,
+  status: "programada" as StatusTarefa,
   registro: "nao_registrada" as Registro,
+  hora_fim: "",
+  data_programacao: "",
 };
 
 const EMPTY_EVENTO_FORM = {
@@ -262,30 +267,44 @@ export default function CotPage() {
     return () => { supabase.removeChannel(channel); };
   }, [loadTarefas]);
 
-  // Auto-archive tasks concluded 24h+ ago
+  // Auto-archive and Auto-program tasks
   useEffect(() => {
     const now = Date.now();
     const toArchive = tarefas.filter(t =>
       t.status === "concluida" && !t.arquivada && t.concluida_em &&
       now - new Date(t.concluida_em).getTime() >= ARCHIVE_MS
     );
-    if (toArchive.length === 0) return;
-    Promise.all(
-      toArchive.map(t =>
+    
+    const INTERROMPIDA_MS = 12 * 60 * 60 * 1000;
+    const toProgram = tarefas.filter(t => 
+      t.status === "interrompida" && t.interrompida_em &&
+      now - new Date(t.interrompida_em).getTime() >= INTERROMPIDA_MS
+    );
+
+    if (toArchive.length === 0 && toProgram.length === 0) return;
+    
+    Promise.all([
+      ...toArchive.map(t =>
         supabase.from("cot_tarefas")
           .update({ arquivada: true, updated_at: new Date().toISOString() })
           .eq("id", t.id)
+      ),
+      ...toProgram.map(t =>
+        supabase.from("cot_tarefas")
+          .update({ status: "programada", updated_at: new Date().toISOString() })
+          .eq("id", t.id)
       )
-    ).then(() => loadTarefas(true));
+    ]).then(() => loadTarefas(true));
   }, [tarefas, loadTarefas]);
 
   const stats = useMemo(() => {
+    const hoje = new Date().toISOString().split("T")[0];
     const calc = (sub: Subtipo) => {
       const t = tarefas.filter(x => x.subtipo === sub && !x.arquivada);
       return {
         total:     t.length,
         diarias:   t.filter(x => x.tipo_atividade === "diaria").length,
-        continuas: t.filter(x => x.tipo_atividade === "continua").length,
+        continuas: t.filter(x => x.tipo_atividade === "continua" && (x.data_fim || "").startsWith(hoje)).length,
         concluidas:t.filter(x => x.status === "concluida").length,
         arquivadas:tarefas.filter(x => x.subtipo === sub && x.arquivada).length,
       };
@@ -302,7 +321,16 @@ export default function CotPage() {
     const arquivadas = base.filter(t => t.arquivada)
       .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
     const ativas = base.filter(t => !t.arquivada && t.status !== "concluida")
-      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      .sort((a, b) => {
+        const getVenc = (t: CotTarefa) => {
+          if (!t.data_fim) return Infinity;
+          const dt = t.data_fim.split("T")[0] + "T" + (t.hora_fim ? t.hora_fim : "23:59") + ":00";
+          return new Date(dt).getTime();
+        };
+        const peso = (t: CotTarefa) => (t.status === "em_execucao" || t.status === "programada") ? 0 : 1;
+        if (peso(a) !== peso(b)) return peso(a) - peso(b);
+        return getVenc(a) - getVenc(b);
+      });
     const concluidas = base.filter(t => !t.arquivada && t.status === "concluida")
       .sort((a, b) => {
         const ta = a.concluida_em ? new Date(a.concluida_em).getTime() : 0;
@@ -379,6 +407,8 @@ export default function CotPage() {
       doc_externo: t.doc_externo ?? (t.subtipo === "doc_ext" ? "MO" : "nao_possui"),
       status: t.status,
       registro: (t.registro ?? "nao_registrada") as Registro,
+      hora_fim: t.hora_fim ?? "",
+      data_programacao: t.data_programacao ?? "",
     });
     setModalStep(2);
   };
@@ -400,7 +430,7 @@ export default function CotPage() {
 
   const confirmarTipo = (tipo: TipoAtividade) => {
     setTipoSelecionado(tipo);
-    setForm(prev => ({ ...prev, status: "iniciada" }));
+    setForm(prev => ({ ...prev, status: "programada" }));
     setModalStep(2);
   };
 
@@ -424,6 +454,8 @@ export default function CotPage() {
         observacao: (form.observacao || "").trim() || null,
         numero_sgi: ["1", "2", "3"].includes(form.tipo_numero) ? ((form.numero_sgi || "").trim() || null) : null,
         data_fim: form.data_fim || null,
+        hora_fim: form.hora_fim || null,
+        data_programacao: form.status === "programada" ? (form.data_programacao || null) : null,
         tipo_atividade: tipoSelecionado,
         tipo_numero: form.tipo_numero ? parseInt(form.tipo_numero) : null,
         nome_agente: form.subtipo === "doc_ext" ? ((form.nome_agente || "").trim() || null) : null,
@@ -433,6 +465,7 @@ export default function CotPage() {
         last_modified_by: userEmail,
         updated_at: new Date().toISOString(),
       };
+      if (form.status === "interrompida") payload.interrompida_em = new Date().toISOString();
       if (editId) {
         const current = tarefas.find(t => t.id === editId);
         if (isConcluida && !current?.concluida_em) payload.concluida_em = new Date().toISOString();
@@ -509,6 +542,9 @@ export default function CotPage() {
       const update: any = { status: novoStatus, updated_at: new Date().toISOString(), last_modified_by: userEmail };
       if (isConcluida && !current?.concluida_em) update.concluida_em = new Date().toISOString();
       else if (!isConcluida) { update.concluida_em = null; update.arquivada = false; }
+      
+      if (novoStatus === "interrompida") update.interrompida_em = new Date().toISOString();
+      
       const { error } = await supabase.from("cot_tarefas").update(update).eq("id", id);
       if (error) throw error;
       setTarefas(prev => prev.map(t => t.id === id ? { ...t, ...update } : t));
@@ -629,10 +665,18 @@ export default function CotPage() {
     const countdown = isConcluida ? calcCountdown(t.concluida_em, nowMs) : null;
     const reg = t.registro ?? "nao_registrada";
 
+    const isVencendo = (() => {
+      if (!t.data_fim || isConcluida || isArquivada) return false;
+      const dtStr = t.data_fim.split("T")[0] + "T" + (t.hora_fim || "23:59") + ":00";
+      const dtMs = new Date(dtStr).getTime();
+      return (dtMs - nowMs) > 0 && (dtMs - nowMs) <= 60 * 60 * 1000;
+    })();
+
     return (
       <tr key={t.id} className={`border-b border-gray-100 dark:border-gray-800 transition-colors group
         ${isConcluida ? "opacity-60 hover:opacity-80 bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04]" : "hover:bg-gray-50/40 dark:hover:bg-gray-800/30"}
         ${isArquivada ? "opacity-40 hover:opacity-60" : ""}
+        ${isVencendo ? "animate-pulse ring-inset ring-2 ring-red-500/50 bg-red-500/5 dark:bg-red-500/10 z-10 relative" : ""}
       `}>
         {/* Tipo */}
         <td className="px-1.5 py-2 text-center align-middle whitespace-nowrap">
@@ -678,8 +722,17 @@ export default function CotPage() {
         </td>
         {/* Data Fim */}
         <td className="px-1.5 py-2 text-center align-middle whitespace-nowrap">
-          <div className="flex items-center justify-center gap-1 text-[11px] text-gray-400">
-            <CalendarDaysIcon className="w-3 h-3 flex-shrink-0" />{formatDate(t.data_fim)}
+          <div className="flex flex-col items-center justify-center gap-0.5 text-[11px] text-gray-400">
+            <div className="flex items-center gap-1">
+              <CalendarDaysIcon className="w-3 h-3 flex-shrink-0" />
+              {formatDate(t.data_fim)}
+            </div>
+            {t.hora_fim && (
+              <div className="flex items-center gap-1 text-[9px] font-bold text-gray-500">
+                <ClockIcon className="w-2.5 h-2.5" />
+                {t.hora_fim}
+              </div>
+            )}
           </div>
         </td>
         {/* Status */}
@@ -1033,10 +1086,10 @@ export default function CotPage() {
                 ))}
               </div>
               <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
-                {(["todos", "iniciada", "em_execucao", "interrompida", "concluida"] as const).map(v => (
+                {(["todos", "programada", "em_execucao", "interrompida", "concluida"] as const).map(v => (
                   <button key={v} onClick={() => setFiltroStatus(v)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroStatus === v ? "bg-[#0b7336] text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-                    {v === "todos" ? "Todos" : v === "em_execucao" ? "Em execução" : v === "iniciada" ? "Iniciada" : v === "interrompida" ? "Interrompida" : "Concluída"}
+                    {v === "todos" ? "Todos" : v === "em_execucao" ? "Em execução" : v === "programada" ? "Programada" : v === "interrompida" ? "Interrompida" : "Concluída"}
                   </button>
                 ))}
               </div>
@@ -1393,9 +1446,15 @@ export default function CotPage() {
                         placeholder="Nome do agente responsável..." className={inputCls} />
                     </div>
                   ) : (
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data de Fim</label>
-                      <input type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className={inputCls} />
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data Fim</label>
+                        <input type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className={inputCls} />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Hora Fim</label>
+                        <input type="time" value={form.hora_fim} onChange={e => setForm(p => ({ ...p, hora_fim: e.target.value }))} className={inputCls} />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1432,9 +1491,15 @@ export default function CotPage() {
                 </div>
 
                 {(form.subtipo === "pes" && form.doc_externo !== "nao_possui") || form.subtipo === "doc_ext" ? (
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data de Fim</label>
-                    <input type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className={inputCls} />
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data Fim</label>
+                      <input type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className={inputCls} />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Hora Fim</label>
+                      <input type="time" value={form.hora_fim} onChange={e => setForm(p => ({ ...p, hora_fim: e.target.value }))} className={inputCls} />
+                    </div>
                   </div>
                 ) : null}
 
@@ -1458,6 +1523,13 @@ export default function CotPage() {
                     })}
                   </div>
                 </div>
+
+                {form.status === "programada" && (
+                  <div>
+                    <label className="text-[10px] font-black text-sky-400 uppercase tracking-widest mb-1.5 block">Data/Hora da Programação <span className="text-red-400">*</span></label>
+                    <input type="datetime-local" required value={form.data_programacao} onChange={e => setForm(p => ({ ...p, data_programacao: e.target.value }))} className={inputCls + " ring-1 ring-sky-500/50"} />
+                  </div>
+                )}
 
                 {/* Registro */}
                 <div>
