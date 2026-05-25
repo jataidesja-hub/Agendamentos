@@ -322,6 +322,12 @@ export default function CotPage() {
       .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
     const ativas = base.filter(t => !t.arquivada && t.status !== "concluida")
       .sort((a, b) => {
+        const hoje = new Date().toISOString().split("T")[0];
+        const isContinuaHoje = (t: CotTarefa) => t.tipo_atividade === "continua" && !!t.data_fim && t.data_fim.startsWith(hoje);
+        
+        if (isContinuaHoje(a) && !isContinuaHoje(b)) return -1;
+        if (!isContinuaHoje(a) && isContinuaHoje(b)) return 1;
+
         const getVenc = (t: CotTarefa) => {
           if (!t.data_fim) return Infinity;
           const dt = t.data_fim.split("T")[0] + "T" + (t.hora_fim ? t.hora_fim : "23:59") + ":00";
