@@ -1211,7 +1211,22 @@ export default function CotPage() {
               return true;
             });
             const tArquivadas = base.filter(t => t.arquivada).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-            const tAtivas = base.filter(t => !t.arquivada && t.status !== "concluida").sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+            const tAtivas = base.filter(t => !t.arquivada && t.status !== "concluida").sort((a, b) => {
+              const hoje = new Date().toISOString().split("T")[0];
+              const isContinuaHoje = (t: CotTarefa) => t.tipo_atividade === "continua" && !!t.data_fim && t.data_fim.startsWith(hoje);
+              
+              if (isContinuaHoje(a) && !isContinuaHoje(b)) return -1;
+              if (!isContinuaHoje(a) && isContinuaHoje(b)) return 1;
+
+              const getVenc = (t: CotTarefa) => {
+                if (!t.data_fim) return Infinity;
+                const dt = t.data_fim.split("T")[0] + "T" + (t.hora_fim ? t.hora_fim : "23:59") + ":00";
+                return new Date(dt).getTime();
+              };
+              const peso = (t: CotTarefa) => (t.status === "em_execucao" || t.status === "programada") ? 0 : 1;
+              if (peso(a) !== peso(b)) return peso(a) - peso(b);
+              return getVenc(a) - getVenc(b);
+            });
             const tConcluidas = base.filter(t => !t.arquivada && t.status === "concluida").sort((a, b) => {
               const ta = a.concluida_em ? new Date(a.concluida_em).getTime() : 0;
               const tb = b.concluida_em ? new Date(b.concluida_em).getTime() : 0;
