@@ -25,6 +25,8 @@ export default function ChecklistPage() {
   const [gerandoPdfId, setGerandoPdfId] = useState<string | null>(null);
   const [isMaster, setIsMaster] = useState(false);
   const [expandedVeiculos, setExpandedVeiculos] = useState<Set<string>>(new Set());
+  const [baixandoTodos, setBaixandoTodos] = useState(false);
+  const [progressoTodos, setProgressoTodos] = useState<{ atual: number; total: number } | null>(null);
 
   const handleDownloadPdf = async (id: string) => {
     setGerandoPdfId(id);
@@ -35,6 +37,30 @@ export default function ChecklistPage() {
       toast.error("Erro ao gerar PDF: " + e.message);
     } finally {
       setGerandoPdfId(null);
+    }
+  };
+
+  const handleDownloadTodos = async () => {
+    if (baixandoTodos) return;
+    if (!confirm(`Baixar ${lista.length} PDF(s)? Isso pode demorar alguns segundos.`)) return;
+    setBaixandoTodos(true);
+    setProgressoTodos({ atual: 0, total: lista.length });
+    try {
+      const { data: todos } = await supabase.from("informe_checklist").select("*").order("created_at", { ascending: false });
+      if (!todos) return;
+      for (let i = 0; i < todos.length; i++) {
+        setProgressoTodos({ atual: i + 1, total: todos.length });
+        try {
+          await gerarChecklistPdf(todos[i]);
+          await new Promise(r => setTimeout(r, 300));
+        } catch {}
+      }
+      toast.success(`${todos.length} PDF(s) gerados!`);
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    } finally {
+      setBaixandoTodos(false);
+      setProgressoTodos(null);
     }
   };
 
@@ -120,6 +146,23 @@ export default function ChecklistPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleDownloadTodos}
+            disabled={baixandoTodos}
+            className="flex items-center gap-2 px-5 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-bold rounded-2xl shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all active:scale-95 disabled:opacity-60"
+          >
+            {baixandoTodos ? (
+              <>
+                <div className="w-4 h-4 border-2 border-[#0b7336] border-t-transparent rounded-full animate-spin" />
+                {progressoTodos ? `${progressoTodos.atual}/${progressoTodos.total}` : "Gerando..."}
+              </>
+            ) : (
+              <>
+                <ArrowDownTrayIcon className="w-5 h-5" />
+                Baixar Todos PDFs
+              </>
+            )}
+          </button>
           <button
             onClick={() => router.push("/dashboard/checklist/novo")}
             className="flex items-center gap-2 px-5 py-3 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95"
