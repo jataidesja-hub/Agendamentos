@@ -172,6 +172,9 @@ const RelatorioMeioAmbiente = () => {
     // @ts-ignore
     const placaToSubproject = dataCache.placaToSubproject || new Map();
 
+    const currentYear = selectedMonth ? selectedMonth.slice(0, 4) : new Date().getFullYear().toString();
+    let anualCO2 = 0;
+
     const filtered = abastecimentos.filter((a: any) => {
       if (!a.data_transacao || !selectedMonth) return false;
       
@@ -194,7 +197,35 @@ const RelatorioMeioAmbiente = () => {
         if (!veiculosAtivos.has(normPlaca)) return false;
       }
 
-      return String(a.data_transacao).slice(0, 7) === selectedMonth;
+      const txDate = String(a.data_transacao);
+      if (txDate.slice(0, 4) === currentYear) {
+         const litros = Number(a.litros) || 0;
+         const km = Number(a.km_rodados_horas || a.km_rodados) || 0;
+         const fuelRaw = String(a.tipo_combustivel || "OUTROS").toUpperCase().trim();
+         const vehicleType = String(a.tipo_frota || a.modelo_veiculo || "").toUpperCase();
+
+         let recordCO2 = 0;
+         if (fuelRaw.includes("GASOLINA")) {
+           recordCO2 = litros * 2.27;
+         } else if (fuelRaw.includes("DIESEL")) {
+           recordCO2 = litros * 2.68;
+         } else if (fuelRaw.includes("ETANOL")) {
+           recordCO2 = litros * 0.45;
+         } else if (litros === 0 && km > 0) {
+           let kmFactor = 0.314;
+           if (vehicleType.includes("CAMINHONETE") || vehicleType.includes("PICKUP")) {
+             kmFactor = 0.461;
+           } else if (vehicleType.includes("MOTO")) {
+             kmFactor = 0.212;
+           }
+           recordCO2 = km * kmFactor;
+         } else if (litros > 0) {
+           recordCO2 = litros * 2.3;
+         }
+         anualCO2 += recordCO2;
+      }
+
+      return txDate.slice(0, 7) === selectedMonth;
     });
 
     let totalCO2 = 0;
@@ -309,6 +340,7 @@ const RelatorioMeioAmbiente = () => {
 
     return {
       totalCO2,
+      anualCO2,
       totalLiters,
       totalKm,
       ranking: rankingSorted.map((d: any) => ({ ...d, barScale: (d.co2 / maxExp) * 100 })),
@@ -448,7 +480,16 @@ const RelatorioMeioAmbiente = () => {
               <span className="text-5xl font-black tracking-tighter">{(processedData.totalCO2 / 1000).toFixed(2)}</span>
               <span className="text-lg font-bold text-gray-400">ton CO₂</span>
            </div>
-           <div className="mt-8 flex items-center gap-2 bg-white/5 py-2 px-4 rounded-xl border border-white/5 w-fit">
+
+           <div className="mt-6 flex flex-col gap-1">
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Acumulado Anual ({selectedMonth.slice(0,4)})</p>
+              <div className="flex items-baseline gap-1">
+                 <span className="text-2xl font-black text-white">{(processedData.anualCO2 / 1000).toFixed(2)}</span>
+                 <span className="text-xs font-bold text-gray-400">ton CO₂</span>
+              </div>
+           </div>
+
+           <div className="mt-6 flex items-center gap-2 bg-white/5 py-2 px-4 rounded-xl border border-white/5 w-fit">
               <CloudIcon className="w-4 h-4 text-emerald-500" />
               <span className="text-[10px] font-bold text-gray-400">Baseado em {processedData.totalRecords} registros</span>
            </div>
