@@ -714,7 +714,7 @@ export default function CotPage() {
               Modificado por {t.last_modified_by.split("@")[0]}
             </p>
           )}
-          <p className="text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[120px] max-w-[200px] leading-snug mx-auto text-center">{t.atividade}</p>
+          <p className="text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[250px] max-w-[500px] w-full leading-snug mx-auto text-center">{t.atividade}</p>
         </td>
         {/* Agente */}
         {isDocExt && (
@@ -864,7 +864,7 @@ export default function CotPage() {
               Modificado por {e.last_modified_by.split("@")[0]}
             </p>
           )}
-          <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words w-[220px] leading-relaxed">{e.descricao}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words min-w-[250px] max-w-[500px] w-full leading-relaxed">{e.descricao}</p>
         </td>
         <td className="px-3 py-3 text-center align-middle whitespace-nowrap">
           <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
@@ -955,7 +955,7 @@ export default function CotPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 mt-8 gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">COT – Tarefas</h1>
+            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">PORTAL COT - Tempo real</h1>
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest transition-all duration-500 ${
               realtimePulse
                 ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400 scale-105"
@@ -965,7 +965,6 @@ export default function CotPage() {
               {realtimePulse ? "Atualizado" : "Ao vivo"}
             </div>
           </div>
-          <p className="text-gray-500 text-sm mt-1 font-medium">Controle de atividades diárias e contínuas</p>
         </div>
         <div className="flex gap-3 items-center">
           <button onClick={() => loadTarefas()}
