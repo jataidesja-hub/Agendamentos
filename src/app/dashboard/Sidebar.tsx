@@ -20,6 +20,7 @@ import {
   MapPinIcon,
   TableCellsIcon,
   ExclamationTriangleIcon,
+  PhoneIcon,
 } from "@heroicons/react/24/outline";
 
 import { supabase } from "@/lib/supabase";
@@ -45,6 +46,7 @@ const iconMap: Record<string, any> = {
   MapPinIcon,
   TableCellsIcon,
   ExclamationTriangleIcon,
+  PhoneIcon,
 };
 
 export default function Sidebar() {

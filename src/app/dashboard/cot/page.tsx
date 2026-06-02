@@ -195,6 +195,7 @@ export default function CotPage() {
   const [mostrarArquivados, setMostrarArquivados] = useState(false);
   const [realtimePulse, setRealtimePulse] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [convOpNota, setConvOpNota] = useState("");
 
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
@@ -994,7 +995,7 @@ export default function CotPage() {
       </div>
 
       {/* Tabs PES / DOC EXT. / EVENTOS */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-5">
         <button onClick={() => { setViewMode("geral"); setMostrarArquivados(false); setSelecionados(new Set()); }}
           className={`col-span-1 rounded-2xl p-5 border-2 text-left transition-all ${viewMode === "geral" ? "border-[#0b7336] bg-[#0b7336]/10" : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-gray-200 dark:hover:border-gray-700"}`}>
           <div className="flex items-center justify-between mb-4">
@@ -1061,6 +1062,31 @@ export default function CotPage() {
             </button>
           );
         })}
+
+        {/* Card Conv. Op. */}
+        {(() => {
+          const eventosAtivosNR = eventos.filter(e => !e.arquivada && e.status === "ativa" && (e.registro ?? "nao_registrada") === "nao_registrada");
+          const eventosAtivosTotal = eventos.filter(e => !e.arquivada && e.status === "ativa");
+          return (
+            <div className="col-span-1 rounded-2xl p-5 border-2 border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-900 flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-black text-purple-500 dark:text-purple-400">CONV. OP.</span>
+                <span className="text-[9px] font-black px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-500">Resumo</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <StatsCard label="Ativas" value={eventosAtivosTotal.length} color="text-amber-400" />
+                <StatsCard label="Não Reg." value={eventosAtivosNR.length} color="text-rose-400" />
+              </div>
+              <textarea
+                value={convOpNota}
+                onChange={e => setConvOpNota(e.target.value)}
+                placeholder="Anotações da conversa operacional..."
+                rows={3}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:ring-2 focus:ring-purple-400 focus:border-transparent resize-none transition-all font-medium"
+              />
+            </div>
+          );
+        })()}
       </div>
 
       {/* Filtros + Arquivados */}

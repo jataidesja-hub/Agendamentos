@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { UserGroupIcon, PlusIcon, PencilIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { UserGroupIcon, PlusIcon, PencilIcon, ShieldCheckIcon, TrashIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 export default function UsuariosPage() {
@@ -39,6 +39,7 @@ export default function UsuariosPage() {
     { id: 'cot', nome: 'COT – Tarefas' },
     { id: 'gestao-eventos', nome: 'Gestão de Eventos' },
     { id: 'multas', nome: 'Gerenciamento de Multas' },
+    { id: 'telecom', nome: 'Controle Telecom' },
   ];
 
   useEffect(() => {
@@ -128,6 +129,14 @@ export default function UsuariosPage() {
     setMaster(u.master || false);
     setAbasRelatorio(u.abas_relatorio || ['projetos', 'postos', 'gestores', 'mapa']);
     setShowForm(true);
+  };
+
+  const handleDelete = async (id: string, email: string) => {
+    if (!confirm(`Excluir perfil de ${email}?`)) return;
+    const { error } = await supabase.from('perfis_acesso').delete().eq('id', id);
+    if (error) { toast.error('Erro ao excluir: ' + error.message); return; }
+    toast.success('Perfil excluído!');
+    fetchUsuarios();
   };
 
   if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse font-bold">Carregando perfis...</div>;
@@ -277,9 +286,14 @@ export default function UsuariosPage() {
                 {u.master ? 'Todos os projetos' : `${(u.projetos_acesso || []).length} projetos`}
               </span>
             </div>
-            <button onClick={() => handleEdit(u)} className="w-full flex items-center justify-center gap-2 bg-gray-100/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 py-2 rounded-xl text-sm font-bold transition-all shadow-sm">
-              <PencilIcon className="w-4 h-4" /> Editar
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => handleEdit(u)} className="flex-1 flex items-center justify-center gap-2 bg-gray-100/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 py-2 rounded-xl text-sm font-bold transition-all shadow-sm">
+                <PencilIcon className="w-4 h-4" /> Editar
+              </button>
+              <button onClick={() => handleDelete(u.id, u.email)} className="flex items-center justify-center gap-1 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-500 dark:text-red-400 py-2 px-3 rounded-xl text-sm font-bold transition-all">
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         ))}
       </div>
