@@ -1163,7 +1163,7 @@ export default function CotPage() {
         <div className={`flex-1 grid gap-4 min-h-0 ${viewMode === "geral" ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1"}`}>
           {(viewMode === "geral" ? ["pes", "doc_ext"] : [viewMode]).map(sub => {
             const isDocExt = sub === "doc_ext";
-            const isEvento = sub === "indisponibilidade" || sub === "anormalidade";
+            const isEvento = sub === "indisponibilidade" || sub === "anormalidade" || sub === "conv_op";
             const cfg = isEvento ? TIPO_EVENTO_CONFIG[sub as TipoEvento] : SUBTIPO_CONFIG[sub as Subtipo];
             
             if (isEvento) {
