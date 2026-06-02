@@ -1070,7 +1070,7 @@ export default function CotPage() {
 
         {/* Card Conv. Op. */}
         {(() => {
-          const s = eventosFiltrados.conv_op;
+          const s = statsEventos.conv_op;
           const isAtivo = viewMode === "conv_op";
           const c = TIPO_EVENTO_CONFIG.conv_op;
           return (
