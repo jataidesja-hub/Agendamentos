@@ -499,19 +499,22 @@ export default function CotPage() {
 
   const salvarEvento = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!formEvento.subestacao.trim() || !formEvento.descricao.trim()) {
-      toast.error("Subestação e Descrição são obrigatórios."); return;
+    if (formEvento.tipo !== "conv_op" && !formEvento.subestacao.trim()) {
+      toast.error("Subestação é obrigatória."); return;
+    }
+    if (!formEvento.descricao.trim()) {
+      toast.error("Descrição é obrigatória."); return;
     }
     setSaving(true);
     try {
       const payload = {
         tipo:       formEvento.tipo,
-        subestacao: formEvento.subestacao.trim(),
-        concessao:  formEvento.concessao.trim() || null,
-        ativo:      formEvento.ativo.trim() || null,
+        subestacao: formEvento.tipo === "conv_op" ? "CONV. OP." : formEvento.subestacao.trim(),
+        concessao:  formEvento.tipo === "conv_op" ? null : (formEvento.concessao.trim() || null),
+        ativo:      formEvento.tipo === "conv_op" ? null : (formEvento.ativo.trim() || null),
         descricao:  formEvento.descricao.trim(),
-        data:       formEvento.data || null,
-        status:     formEvento.status,
+        data:       formEvento.tipo === "conv_op" ? null : (formEvento.data || null),
+        status:     formEvento.tipo === "conv_op" ? "ativa" : formEvento.status,
         registro:   formEvento.registro,
         last_modified_by: userEmail,
         updated_at: new Date().toISOString(),
@@ -1634,44 +1637,46 @@ export default function CotPage() {
               </button>
             </div>
             <form onSubmit={salvarEvento} className="p-7 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Subestação <span className="text-red-400">*</span></label>
-                  <input type="text" value={formEvento.subestacao} onChange={e => setFormEvento(p => ({ ...p, subestacao: e.target.value.toUpperCase() }))}
-                    placeholder="Ex: SE MESSEJANA" required className={inputCls} />
+              {formEvento.tipo !== "conv_op" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Subestação <span className="text-red-400">*</span></label>
+                    <input type="text" value={formEvento.subestacao} onChange={e => setFormEvento(p => ({ ...p, subestacao: e.target.value.toUpperCase() }))}
+                      placeholder="Ex: SE MESSEJANA" required={formEvento.tipo !== "conv_op"} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Concessão</label>
+                    <input type="text" value={formEvento.concessao} onChange={e => setFormEvento(p => ({ ...p, concessao: e.target.value.toUpperCase() }))}
+                      placeholder="Ex: CHESF" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Ativo</label>
+                    <input type="text" value={formEvento.ativo} onChange={e => setFormEvento(p => ({ ...p, ativo: e.target.value.toUpperCase() }))}
+                      placeholder="Ex: 04T4" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Previsão de Normalização</label>
+                    <input
+                      type="date"
+                      value={formEvento.data}
+                      onChange={e => {
+                        const val = e.target.value;
+                        let newStatus: StatusEvento = formEvento.status;
+                        if (!val) {
+                          newStatus = "sem_previsao";
+                        } else {
+                          const today = new Date().toISOString().split("T")[0];
+                          newStatus = val < today ? "previsao_vencida" : "ativa";
+                        }
+                        setFormEvento(p => ({ ...p, data: val, status: newStatus }));
+                      }}
+                      className={inputCls}
+                    />
+                    {!formEvento.data && <p className="text-[9px] text-amber-400 mt-1 font-bold">Sem previsão definida</p>}
+                    {formEvento.data && formEvento.data < new Date().toISOString().split("T")[0] && <p className="text-[9px] text-rose-400 mt-1 font-bold">Previsão vencida</p>}
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Concessão</label>
-                  <input type="text" value={formEvento.concessao} onChange={e => setFormEvento(p => ({ ...p, concessao: e.target.value.toUpperCase() }))}
-                    placeholder="Ex: CHESF" className={inputCls} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Ativo</label>
-                  <input type="text" value={formEvento.ativo} onChange={e => setFormEvento(p => ({ ...p, ativo: e.target.value.toUpperCase() }))}
-                    placeholder="Ex: 04T4" className={inputCls} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Previsão de Normalização</label>
-                  <input
-                    type="date"
-                    value={formEvento.data}
-                    onChange={e => {
-                      const val = e.target.value;
-                      let newStatus: StatusEvento = formEvento.status;
-                      if (!val) {
-                        newStatus = "sem_previsao";
-                      } else {
-                        const today = new Date().toISOString().split("T")[0];
-                        newStatus = val < today ? "previsao_vencida" : "ativa";
-                      }
-                      setFormEvento(p => ({ ...p, data: val, status: newStatus }));
-                    }}
-                    className={inputCls}
-                  />
-                  {!formEvento.data && <p className="text-[9px] text-amber-400 mt-1 font-bold">Sem previsão definida</p>}
-                  {formEvento.data && formEvento.data < new Date().toISOString().split("T")[0] && <p className="text-[9px] text-rose-400 mt-1 font-bold">Previsão vencida</p>}
-                </div>
-              </div>
+              )}
 
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Descrição <span className="text-red-400">*</span></label>
@@ -1679,25 +1684,27 @@ export default function CotPage() {
                   placeholder="Detalhes do evento..." required rows={3} className={inputCls + " resize-none"} />
               </div>
 
-              <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Status</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {STATUS_EVENTO_LIST.map(s => {
-                    const SIcon = s.icon;
-                    return (
-                      <button key={s.id} type="button" onClick={() => setFormEvento(p => ({ ...p, status: s.id }))}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                          formEvento.status === s.id
-                            ? s.badge + " ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-indigo-500"
-                            : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300"
-                        }`}>
-                        <SIcon className="w-4 h-4 flex-shrink-0" />{s.label}
-                        {formEvento.status === s.id && <CheckIcon className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
-                      </button>
-                    );
-                  })}
+              {formEvento.tipo !== "conv_op" && (
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Status</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {STATUS_EVENTO_LIST.map(s => {
+                      const SIcon = s.icon;
+                      return (
+                        <button key={s.id} type="button" onClick={() => setFormEvento(p => ({ ...p, status: s.id }))}
+                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                            formEvento.status === s.id
+                              ? s.badge + " ring-2 ring-offset-1 dark:ring-offset-gray-900 ring-indigo-500"
+                              : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300"
+                          }`}>
+                          <SIcon className="w-4 h-4 flex-shrink-0" />{s.label}
+                          {formEvento.status === s.id && <CheckIcon className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Registro</label>
