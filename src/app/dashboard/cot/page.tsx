@@ -1002,8 +1002,8 @@ export default function CotPage() {
             {viewMode === "geral" && <span className="text-[9px] font-black px-2 py-1 rounded-full border border-[#0b7336] text-[#0b7336]">ATIVO</span>}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <StatsCard label="Total"     value={tarefas.filter(t => !t.arquivada).length} color={viewMode === "geral" ? "text-[#0b7336]" : "text-gray-500"} />
-            <StatsCard label="Concluídas"value={tarefas.filter(t => t.status === "concluida" && !t.arquivada).length} color={viewMode === "geral" ? "text-[#0b7336]" : "text-gray-500"} />
+            <StatsCard label="Total"          value={tarefas.filter(t => !t.arquivada).length} color={viewMode === "geral" ? "text-[#0b7336]" : "text-gray-500"} />
+            <StatsCard label="Concluídas (24h)" value={tarefas.filter(t => t.status === "concluida" && !t.arquivada).length} color={viewMode === "geral" ? "text-[#0b7336]" : "text-gray-500"} />
           </div>
         </button>
 
@@ -1055,9 +1055,8 @@ export default function CotPage() {
                   {isAtivo && <span className={`text-[9px] font-black px-2 py-1 rounded-full border ${c.activeColor} ${c.color}`}>ATIVO</span>}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <StatsCard label="Total"  value={s.total} color={isAtivo ? c.color : "text-gray-500 dark:text-gray-400"} />
-                <StatsCard label="Ativas" value={s.ativas} color={isAtivo ? "text-sky-400" : "text-gray-500 dark:text-gray-400"} />
               </div>
             </button>
           );
@@ -1482,9 +1481,9 @@ export default function CotPage() {
 
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Projeto <span className="text-red-400">*</span></label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Subestação <span className="text-red-400">*</span></label>
                     <input type="text" value={form.nome_projeto} onChange={e => setForm(p => ({ ...p, nome_projeto: e.target.value }))}
-                      placeholder="Nome do projeto..." required className={inputCls} />
+                      placeholder="Nome da subestação..." required className={inputCls} />
                   </div>
                   <div className="flex flex-col gap-3">
                     <div>
@@ -1622,8 +1621,25 @@ export default function CotPage() {
                     placeholder="Ex: 04T4" className={inputCls} />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Data do Evento</label>
-                  <input type="date" value={formEvento.data} onChange={e => setFormEvento(p => ({ ...p, data: e.target.value }))} className={inputCls} />
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Previsão de Normalização</label>
+                  <input
+                    type="date"
+                    value={formEvento.data}
+                    onChange={e => {
+                      const val = e.target.value;
+                      let newStatus: StatusEvento = formEvento.status;
+                      if (!val) {
+                        newStatus = "sem_previsao";
+                      } else {
+                        const today = new Date().toISOString().split("T")[0];
+                        newStatus = val < today ? "previsao_vencida" : "ativa";
+                      }
+                      setFormEvento(p => ({ ...p, data: val, status: newStatus }));
+                    }}
+                    className={inputCls}
+                  />
+                  {!formEvento.data && <p className="text-[9px] text-amber-400 mt-1 font-bold">Sem previsão definida</p>}
+                  {formEvento.data && formEvento.data < new Date().toISOString().split("T")[0] && <p className="text-[9px] text-rose-400 mt-1 font-bold">Previsão vencida</p>}
                 </div>
               </div>
 
