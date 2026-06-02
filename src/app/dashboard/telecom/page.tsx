@@ -19,7 +19,10 @@ interface TelecomRow {
   mensagem_padrao: string;
   observacoes_internas: string;
   contatos_internos: string;
+  created_by: string | null;
+  updated_by: string | null;
   created_at: string;
+  updated_at: string | null;
 }
 
 const ADMINS = ["inacio", "eliton", "pablo", "steffany", "stéffany", "rafael", "ramos", "brendo", "oliveira", "logistica@cymi.com.br"];
@@ -29,9 +32,20 @@ function isAdmin(email: string) {
   return ADMINS.some(a => lc.includes(a));
 }
 
+function shortEmail(email: string | null) {
+  if (!email) return null;
+  return email.split("@")[0];
+}
+
+function fmtDate(dt: string | null) {
+  if (!dt) return null;
+  const d = new Date(dt);
+  return d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
 const inputCls = "w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all";
 
-const EMPTY: Omit<TelecomRow, "id" | "created_at"> = {
+const EMPTY_FORM = {
   origem: "", destino: "", provedor: "", canal: "",
   contato: "", designacao: "", mensagem_padrao: "",
   observacoes_internas: "", contatos_internos: "",
@@ -45,7 +59,7 @@ export default function TelecomPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ ...EMPTY });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -66,7 +80,7 @@ export default function TelecomPage() {
 
   function openNew() {
     setEditId(null);
-    setForm({ ...EMPTY });
+    setForm({ ...EMPTY_FORM });
     setShowForm(true);
   }
 
@@ -85,12 +99,22 @@ export default function TelecomPage() {
     e.preventDefault();
     setSaving(true);
     try {
+      const now = new Date().toISOString();
       if (editId) {
-        const { error } = await supabase.from("telecom_linhas").update(form).eq("id", editId);
+        const { error } = await supabase.from("telecom_linhas").update({
+          ...form,
+          updated_by: userEmail,
+          updated_at: now,
+        }).eq("id", editId);
         if (error) throw error;
         toast.success("Linha atualizada!");
       } else {
-        const { error } = await supabase.from("telecom_linhas").insert(form);
+        const { error } = await supabase.from("telecom_linhas").insert({
+          ...form,
+          created_by: userEmail,
+          updated_by: userEmail,
+          updated_at: now,
+        });
         if (error) throw error;
         toast.success("Linha criada!");
       }
@@ -134,7 +158,7 @@ export default function TelecomPage() {
     window.open(`mailto:${destinos}?subject=${assunto}&body=${corpoEnc}`);
   }
 
-  const cols = ["Origem","Destino","Provedor","Canal","Contato","Designação","Mensagem Padrão","Obs. Internas","Contatos Internos"];
+  const cols = ["Origem","Destino","Provedor","Canal","Contato","Designação","Mensagem Padrão","Obs. Internas","Contatos Internos","Criado por"];
 
   return (
     <div className="p-4 md:p-6 flex flex-col gap-6">
@@ -146,7 +170,7 @@ export default function TelecomPage() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Controle Telecom</h1>
-            <p className="text-xs text-gray-500 font-medium">{rows.length} linha{rows.length !== 1 ? "s" : ""} cadastrada{rows.length !== 1 ? "s" : ""}</p>
+            <p className="text-xs text-gray-500 font-medium">{rows.length} linha{rows.length !== 1 ? "s" : ""} cadastrada{rows.length !== 1 ? "s" : ""} · Dados compartilhados entre todos os usuários</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -211,6 +235,32 @@ export default function TelecomPage() {
                     <p className="text-xs text-gray-400 leading-relaxed line-clamp-2">{r.observacoes_internas || "—"}</p>
                   </td>
                   <td className="px-3 py-3 text-xs text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{r.contatos_internos || "—"}</td>
+
+                  {/* Log de criação/edição */}
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <div className="flex flex-col gap-0.5">
+                      {r.created_by && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] font-black text-gray-400 uppercase">Criado</span>
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">{shortEmail(r.created_by)}</span>
+                        </div>
+                      )}
+                      {r.created_by && r.created_at && (
+                        <span className="text-[9px] text-gray-400">{fmtDate(r.created_at)}</span>
+                      )}
+                      {r.updated_by && r.updated_by !== r.created_by && (
+                        <>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-[9px] font-black text-gray-400 uppercase">Edit.</span>
+                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{shortEmail(r.updated_by)}</span>
+                          </div>
+                          {r.updated_at && <span className="text-[9px] text-gray-400">{fmtDate(r.updated_at)}</span>}
+                        </>
+                      )}
+                      {!r.created_by && <span className="text-[9px] text-gray-400">—</span>}
+                    </div>
+                  </td>
+
                   {admin && (
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -250,7 +300,7 @@ export default function TelecomPage() {
                   ["contato", "Contato"],
                   ["designacao", "Designação"],
                   ["contatos_internos", "Contatos Internos (e-mail)"],
-                ] as [keyof typeof EMPTY, string][]).map(([key, label]) => (
+                ] as [keyof typeof EMPTY_FORM, string][]).map(([key, label]) => (
                   <div key={key} className={key === "contatos_internos" ? "col-span-2" : ""}>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">{label}</label>
                     <input type="text" value={(form as any)[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} className={inputCls} />
