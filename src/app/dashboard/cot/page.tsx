@@ -196,6 +196,7 @@ export default function CotPage() {
   const [realtimePulse, setRealtimePulse] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [convOpNota, setConvOpNota] = useState("");
+  const [showConvOp, setShowConvOp] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
@@ -1071,7 +1072,12 @@ export default function CotPage() {
             <div className="col-span-1 rounded-2xl p-5 border-2 border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-900 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <span className="text-[12px] font-black text-purple-500 dark:text-purple-400">CONV. OP.</span>
-                <span className="text-[9px] font-black px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-500">Resumo</span>
+                <button
+                  onClick={() => setShowConvOp(true)}
+                  className="text-[9px] font-black px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-500 hover:bg-purple-200 dark:hover:bg-purple-800/50 transition-colors cursor-pointer"
+                >
+                  Visualizar
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <StatsCard label="Ativas" value={eventosAtivosTotal.length} color="text-amber-400" />
@@ -1780,6 +1786,79 @@ export default function CotPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL CONV. OP. */}
+      {showConvOp && (() => {
+        const ativos = eventos.filter(e => !e.arquivada && e.status === "ativa");
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-2xl border border-gray-100 dark:border-gray-800 overflow-hidden max-h-[85vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-gray-100 dark:border-gray-800">
+                <div>
+                  <h2 className="text-xl font-black text-purple-500 dark:text-purple-400">Conv. Op. — Eventos Ativos</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">{ativos.length} evento{ativos.length !== 1 ? "s" : ""} ativo{ativos.length !== 1 ? "s" : ""}</p>
+                </div>
+                <button onClick={() => setShowConvOp(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* List */}
+              <div className="flex-1 overflow-y-auto px-7 py-4 space-y-3">
+                {ativos.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
+                    <CheckCircleIcon className="w-10 h-10 text-emerald-400" />
+                    <p className="font-bold text-sm">Nenhum evento ativo no momento</p>
+                  </div>
+                ) : ativos.map(e => {
+                  const reg = e.registro ?? "nao_registrada";
+                  const cfg = TIPO_EVENTO_CONFIG[e.tipo];
+                  return (
+                    <div key={e.id} className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+                      {/* Tipo badge */}
+                      <div className="flex-shrink-0 pt-0.5">
+                        <span className={`text-[9px] font-black px-2 py-1 rounded-full border whitespace-nowrap ${cfg.statBg} ${cfg.color}`}>
+                          {cfg.label}
+                        </span>
+                      </div>
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black text-gray-800 dark:text-white mb-0.5">{e.subestacao}{e.ativo ? ` — ${e.ativo}` : ""}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">{e.descricao}</p>
+                        {e.last_modified_by && (
+                          <p className="text-[9px] text-rose-400 font-bold mt-1 uppercase tracking-wide">
+                            Mod. por {e.last_modified_by.split("@")[0]}
+                          </p>
+                        )}
+                      </div>
+                      {/* Registro badge */}
+                      <div className="flex-shrink-0 pt-0.5">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border font-black text-[9px] whitespace-nowrap ${
+                          reg === "registrada"
+                            ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
+                            : "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${reg === "registrada" ? "bg-indigo-400" : "bg-rose-400"}`} />
+                          {reg === "registrada" ? "Registrada" : "Não Reg."}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Nota Conv Op dentro do modal */}
+              {convOpNota && (
+                <div className="px-7 pb-6 pt-2 border-t border-gray-100 dark:border-gray-800">
+                  <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-2">Anotações</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{convOpNota}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
