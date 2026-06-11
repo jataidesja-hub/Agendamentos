@@ -40,6 +40,7 @@ export default function UsuariosPage() {
     { id: 'gestao-eventos', nome: 'Gestão de Eventos' },
     { id: 'multas', nome: 'Gerenciamento de Multas' },
     { id: 'telecom', nome: 'Controle Telecom' },
+    { id: 'informacoes', nome: 'Informações (Senhas/Transformadores/Yealink)' },
   ];
 
   useEffect(() => {
