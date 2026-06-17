@@ -126,12 +126,15 @@ export default function MultasPage() {
 
   // Ranking data
   const rankingProjetos = useMemo(() => {
-    const map: Record<string, { count: number; valor: number }> = {};
+    const map: Record<string, { count: number; valor: number; valorRecuperado: number }> = {};
     multas.forEach(m => {
       const proj = getProjeto(m.placa);
-      if (!map[proj]) map[proj] = { count: 0, valor: 0 };
+      if (!map[proj]) map[proj] = { count: 0, valor: 0, valorRecuperado: 0 };
       map[proj].count++;
       map[proj].valor += m.valor_multa || 0;
+      if (m.condutor_identificado) {
+        map[proj].valorRecuperado += m.valor_multa || 0;
+      }
     });
     return Object.entries(map)
       .map(([proj, d]) => ({ proj, ...d }))
@@ -470,7 +473,16 @@ export default function MultasPage() {
                       <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5">
                         <div className="bg-rose-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (r.count / (rankingProjetos[0]?.count || 1)) * 100)}%` }} />
                       </div>
-                      {r.valor > 0 && <p className="text-[10px] text-gray-400 mt-0.5">{formatCurrency(r.valor)}</p>}
+                      {r.valor > 0 && (
+                        <div className="flex items-center gap-2 mt-0.5 text-[10px]">
+                          <span className="text-gray-400">{formatCurrency(r.valor)}</span>
+                          {r.valorRecuperado > 0 && (
+                            <span className="text-emerald-500 font-medium">
+                              (Recup. {formatCurrency(r.valorRecuperado)})
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
