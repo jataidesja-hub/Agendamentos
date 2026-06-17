@@ -230,15 +230,21 @@ export default function CotPage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoAtividade | "todos">("todos");
   const [filtroStatus, setFiltroStatus] = useState<StatusTarefa | "todos">("todos");
 
-  // Filtros de coluna (tarefas)
-  const [colFiltros, setColFiltros] = useState<Record<string, string>>({});
-  const setColFiltro = (key: string, val: string) =>
-    setColFiltros(prev => ({ ...prev, [key]: val }));
+  // Ordenação tarefas
+  const [sortCol, setSortCol] = useState<string>("data_fim");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (col: string) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
 
-  // Filtros de coluna (eventos)
-  const [colFiltrosEvt, setColFiltrosEvt] = useState<Record<string, string>>({});  
-  const setColFiltroEvt = (key: string, val: string) =>
-    setColFiltrosEvt(prev => ({ ...prev, [key]: val }));
+  // Ordenação eventos
+  const [sortColEvt, setSortColEvt] = useState<string>("data");
+  const [sortDirEvt, setSortDirEvt] = useState<"asc" | "desc">("desc");
+  const toggleSortEvt = (col: string) => {
+    if (sortColEvt === col) setSortDirEvt(d => d === "asc" ? "desc" : "asc");
+    else { setSortColEvt(col); setSortDirEvt("asc"); }
+  };
 
   const loadTarefas = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -1180,20 +1186,32 @@ export default function CotPage() {
             const cfg = isEvento ? TIPO_EVENTO_CONFIG[sub as TipoEvento] : SUBTIPO_CONFIG[sub as Subtipo];
             
             if (isEvento) {
-              const evtBase = eventosAtivos.filter(e =>
-                e.tipo === sub &&
-                (!colFiltrosEvt.subestacao || (e.subestacao || "").toLowerCase().includes(colFiltrosEvt.subestacao.toLowerCase())) &&
-                (!colFiltrosEvt.ativo || (e.ativo || "").toLowerCase().includes(colFiltrosEvt.ativo.toLowerCase())) &&
-                (!colFiltrosEvt.descricao || (e.descricao || "").toLowerCase().includes(colFiltrosEvt.descricao.toLowerCase()))
-              );
-              const evtAtivos = evtBase;
-              const evtArquivados = eventosArquivados.filter(e => e.tipo === sub);
+              const EVT_SORT_COLS = ["subestacao", "ativo", "data", "status_evt"];
+              const evtBase = eventosAtivos.filter(e => e.tipo === sub);
+              const applyEvtSort = (arr: Evento[]) => {
+                const dir = sortDirEvt === "asc" ? 1 : -1;
+                return [...arr].sort((a, b) => {
+                  switch (sortColEvt) {
+                    case "subestacao": return dir * (a.subestacao || "").localeCompare(b.subestacao || "");
+                    case "ativo":      return dir * (a.ativo || "").localeCompare(b.ativo || "");
+                    case "status_evt": return dir * (a.status || "").localeCompare(b.status || "");
+                    case "data": {
+                      const da = a.data_inicio ? new Date(a.data_inicio).getTime() : 0;
+                      const db = b.data_inicio ? new Date(b.data_inicio).getTime() : 0;
+                      return dir * (da - db);
+                    }
+                    default: return 0;
+                  }
+                });
+              };
+              const evtAtivos = applyEvtSort(evtBase);
+              const evtArquivados = applyEvtSort(eventosArquivados.filter(e => e.tipo === sub));
 
-              const evColKeys: { label: string; key: string; align: string; show?: boolean }[] = [
-                { label: "Subestação", key: "subestacao", align: "text-left",   show: true },
+              const evColKeys: { label: string; key: string; align: string }[] = [
+                { label: "Subestação", key: "subestacao", align: "text-left" },
                 { label: "Concessão",  key: "concessao",  align: "text-left" },
-                { label: "Ativo",      key: "ativo",      align: "text-left",   show: true },
-                { label: "Descrição",  key: "descricao",  align: "text-left",   show: true },
+                { label: "Ativo",      key: "ativo",      align: "text-left" },
+                { label: "Descrição",  key: "descricao",  align: "text-left" },
                 { label: "Data",       key: "data",       align: "text-center" },
                 { label: "Status",     key: "status_evt", align: "text-center" },
                 { label: "Registro",   key: "reg_evt",    align: "text-center" },
@@ -1208,21 +1226,23 @@ export default function CotPage() {
                       onChange={() => toggleSelectAllEventos(lista)}
                       className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
                   </th>
-                  {evColKeys.map(h => (
-                    <th key={h.key} className={`${h.align} px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest`}>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="whitespace-nowrap">{h.label}</span>
-                        {h.show && (
-                          <input
-                            value={colFiltrosEvt[h.key] || ""}
-                            onChange={e => setColFiltroEvt(h.key, e.target.value)}
-                            placeholder="🔍"
-                            className="w-full px-1 py-0.5 text-[9px] font-normal bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-700 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                          />
-                        )}
-                      </div>
+                  {evColKeys.map(h => {
+                    const sortable = EVT_SORT_COLS.includes(h.key);
+                    const active = sortColEvt === h.key;
+                    return (
+                    <th key={h.key}
+                      onClick={() => sortable && toggleSortEvt(h.key)}
+                      className={`${h.align} px-3 py-2 text-[9px] font-black uppercase tracking-widest whitespace-nowrap select-none ${
+                        sortable ? "cursor-pointer hover:text-white text-gray-400" : "text-gray-400"
+                      } ${active ? "text-white" : ""}`}>
+                      {h.label}
+                      {sortable && (
+                        <span className={`ml-0.5 ${active ? "text-[#4ade80]" : "text-gray-600"}`}>
+                          {active ? (sortDirEvt === "asc" ? " ↑" : " ↓") : " ↕"}
+                        </span>
+                      )}
                     </th>
-                  ))}
+                  );})}
                 </tr>
               );
               
@@ -1266,69 +1286,67 @@ export default function CotPage() {
               if (t.subtipo !== sub) return false;
               if (filtroTipo !== "todos" && t.tipo_atividade !== filtroTipo) return false;
               if (filtroStatus !== "todos" && t.status !== filtroStatus) return false;
-              // filtros de coluna
-              if (colFiltros.projeto && !t.nome_projeto.toLowerCase().includes(colFiltros.projeto.toLowerCase())) return false;
-              if (colFiltros.atividade && !t.atividade.toLowerCase().includes(colFiltros.atividade.toLowerCase())) return false;
-              if (colFiltros.numero_doc && !(t.numero_documento || "").toLowerCase().includes(colFiltros.numero_doc.toLowerCase())) return false;
-              if (colFiltros.status && !(t.status || "").toLowerCase().includes(colFiltros.status.toLowerCase())) return false;
-              if (colFiltros.registro && !(t.registro || "").toLowerCase().includes(colFiltros.registro.toLowerCase())) return false;
               return true;
             });
             const tArquivadas = base.filter(t => t.arquivada).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-            const tAtivas = base.filter(t => !t.arquivada && t.status !== "concluida").sort((a, b) => {
-              const hoje = new Date().toISOString().split("T")[0];
-              const isContinuaHoje = (t: CotTarefa) => t.tipo_atividade === "continua" && !!t.data_fim && t.data_fim.startsWith(hoje);
-              
-              if (isContinuaHoje(a) && !isContinuaHoje(b)) return -1;
-              if (!isContinuaHoje(a) && isContinuaHoje(b)) return 1;
+            const applySort = (arr: CotTarefa[]) => {
+              const dir = sortDir === "asc" ? 1 : -1;
+              return [...arr].sort((a, b) => {
+                switch (sortCol) {
+                  case "projeto":    return dir * a.nome_projeto.localeCompare(b.nome_projeto);
+                  case "atividade":  return dir * a.atividade.localeCompare(b.atividade);
+                  case "status_col": return dir * a.status.localeCompare(b.status);
+                  case "numero_doc": return dir * (a.numero_documento || "").localeCompare(b.numero_documento || "");
+                  case "tipo":       return dir * a.tipo_atividade.localeCompare(b.tipo_atividade);
+                  case "data_fim": {
+                    const da = a.data_fim ? new Date(a.data_fim).getTime() : Infinity;
+                    const db = b.data_fim ? new Date(b.data_fim).getTime() : Infinity;
+                    return dir * (da - db);
+                  }
+                  default: return 0;
+                }
+              });
+            };
+            const tAtivas    = applySort(base.filter(t => !t.arquivada && t.status !== "concluida"));
+            const tConcluidas = applySort(base.filter(t => !t.arquivada && t.status === "concluida"));
+            const tArquivadas2 = applySort(base.filter(t => t.arquivada));
 
-              const getVenc = (t: CotTarefa) => {
-                if (!t.data_fim) return Infinity;
-                const dt = t.data_fim.split("T")[0] + "T" + (t.hora_fim ? t.hora_fim : "23:59") + ":00";
-                return new Date(dt).getTime();
-              };
-              const peso = (t: CotTarefa) => (t.status === "em_execucao" || t.status === "programada") ? 0 : 1;
-              if (peso(a) !== peso(b)) return peso(a) - peso(b);
-              return getVenc(a) - getVenc(b);
-            });
-            const tConcluidas = base.filter(t => !t.arquivada && t.status === "concluida").sort((a, b) => {
-              const ta = a.concluida_em ? new Date(a.concluida_em).getTime() : 0;
-              const tb = b.concluida_em ? new Date(b.concluida_em).getTime() : 0;
-              return tb - ta;
-            });
-
-            const colFiltroKeys: { label: string; key: string; align: string; show?: boolean }[] = [
-              { label: "Tipo",     key: "tipo",       align: "text-center" },
-              { label: "Nº Tipo", key: "tipo_num",   align: "text-center" },
-              { label: "Projeto", key: "projeto",    align: "text-center", show: true },
-              { label: "Atividade", key: "atividade", align: "text-center", show: true },
+            const SORT_COLS = ["tipo", "projeto", "atividade", "numero_doc", "data_fim", "status_col"];
+            const colHeaders: { label: string; key: string; align: string }[] = [
+              { label: "Tipo",      key: "tipo",        align: "text-center" },
+              { label: "Nº Tipo",  key: "tipo_num",    align: "text-center" },
+              { label: "Projeto",  key: "projeto",     align: "text-center" },
+              { label: "Atividade",key: "atividade",   align: "text-center" },
               ...(isDocExt ? [{ label: "Agente", key: "agente", align: "text-center" }] : []),
-              { label: !isDocExt ? "Nº PES / Doc." : "Nº Documento", key: "numero_doc", align: "text-center", show: true },
-              { label: "Data Fim", key: "data_fim",  align: "text-center" },
-              { label: "Status",   key: "status_col",align: "text-center", show: true },
-              { label: "Doc. Ext.", key: "doc_ext",  align: "text-center" },
-              { label: "Registro", key: "registro_col", align: "text-center", show: true },
-              { label: "Obs.",     key: "obs",        align: "text-center" },
-              { label: "",         key: "_acoes",     align: "text-center" },
+              { label: !isDocExt ? "Nº PES / Doc." : "Nº Documento", key: "numero_doc", align: "text-center" },
+              { label: "Data Fim", key: "data_fim",    align: "text-center" },
+              { label: "Status",   key: "status_col",  align: "text-center" },
+              { label: "Doc. Ext.",key: "doc_ext",     align: "text-center" },
+              { label: "Registro", key: "registro_col",align: "text-center" },
+              { label: "Obs.",     key: "obs",          align: "text-center" },
+              { label: "",         key: "_acoes",       align: "text-center" },
             ];
 
             const renderTarefaHeader = () => (
               <tr className="border-b border-gray-100 dark:border-gray-800">
-                {colFiltroKeys.map((h) => (
-                  <th key={h.key} className={`${h.align} px-1.5 py-1 text-[8px] font-black text-gray-400 uppercase tracking-tighter`}>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="whitespace-nowrap">{h.label}</span>
-                      {h.show && (
-                        <input
-                          value={colFiltros[h.key] || ""}
-                          onChange={e => setColFiltro(h.key, e.target.value)}
-                          placeholder="🔍"
-                          className="w-full px-1 py-0.5 text-[9px] font-normal bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-700 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                        />
+                {colHeaders.map((h) => {
+                  const sortable = SORT_COLS.includes(h.key);
+                  const active = sortCol === h.key;
+                  return (
+                    <th key={h.key}
+                      onClick={() => sortable && toggleSort(h.key)}
+                      className={`${h.align} px-1.5 py-2 text-[8px] font-black uppercase tracking-tighter whitespace-nowrap select-none ${
+                        sortable ? "cursor-pointer hover:text-white text-gray-400" : "text-gray-400"
+                      } ${active ? "text-white" : ""}`}>
+                      {h.label}
+                      {sortable && (
+                        <span className={`ml-0.5 ${active ? "text-[#4ade80]" : "text-gray-600"}`}>
+                          {active ? (sortDir === "asc" ? " ↑" : " ↓") : " ↕"}
+                        </span>
                       )}
-                    </div>
-                  </th>
-                ))}
+                    </th>
+                  );
+                })}
               </tr>
             );
 
@@ -1348,7 +1366,7 @@ export default function CotPage() {
                     ) : (
                       <table className="w-full">
                         <thead>{renderTarefaHeader()}</thead>
-                        <tbody>{tArquivadas.map(t => renderRow(t, true, isDocExt))}</tbody>
+                        <tbody>{tArquivadas2.map(t => renderRow(t, true, isDocExt))}</tbody>
                       </table>
                     )
                   ) : (tAtivas.length === 0 && tConcluidas.length === 0) ? (
