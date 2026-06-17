@@ -230,6 +230,16 @@ export default function CotPage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoAtividade | "todos">("todos");
   const [filtroStatus, setFiltroStatus] = useState<StatusTarefa | "todos">("todos");
 
+  // Filtros de coluna (tarefas)
+  const [colFiltros, setColFiltros] = useState<Record<string, string>>({});
+  const setColFiltro = (key: string, val: string) =>
+    setColFiltros(prev => ({ ...prev, [key]: val }));
+
+  // Filtros de coluna (eventos)
+  const [colFiltrosEvt, setColFiltrosEvt] = useState<Record<string, string>>({});  
+  const setColFiltroEvt = (key: string, val: string) =>
+    setColFiltrosEvt(prev => ({ ...prev, [key]: val }));
+
   const loadTarefas = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
@@ -1170,18 +1180,51 @@ export default function CotPage() {
             const cfg = isEvento ? TIPO_EVENTO_CONFIG[sub as TipoEvento] : SUBTIPO_CONFIG[sub as Subtipo];
             
             if (isEvento) {
-              const evtAtivos = eventosAtivos.filter(e => e.tipo === sub);
+              const evtBase = eventosAtivos.filter(e =>
+                e.tipo === sub &&
+                (!colFiltrosEvt.subestacao || (e.subestacao || "").toLowerCase().includes(colFiltrosEvt.subestacao.toLowerCase())) &&
+                (!colFiltrosEvt.ativo || (e.ativo || "").toLowerCase().includes(colFiltrosEvt.ativo.toLowerCase())) &&
+                (!colFiltrosEvt.descricao || (e.descricao || "").toLowerCase().includes(colFiltrosEvt.descricao.toLowerCase()))
+              );
+              const evtAtivos = evtBase;
               const evtArquivados = eventosArquivados.filter(e => e.tipo === sub);
-              const evHeaders = [
-                { label: "Subestação", align: "text-left" },
-                { label: "Concessão",  align: "text-left" },
-                { label: "Ativo",      align: "text-left" },
-                { label: "Descrição",  align: "text-left" },
-                { label: "Data",       align: "text-center" },
-                { label: "Status",     align: "text-center" },
-                { label: "Registro",   align: "text-center" },
-                { label: "",           align: "text-center" },
+
+              const evColKeys: { label: string; key: string; align: string; show?: boolean }[] = [
+                { label: "Subestação", key: "subestacao", align: "text-left",   show: true },
+                { label: "Concessão",  key: "concessao",  align: "text-left" },
+                { label: "Ativo",      key: "ativo",      align: "text-left",   show: true },
+                { label: "Descrição",  key: "descricao",  align: "text-left",   show: true },
+                { label: "Data",       key: "data",       align: "text-center" },
+                { label: "Status",     key: "status_evt", align: "text-center" },
+                { label: "Registro",   key: "reg_evt",    align: "text-center" },
+                { label: "",           key: "_",          align: "text-center" },
               ];
+
+              const renderEvtHeader = (lista: Evento[]) => (
+                <tr className="border-b border-gray-100 dark:border-gray-800">
+                  <th className="px-3 py-3 w-10">
+                    <input type="checkbox"
+                      checked={lista.length > 0 && lista.every(e => selecionados.has(e.id))}
+                      onChange={() => toggleSelectAllEventos(lista)}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                  </th>
+                  {evColKeys.map(h => (
+                    <th key={h.key} className={`${h.align} px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest`}>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="whitespace-nowrap">{h.label}</span>
+                        {h.show && (
+                          <input
+                            value={colFiltrosEvt[h.key] || ""}
+                            onChange={e => setColFiltroEvt(h.key, e.target.value)}
+                            placeholder="🔍"
+                            className="w-full px-1 py-0.5 text-[9px] font-normal bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-700 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          />
+                        )}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              );
               
               return (
                 <div key={sub} className="bg-white dark:bg-gray-900 rounded-[1.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden">
@@ -1197,16 +1240,7 @@ export default function CotPage() {
                         </div>
                       ) : (
                         <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-gray-100 dark:border-gray-800">
-                              <th className="px-3 py-3 w-10">
-                                <input type="checkbox" checked={evtArquivados.length > 0 && evtArquivados.every(e => selecionados.has(e.id))} onChange={() => toggleSelectAllEventos(evtArquivados)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
-                              </th>
-                              {evHeaders.map((h, i) => (
-                                <th key={i} className={`${h.align} px-3 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
-                              ))}
-                            </tr>
-                          </thead>
+                          <thead>{renderEvtHeader(evtArquivados)}</thead>
                           <tbody>{evtArquivados.map(e => renderRowEvento(e))}</tbody>
                         </table>
                       )
@@ -1217,22 +1251,14 @@ export default function CotPage() {
                       </div>
                     ) : (
                       <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-gray-100 dark:border-gray-800">
-                            <th className="px-3 py-3 w-10">
-                              <input type="checkbox" checked={evtAtivos.length > 0 && evtAtivos.every(e => selecionados.has(e.id))} onChange={() => toggleSelectAllEventos(evtAtivos)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
-                            </th>
-                            {evHeaders.map((h, i) => (
-                              <th key={i} className={`${h.align} px-3 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap`}>{h.label}</th>
-                            ))}
-                          </tr>
-                        </thead>
+                        <thead>{renderEvtHeader(evtAtivos)}</thead>
                         <tbody>{evtAtivos.map(e => renderRowEvento(e))}</tbody>
                       </table>
                     )}
                   </div>
                 </div>
               );
+
             }
             
             // Re-filter tasks for this panel
@@ -1240,6 +1266,12 @@ export default function CotPage() {
               if (t.subtipo !== sub) return false;
               if (filtroTipo !== "todos" && t.tipo_atividade !== filtroTipo) return false;
               if (filtroStatus !== "todos" && t.status !== filtroStatus) return false;
+              // filtros de coluna
+              if (colFiltros.projeto && !t.nome_projeto.toLowerCase().includes(colFiltros.projeto.toLowerCase())) return false;
+              if (colFiltros.atividade && !t.atividade.toLowerCase().includes(colFiltros.atividade.toLowerCase())) return false;
+              if (colFiltros.numero_doc && !(t.numero_documento || "").toLowerCase().includes(colFiltros.numero_doc.toLowerCase())) return false;
+              if (colFiltros.status && !(t.status || "").toLowerCase().includes(colFiltros.status.toLowerCase())) return false;
+              if (colFiltros.registro && !(t.registro || "").toLowerCase().includes(colFiltros.registro.toLowerCase())) return false;
               return true;
             });
             const tArquivadas = base.filter(t => t.arquivada).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
@@ -1265,20 +1297,40 @@ export default function CotPage() {
               return tb - ta;
             });
 
-            const headers = [
-              { label: "Tipo",         align: "text-center" },
-              { label: "Nº Tipo",      align: "text-center" },
-              { label: "Projeto",      align: "text-center" },
-              { label: "Atividade",    align: "text-center" },
-              ...(isDocExt ? [{ label: "Agente", align: "text-center" }] : []),
-              { label: !isDocExt ? "Nº PES / Doc." : "Nº Documento", align: "text-center" },
-              { label: "Data Fim",     align: "text-center" },
-              { label: "Status",       align: "text-center" },
-              { label: "Doc. Ext.",    align: "text-center" },
-              { label: "Registro",     align: "text-center" },
-              { label: "Obs.",         align: "text-center" },
-              { label: "",             align: "text-center" },
+            const colFiltroKeys: { label: string; key: string; align: string; show?: boolean }[] = [
+              { label: "Tipo",     key: "tipo",       align: "text-center" },
+              { label: "Nº Tipo", key: "tipo_num",   align: "text-center" },
+              { label: "Projeto", key: "projeto",    align: "text-center", show: true },
+              { label: "Atividade", key: "atividade", align: "text-center", show: true },
+              ...(isDocExt ? [{ label: "Agente", key: "agente", align: "text-center" }] : []),
+              { label: !isDocExt ? "Nº PES / Doc." : "Nº Documento", key: "numero_doc", align: "text-center", show: true },
+              { label: "Data Fim", key: "data_fim",  align: "text-center" },
+              { label: "Status",   key: "status_col",align: "text-center", show: true },
+              { label: "Doc. Ext.", key: "doc_ext",  align: "text-center" },
+              { label: "Registro", key: "registro_col", align: "text-center", show: true },
+              { label: "Obs.",     key: "obs",        align: "text-center" },
+              { label: "",         key: "_acoes",     align: "text-center" },
             ];
+
+            const renderTarefaHeader = () => (
+              <tr className="border-b border-gray-100 dark:border-gray-800">
+                {colFiltroKeys.map((h) => (
+                  <th key={h.key} className={`${h.align} px-1.5 py-1 text-[8px] font-black text-gray-400 uppercase tracking-tighter`}>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="whitespace-nowrap">{h.label}</span>
+                      {h.show && (
+                        <input
+                          value={colFiltros[h.key] || ""}
+                          onChange={e => setColFiltro(h.key, e.target.value)}
+                          placeholder="🔍"
+                          className="w-full px-1 py-0.5 text-[9px] font-normal bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-700 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        />
+                      )}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            );
 
             return (
               <div key={sub} className="bg-white dark:bg-gray-900 rounded-[1.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden">
@@ -1295,13 +1347,7 @@ export default function CotPage() {
                       </div>
                     ) : (
                       <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-gray-100 dark:border-gray-800">
-                            {headers.map((h, i) => (
-                              <th key={i} className={`${h.align} px-1.5 py-2 text-[8px] font-black text-gray-400 uppercase tracking-tighter whitespace-nowrap`}>{h.label}</th>
-                            ))}
-                          </tr>
-                        </thead>
+                        <thead>{renderTarefaHeader()}</thead>
                         <tbody>{tArquivadas.map(t => renderRow(t, true, isDocExt))}</tbody>
                       </table>
                     )
@@ -1312,18 +1358,12 @@ export default function CotPage() {
                     </div>
                   ) : (
                     <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-100 dark:border-gray-800">
-                          {headers.map((h, i) => (
-                            <th key={i} className={`${h.align} px-1.5 py-2 text-[8px] font-black text-gray-400 uppercase tracking-tighter whitespace-nowrap`}>{h.label}</th>
-                          ))}
-                        </tr>
-                      </thead>
+                      <thead>{renderTarefaHeader()}</thead>
                       <tbody>
                         {tAtivas.map(t => renderRow(t, false, isDocExt))}
                         {tConcluidas.length > 0 && (
                           <tr>
-                            <td colSpan={headers.length} className="px-4 pt-4 pb-2">
+                            <td colSpan={colFiltroKeys.length} className="px-4 pt-4 pb-2">
                               <div className="flex items-center gap-3">
                                 <div className="flex-1 border-t border-dashed border-emerald-500/20" />
                                 <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/8 border border-emerald-500/20">
