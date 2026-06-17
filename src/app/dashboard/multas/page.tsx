@@ -153,6 +153,7 @@ export default function MultasPage() {
   }, [multas]);
 
   const totalValor = useMemo(() => multas.reduce((acc, m) => acc + (m.valor_multa || 0), 0), [multas]);
+  const totalRecuperado = useMemo(() => multas.reduce((acc, m) => acc + (m.condutor_identificado ? (m.valor_multa || 0) : 0), 0), [multas]);
 
   function resetForm() {
     setPlaca(""); setAutoInfracao(""); setGestor(""); setObs("");
@@ -400,6 +401,9 @@ export default function MultasPage() {
           <div className="mt-2 flex items-center gap-2">
             <span className="text-xs font-black text-rose-600 bg-rose-50 dark:bg-rose-900/20 px-3 py-1 rounded-full border border-rose-200 dark:border-rose-800">
               Total em multas: {formatCurrency(totalValor)}
+            </span>
+            <span className="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800" title="Valor recuperado através da indicação de condutor">
+              Recuperado: {formatCurrency(totalRecuperado)}
             </span>
           </div>
         </div>
