@@ -1,7 +1,8 @@
 import Sidebar from "./Sidebar";
 import MobileNav from "./MobileNav";
 import InstallPrompt from "@/components/InstallPrompt";
-import { MagnifyingGlassIcon, BellIcon } from "@heroicons/react/24/outline";
+import { BellIcon } from "@heroicons/react/24/outline";
+import SearchBar from "@/components/SearchBar";
 
 export default function DashboardLayout({
   children,
@@ -24,17 +25,8 @@ export default function DashboardLayout({
       <div className="flex-1 flex flex-col overflow-hidden relative z-0">
         <header className="h-20 md:h-24 flex justify-between items-center px-4 md:px-8 bg-transparent transition-all duration-300">
           <div className="flex-1 flex items-center pr-2 md:pr-4 mt-2">
-            <div className="relative w-full max-w-[200px] md:max-w-md hidden sm:block">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
-              </div>
-              <input
-                type="text"
-                className="block w-full pl-11 pr-4 py-2.5 md:py-3 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border-0 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-[#0b7336] shadow-sm transition-all duration-300 text-sm"
-                placeholder="Pesquisar..."
-              />
-            </div>
-            {/* Mobile Logo Placeholder or Title */}
+            <SearchBar />
+            {/* Mobile Logo */}
             <div className="sm:hidden flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0b7336] to-[#298d4a] flex items-center justify-center shadow-lg">
                 <span className="text-white font-black text-xs">C</span>
