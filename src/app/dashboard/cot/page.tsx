@@ -1196,8 +1196,8 @@ export default function CotPage() {
                     case "ativo":      return dir * (a.ativo || "").localeCompare(b.ativo || "");
                     case "status_evt": return dir * (a.status || "").localeCompare(b.status || "");
                     case "data": {
-                      const da = a.data_inicio ? new Date(a.data_inicio).getTime() : 0;
-                      const db = b.data_inicio ? new Date(b.data_inicio).getTime() : 0;
+                      const da = a.data ? new Date(a.data).getTime() : 0;
+                      const db = b.data ? new Date(b.data).getTime() : 0;
                       return dir * (da - db);
                     }
                     default: return 0;
@@ -1381,7 +1381,7 @@ export default function CotPage() {
                         {tAtivas.map(t => renderRow(t, false, isDocExt))}
                         {tConcluidas.length > 0 && (
                           <tr>
-                            <td colSpan={colFiltroKeys.length} className="px-4 pt-4 pb-2">
+                            <td colSpan={colHeaders.length} className="px-4 pt-4 pb-2">
                               <div className="flex items-center gap-3">
                                 <div className="flex-1 border-t border-dashed border-emerald-500/20" />
                                 <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/8 border border-emerald-500/20">
