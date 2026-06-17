@@ -14,8 +14,8 @@ import { supabase } from "@/lib/supabase";
 
 type Subtipo = "pes" | "doc_ext";
 type TipoAtividade = "diaria" | "continua";
-type StatusDiaria = "programada" | "em_execucao" | "interrompida" | "concluida";
-type StatusContinua = "programada" | "em_execucao" | "concluida";
+type StatusDiaria = "programada" | "iniciada" | "em_execucao" | "interrompida" | "concluida";
+type StatusContinua = "programada" | "iniciada" | "em_execucao" | "concluida";
 type StatusTarefa = StatusDiaria | StatusContinua;
 type Registro = "registrada" | "nao_registrada";
 
@@ -76,6 +76,7 @@ interface Evento {
 
 const STATUS_DIARIA: { id: StatusDiaria; label: string; badge: string; dot: string; icon: any }[] = [
   { id: "programada",   label: "Programada",   badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: CalendarDaysIcon },
+  { id: "iniciada",     label: "Iniciada",     badge: "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",      dot: "bg-indigo-400",  icon: PlayIcon },
   { id: "em_execucao",  label: "Em execução",  badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",         dot: "bg-amber-400",   icon: ClockIcon },
   { id: "interrompida", label: "Interrompida", badge: "bg-rose-500/15 text-rose-400 border-rose-500/30",            dot: "bg-rose-400",    icon: ExclamationTriangleIcon },
   { id: "concluida",    label: "Concluída",    badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",   dot: "bg-emerald-400", icon: CheckCircleIcon },
@@ -83,6 +84,7 @@ const STATUS_DIARIA: { id: StatusDiaria; label: string; badge: string; dot: stri
 
 const STATUS_CONTINUA: { id: StatusContinua; label: string; badge: string; dot: string; icon: any }[] = [
   { id: "programada",  label: "Programada",  badge: "bg-sky-500/15 text-sky-400 border-sky-500/30",               dot: "bg-sky-400",     icon: CalendarDaysIcon },
+  { id: "iniciada",    label: "Iniciada",    badge: "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",      dot: "bg-indigo-400",  icon: PlayIcon },
   { id: "em_execucao", label: "Em execução", badge: "bg-amber-500/15 text-amber-400 border-amber-500/30",         dot: "bg-amber-400",   icon: ClockIcon },
   { id: "concluida",   label: "Concluída",   badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",   dot: "bg-emerald-400", icon: CheckCircleIcon },
 ];
@@ -835,17 +837,29 @@ export default function CotPage() {
               <span className="text-[7px] text-gray-500 uppercase tracking-widest">arquivo em</span>
             </div>
           ) : (
-            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              {!isArquivada && (
-                <button onClick={() => abrirEdicao(t)}
-                  className="p-1.5 text-gray-400 hover:text-[#0b7336] hover:bg-green-50 dark:hover:bg-green-500/10 rounded-lg transition-colors">
-                  <PencilSquareIcon className="w-4 h-4" />
+            <div className="flex items-center justify-end gap-1">
+              {/* Passar Turno: só aparece quando status = iniciada */}
+              {!isArquivada && t.status === "iniciada" && (
+                <button
+                  onClick={() => alterarStatus(t.id, t.tipo_atividade, "em_execucao")}
+                  title="Passar Turno → Em execução"
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 text-[9px] font-black transition-all whitespace-nowrap">
+                  <PlayIcon className="w-3 h-3" />
+                  Passar Turno
                 </button>
               )}
-              <button onClick={() => excluir(t.id)}
-                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
-                <TrashIcon className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {!isArquivada && (
+                  <button onClick={() => abrirEdicao(t)}
+                    className="p-1.5 text-gray-400 hover:text-[#0b7336] hover:bg-green-50 dark:hover:bg-green-500/10 rounded-lg transition-colors">
+                    <PencilSquareIcon className="w-4 h-4" />
+                  </button>
+                )}
+                <button onClick={() => excluir(t.id)}
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
         </td>
