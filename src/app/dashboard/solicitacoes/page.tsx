@@ -624,7 +624,7 @@ export default function SolicitacoesPage() {
                     <div>
                       <label className="block text-xs font-bold text-gray-500 mb-1">Descrição / Observações (Opcional)</label>
                       <textarea value={conclusaoDesc} onChange={e => setConclusaoDesc(e.target.value)} 
-                        className="w-full p-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all" 
+                        className="w-full p-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all" 
                         rows={3} placeholder="Descreva o que foi feito..." />
                     </div>
                     <div>
