@@ -41,6 +41,7 @@ export default function UsuariosPage() {
     { id: 'multas', nome: 'Gerenciamento de Multas' },
     { id: 'telecom', nome: 'Controle Telecom' },
     { id: 'informacoes', nome: 'Informações (Senhas/Transformadores/Yealink)' },
+    { id: 'solicitacoes', nome: 'Solicitações de Manutenção (Admin)' },
   ];
 
   useEffect(() => {

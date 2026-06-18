@@ -22,6 +22,7 @@ import {
   ExclamationTriangleIcon,
   PhoneIcon,
   InformationCircleIcon,
+  WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 
 import { supabase } from "@/lib/supabase";
@@ -49,6 +50,7 @@ const iconMap: Record<string, any> = {
   ExclamationTriangleIcon,
   PhoneIcon,
   InformationCircleIcon,
+  WrenchScrewdriverIcon,
 };
 
 export default function Sidebar() {

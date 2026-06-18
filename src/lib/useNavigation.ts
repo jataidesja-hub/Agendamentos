@@ -33,6 +33,7 @@ const DEFAULT_NAV: NavItem[] = [
   { id: "multas", name: "Multas", href: "/dashboard/multas", iconName: "ClipboardDocumentCheckIcon" },
   { id: "telecom", name: "Controle Telecom", href: "/dashboard/telecom", iconName: "PhoneIcon" },
   { id: "informacoes", name: "Informações", href: "/dashboard/informacoes", iconName: "InformationCircleIcon" },
+  { id: "solicitacoes", name: "Solicitações de Manut.", href: "/dashboard/solicitacoes", iconName: "WrenchScrewdriverIcon" },
 ];
 
 // Nomes curtos para mobile
@@ -56,6 +57,7 @@ export const MOBILE_NAMES: Record<string, string> = {
   multas: "Multas",
   telecom: "Telecom",
   informacoes: "Info",
+  solicitacoes: "Solicit.",
 };
 
 function getSavedOrder(): string[] | null {
