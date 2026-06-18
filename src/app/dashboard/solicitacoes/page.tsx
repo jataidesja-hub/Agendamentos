@@ -1,796 +1,430 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  WrenchScrewdriverIcon,
-  TruckIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ExclamationTriangleIcon,
-  MagnifyingGlassIcon,
-  ArrowPathIcon,
-  XMarkIcon,
-  ChevronDownIcon,
-  PhotoIcon,
-  ArrowTopRightOnSquareIcon,
+  WrenchScrewdriverIcon, TruckIcon, ClockIcon, CheckCircleIcon,
+  XCircleIcon, ExclamationTriangleIcon, XMarkIcon, PhotoIcon,
+  BellAlertIcon, EyeIcon,
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 interface Solicitacao {
   id: string;
   placa: string;
-  tipo_manutencao: string | null;
-  prioridade: string | null;
-  status: string | null;
   projeto: string | null;
   nome_solicitante: string | null;
+  funcao: string | null;
+  instalacao_base: string | null;
+  km_atual: number | null;
+  tipo_frota: string | null;
+  tipo_manutencao: string[] | null;
+  tipo_manutencao_outro: string | null;
+  pode_operar: string | null;
+  prioridade: string | null;
+  impacto_operacional: string | null;
   descricao: string | null;
-  km_atual: string | null;
-  data_ultima_manutencao: string | null;
-  oficina_sugerida: string | null;
-  orcamento_estimado: string | null;
-  observacoes: string | null;
+  categoria_servico: string[] | null;
+  categoria_outro: string | null;
   fotos: string[] | null;
+  status: string | null;
   created_at: string;
   updated_at: string | null;
 }
 
-interface Veiculo {
-  id: string;
-  placa: string;
-  modelo: string | null;
-  projeto: string | null;
-}
+const PRIORIDADE_LABEL: Record<string, string> = { baixa: 'Baixa', media: 'Média', alta: 'Alta', emergencial: 'Emergencial', operacional: 'Emergencial' };
+const STATUS_LABEL: Record<string, string> = { aberto: 'Aberto', em_andamento: 'Em Andamento', concluido: 'Concluído', cancelado: 'Cancelado' };
+const PODE_OPERAR_LABEL: Record<string, string> = { sim: 'Sim', nao: 'Não', casos_especiais: 'Em Casos Especiais' };
+const IMPACTO_LABEL: Record<string, string> = { operacional: 'Veículo Operacional', restricao: 'Veículo com Restrição de Uso', indisponivel: 'Veículo Indisponível' };
+const TIPO_FROTA_LABEL: Record<string, string> = { alugada: 'Alugada', propria: 'Própria' };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const PRIORIDADE_LABELS: Record<string, string> = {
-  baixa: 'Baixa',
-  media: 'Média',
-  alta: 'Alta',
-  operacional: 'Operacional',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  aberto: 'Aberto',
-  em_andamento: 'Em Andamento',
-  concluido: 'Concluído',
-  cancelado: 'Cancelado',
-};
-
-function prioridadeBadge(p: string | null) {
+function prioBadge(p: string | null) {
+  const base = 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wide';
   switch (p) {
-    case 'baixa':
-      return 'bg-blue-500/15 text-blue-400 border border-blue-500/30';
-    case 'media':
-      return 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30';
-    case 'alta':
-      return 'bg-orange-500/15 text-orange-400 border border-orange-500/30';
-    case 'operacional':
-      return 'bg-red-500/15 text-red-400 border border-red-500/30 animate-pulse';
-    default:
-      return 'bg-gray-500/15 text-gray-400 border border-gray-500/30';
+    case 'baixa': return `${base} bg-blue-500/15 text-blue-400 border-blue-500/30`;
+    case 'media': return `${base} bg-yellow-500/15 text-yellow-400 border-yellow-500/30`;
+    case 'alta': return `${base} bg-orange-500/15 text-orange-400 border-orange-500/30`;
+    case 'emergencial': case 'operacional': return `${base} bg-red-500/15 text-red-400 border-red-500/30`;
+    default: return `${base} bg-gray-500/15 text-gray-400 border-gray-500/30`;
   }
 }
 
 function statusBadge(s: string | null) {
+  const base = 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wide';
   switch (s) {
-    case 'aberto':
-      return 'bg-gray-500/15 text-gray-400 border border-gray-500/30';
-    case 'em_andamento':
-      return 'bg-amber-500/15 text-amber-400 border border-amber-500/30';
-    case 'concluido':
-      return 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-    case 'cancelado':
-      return 'bg-rose-500/15 text-rose-400 border border-rose-500/30';
-    default:
-      return 'bg-gray-500/15 text-gray-400 border border-gray-500/30';
+    case 'aberto': return `${base} bg-gray-500/15 text-gray-400 border-gray-500/30`;
+    case 'em_andamento': return `${base} bg-amber-500/15 text-amber-400 border-amber-500/30`;
+    case 'concluido': return `${base} bg-emerald-500/15 text-emerald-400 border-emerald-500/30`;
+    case 'cancelado': return `${base} bg-rose-500/15 text-rose-400 border-rose-500/30`;
+    default: return `${base} bg-gray-500/15 text-gray-400 border-gray-500/30`;
   }
 }
 
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function fmtDate(d: string | null) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function formatDateShort(dateStr: string | null) {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-}
-
-// ─── Stat Card ───────────────────────────────────────────────────────────────
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: number;
-  color: string;
-}) {
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="bg-white dark:bg-gray-800/60 rounded-2xl border border-gray-200/60 dark:border-gray-700/40 p-5 flex items-center gap-4 shadow-sm">
-      <div className={`p-3 rounded-xl ${color}`}>
-        <Icon className="w-5 h-5" />
-      </div>
-      <div>
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</p>
-      </div>
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
+      <span className="text-sm font-medium text-gray-900 dark:text-white">{value || '—'}</span>
     </div>
   );
 }
 
-// ─── Modal ───────────────────────────────────────────────────────────────────
-
-function DetailModal({
-  sol,
-  onClose,
-  onStatusChange,
-}: {
-  sol: Solicitacao;
-  onClose: () => void;
-  onStatusChange: (id: string, status: string) => Promise<void>;
-}) {
-  const [updating, setUpdating] = useState(false);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-
-  const getFotoUrl = (path: string) =>
-    supabase.storage.from('manutencao-fotos').getPublicUrl(path).data.publicUrl;
-
-  const handleStatus = async (status: string) => {
-    setUpdating(true);
-    await onStatusChange(sol.id, status);
-    setUpdating(false);
-    onClose();
-  };
-
-  return (
-    <>
-      {/* Lightbox */}
-      {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setLightboxUrl(null)}
-        >
-          <img
-            src={lightboxUrl}
-            alt="Foto ampliada"
-            className="max-h-[90vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
-          />
-          <button
-            className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
-            onClick={() => setLightboxUrl(null)}
-          >
-            <XMarkIcon className="w-6 h-6 text-white" />
-          </button>
-        </div>
-      )}
-
-      {/* Modal backdrop */}
-      <div
-        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-        onClick={(e) => e.target === e.currentTarget && onClose()}
-      >
-        <div className="bg-white dark:bg-gray-900 rounded-[1.5rem] w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200/60 dark:border-gray-700/40">
-          {/* Header */}
-          <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 flex items-center justify-between px-6 py-4 border-b border-gray-200/60 dark:border-gray-700/40 rounded-t-[1.5rem]">
-            <div className="flex items-center gap-3">
-              <div className="bg-indigo-500/10 p-2 rounded-xl">
-                <WrenchScrewdriverIcon className="w-5 h-5 text-indigo-500" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  Placa {sol.placa}
-                </h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Solicitado em {formatDate(sol.created_at)}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              <XMarkIcon className="w-5 h-5 text-gray-500" />
-            </button>
-          </div>
-
-          <div className="p-6 space-y-6">
-            {/* Badges row */}
-            <div className="flex flex-wrap gap-2">
-              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${prioridadeBadge(sol.prioridade)}`}>
-                Prioridade: {PRIORIDADE_LABELS[sol.prioridade ?? ''] ?? sol.prioridade ?? '—'}
-              </span>
-              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusBadge(sol.status)}`}>
-                {STATUS_LABELS[sol.status ?? ''] ?? sol.status ?? '—'}
-              </span>
-            </div>
-
-            {/* Info grid */}
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: 'Tipo de Manutenção', value: sol.tipo_manutencao },
-                { label: 'Projeto', value: sol.projeto },
-                { label: 'Solicitante', value: sol.nome_solicitante },
-                { label: 'KM Atual', value: sol.km_atual },
-                { label: 'Última Manutenção', value: formatDateShort(sol.data_ultima_manutencao) },
-                { label: 'Oficina Sugerida', value: sol.oficina_sugerida },
-                { label: 'Orçamento Estimado', value: sol.orcamento_estimado },
-                { label: 'Atualizado em', value: formatDate(sol.updated_at) },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">
-                    {label}
-                  </p>
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                    {value || '—'}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            {/* Descrição */}
-            {sol.descricao && (
-              <div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">
-                  Descrição
-                </p>
-                <p className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 leading-relaxed">
-                  {sol.descricao}
-                </p>
-              </div>
-            )}
-
-            {/* Observações */}
-            {sol.observacoes && (
-              <div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">
-                  Observações
-                </p>
-                <p className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 leading-relaxed">
-                  {sol.observacoes}
-                </p>
-              </div>
-            )}
-
-            {/* Fotos */}
-            {sol.fotos && sol.fotos.length > 0 && (
-              <div>
-                <p className="text-xs uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3 flex items-center gap-1.5">
-                  <PhotoIcon className="w-4 h-4" />
-                  Fotos ({sol.fotos.length})
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  {sol.fotos.map((path, i) => {
-                    const url = getFotoUrl(path);
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => setLightboxUrl(url)}
-                        className="relative group rounded-xl overflow-hidden aspect-square bg-gray-100 dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700/40 hover:border-indigo-500/50 transition-all"
-                      >
-                        <img
-                          src={url}
-                          alt={`Foto ${i + 1}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                          <ArrowTopRightOnSquareIcon className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Status change actions */}
-            <div className="border-t border-gray-200/60 dark:border-gray-700/40 pt-4">
-              <p className="text-xs uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3">
-                Alterar Status
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {sol.status !== 'em_andamento' && sol.status !== 'concluido' && sol.status !== 'cancelado' && (
-                  <button
-                    onClick={() => handleStatus('em_andamento')}
-                    disabled={updating}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
-                  >
-                    <ClockIcon className="w-4 h-4" />
-                    Marcar Em Andamento
-                  </button>
-                )}
-                {sol.status !== 'concluido' && sol.status !== 'cancelado' && (
-                  <button
-                    onClick={() => handleStatus('concluido')}
-                    disabled={updating}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
-                  >
-                    <CheckCircleIcon className="w-4 h-4" />
-                    Marcar Concluído
-                  </button>
-                )}
-                {sol.status !== 'cancelado' && sol.status !== 'concluido' && (
-                  <button
-                    onClick={() => handleStatus('cancelado')}
-                    disabled={updating}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-rose-500/10 text-rose-500 border border-rose-500/30 hover:bg-rose-500/20 transition-colors disabled:opacity-50"
-                  >
-                    <XCircleIcon className="w-4 h-4" />
-                    Cancelar
-                  </button>
-                )}
-                {(sol.status === 'concluido' || sol.status === 'cancelado') && (
-                  <button
-                    onClick={() => handleStatus('aberto')}
-                    disabled={updating}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl bg-gray-500/10 text-gray-500 border border-gray-500/30 hover:bg-gray-500/20 transition-colors disabled:opacity-50"
-                  >
-                    <ArrowPathIcon className="w-4 h-4" />
-                    Reabrir
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
+function getPhotoUrl(path: string) {
+  const { data } = supabase.storage.from('manutencao-fotos').getPublicUrl(path);
+  return data.publicUrl;
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
-type TabType = 'solicitacoes' | 'veiculos';
-type StatusFilter = 'todos' | 'aberto' | 'em_andamento' | 'concluido' | 'cancelado';
-type PrioridadeFilter = 'todas' | 'baixa' | 'media' | 'alta' | 'operacional';
-
 export default function SolicitacoesPage() {
-  const [tab, setTab] = useState<TabType>('solicitacoes');
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
-  const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingVeiculos, setLoadingVeiculos] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
-  const [prioridadeFilter, setPrioridadeFilter] = useState<PrioridadeFilter>('todas');
+  const [activeTab, setActiveTab] = useState<'solicitacoes' | 'veiculos'>('solicitacoes');
+  const [filterStatus, setFilterStatus] = useState<string>('todos');
+  const [filterPrio, setFilterPrio] = useState<string>('todos');
   const [selected, setSelected] = useState<Solicitacao | null>(null);
-  const [showPrioridadeDropdown, setShowPrioridadeDropdown] = useState(false);
-  const [search, setSearch] = useState('');
+  const [veiculos, setVeiculos] = useState<any[]>([]);
+  const [novas, setNovas] = useState<Set<string>>(new Set());
+  const [vistas, setVistas] = useState<Set<string>>(new Set());
+  const seenRef = useRef<Set<string>>(new Set());
 
-  // Fetch solicitacoes
-  const fetchSolicitacoes = useCallback(async () => {
-    setLoading(true);
+  const fetchVeiculos = useCallback(async () => {
+    const { data } = await supabase.from('frota_veiculos').select('placa, modelo, projeto').order('placa');
+    setVeiculos(data || []);
+  }, []);
+
+  const fetchSolicitacoes = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     const { data, error } = await supabase
       .from('manutencao_solicitacoes')
       .select('*')
       .order('created_at', { ascending: false });
-
-    if (error) {
-      toast.error('Erro ao carregar solicitações');
-    } else {
-      setSolicitacoes(data ?? []);
+    if (error) { toast.error('Erro ao carregar solicitações'); }
+    else {
+      const list = data || [];
+      // detectar novas (não vistas ainda)
+      const novosIds = list
+        .filter(s => !seenRef.current.has(s.id))
+        .map(s => s.id);
+      if (novosIds.length > 0 && seenRef.current.size > 0) {
+        setNovas(prev => new Set([...prev, ...novosIds]));
+      }
+      // na primeira carga, marca todos como "já conhecidos"
+      if (seenRef.current.size === 0) {
+        list.forEach(s => seenRef.current.add(s.id));
+      } else {
+        list.forEach(s => seenRef.current.add(s.id));
+      }
+      setSolicitacoes(list);
     }
-    setLoading(false);
-  }, []);
-
-  // Fetch veiculos
-  const fetchVeiculos = useCallback(async () => {
-    setLoadingVeiculos(true);
-    const { data, error } = await supabase
-      .from('frota_veiculos')
-      .select('id, placa, modelo, projeto')
-      .order('placa', { ascending: true });
-
-    if (error) {
-      toast.error('Erro ao carregar veículos');
-    } else {
-      setVeiculos(data ?? []);
-    }
-    setLoadingVeiculos(false);
+    if (!silent) setLoading(false);
   }, []);
 
   useEffect(() => {
     fetchSolicitacoes();
+    fetchVeiculos();
+  }, [fetchSolicitacoes, fetchVeiculos]);
+
+  // Realtime subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('solicitacoes-rt')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'manutencao_solicitacoes' }, (payload) => {
+        const nova = payload.new as Solicitacao;
+        setSolicitacoes(prev => [nova, ...prev]);
+        setNovas(prev => new Set([...prev, nova.id]));
+        seenRef.current.add(nova.id);
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} flex items-center gap-3 bg-white dark:bg-gray-900 border border-emerald-500/30 rounded-2xl shadow-lg px-4 py-3`}>
+            <BellAlertIcon className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-gray-900 dark:text-white">Nova solicitação!</p>
+              <p className="text-xs text-gray-500">{nova.placa} · {nova.projeto}</p>
+            </div>
+          </div>
+        ), { duration: 6000 });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'manutencao_solicitacoes' }, () => {
+        fetchSolicitacoes(true);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [fetchSolicitacoes]);
 
-  useEffect(() => {
-    if (tab === 'veiculos') fetchVeiculos();
-  }, [tab, fetchVeiculos]);
-
-  // Status update
-  const handleStatusChange = async (id: string, status: string) => {
+  async function updateStatus(id: string, status: string) {
     const { error } = await supabase
       .from('manutencao_solicitacoes')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id);
+    if (error) { toast.error('Erro ao atualizar'); return; }
+    toast.success('Status atualizado');
+    fetchSolicitacoes(true);
+    setSelected(prev => prev ? { ...prev, status } : prev);
+  }
 
-    if (error) {
-      toast.error('Erro ao atualizar status');
-    } else {
-      toast.success(`Status atualizado: ${STATUS_LABELS[status] ?? status}`);
-      await fetchSolicitacoes();
-    }
-  };
+  function openModal(s: Solicitacao) {
+    setSelected(s);
+    // marca como vista
+    setNovas(prev => { const n = new Set(prev); n.delete(s.id); return n; });
+    setVistas(prev => new Set([...prev, s.id]));
+  }
 
-  // Filtered list
-  const filtered = solicitacoes.filter((s) => {
-    const matchStatus = statusFilter === 'todos' || s.status === statusFilter;
-    const matchPrioridade = prioridadeFilter === 'todas' || s.prioridade === prioridadeFilter;
-    const matchSearch =
-      !search ||
-      s.placa?.toLowerCase().includes(search.toLowerCase()) ||
-      s.nome_solicitante?.toLowerCase().includes(search.toLowerCase()) ||
-      s.projeto?.toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchPrioridade && matchSearch;
+  const filtered = solicitacoes.filter(s => {
+    if (filterStatus !== 'todos' && s.status !== filterStatus) return false;
+    if (filterPrio !== 'todos' && s.prioridade !== filterPrio) return false;
+    return true;
   });
 
-  // Stats
-  const stats = {
+  const counts = {
     total: solicitacoes.length,
-    abertas: solicitacoes.filter((s) => s.status === 'aberto').length,
-    em_andamento: solicitacoes.filter((s) => s.status === 'em_andamento').length,
-    concluidas: solicitacoes.filter((s) => s.status === 'concluido').length,
+    aberto: solicitacoes.filter(s => s.status === 'aberto').length,
+    em_andamento: solicitacoes.filter(s => s.status === 'em_andamento').length,
+    concluido: solicitacoes.filter(s => s.status === 'concluido').length,
   };
 
-  const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
-    { key: 'todos', label: 'Todos' },
-    { key: 'aberto', label: 'Aberto' },
-    { key: 'em_andamento', label: 'Em Andamento' },
-    { key: 'concluido', label: 'Concluído' },
-    { key: 'cancelado', label: 'Cancelado' },
-  ];
-
-  const PRIORIDADE_FILTERS: { key: PrioridadeFilter; label: string }[] = [
-    { key: 'todas', label: 'Todas Prioridades' },
-    { key: 'baixa', label: 'Baixa' },
-    { key: 'media', label: 'Média' },
-    { key: 'alta', label: 'Alta' },
-    { key: 'operacional', label: 'Operacional' },
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6 lg:p-8">
-      {/* Modal */}
-      {selected && (
-        <DetailModal
-          sol={selected}
-          onClose={() => setSelected(null)}
-          onStatusChange={handleStatusChange}
-        />
+    <div className="h-full flex flex-col gap-6 p-4 md:p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+            <WrenchScrewdriverIcon className="w-7 h-7 text-[#0b7336]" />
+            Solicitações de Manutenção
+            {novas.size > 0 && (
+              <span className="animate-pulse inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500 text-white text-xs font-black">
+                <BellAlertIcon className="w-3.5 h-3.5" /> {novas.size} nova{novas.size !== 1 ? 's' : ''}
+              </span>
+            )}
+          </h1>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Total', value: counts.total, color: 'text-gray-900 dark:text-white' },
+          { label: 'Abertas', value: counts.aberto, color: 'text-gray-400' },
+          { label: 'Em Andamento', value: counts.em_andamento, color: 'text-amber-400' },
+          { label: 'Concluídas', value: counts.concluido, color: 'text-emerald-400' },
+        ].map(s => (
+          <div key={s.label} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
+            <p className="text-xs font-bold text-gray-500">{s.label}</p>
+            <p className={`text-3xl font-black mt-1 ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-gray-200 dark:border-gray-800 pb-2">
+        {(['solicitacoes', 'veiculos'] as const).map(t => (
+          <button key={t} onClick={() => setActiveTab(t)}
+            className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${activeTab === t ? 'bg-[#0b7336] text-white' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+            {t === 'solicitacoes' ? 'Solicitações' : 'Veículos'}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'veiculos' ? (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-800/50">
+              <tr>
+                {['Placa', 'Modelo', 'Projeto'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {veiculos.map((v, i) => (
+                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                  <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white">{v.placa}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{v.modelo || '—'}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{v.projeto || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <>
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2">
+            {['todos', 'aberto', 'em_andamento', 'concluido', 'cancelado'].map(s => (
+              <button key={s} onClick={() => setFilterStatus(s)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === s ? 'bg-[#0b7336] text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
+                {STATUS_LABEL[s] || 'Todos'}
+              </button>
+            ))}
+            <div className="w-px bg-gray-200 dark:bg-gray-700 mx-1" />
+            {['todos', 'baixa', 'media', 'alta', 'emergencial'].map(p => (
+              <button key={p} onClick={() => setFilterPrio(p)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterPrio === p ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+                {p === 'todos' ? 'Todas prioridades' : PRIORIDADE_LABEL[p]}
+              </button>
+            ))}
+          </div>
+
+          {/* List */}
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-8 h-8 border-4 border-[#0b7336] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-20 text-gray-400 font-medium">Nenhuma solicitação encontrada.</div>
+          ) : (
+            <div className="grid gap-3">
+              {filtered.map(s => {
+                const isNova = novas.has(s.id);
+                return (
+                  <div key={s.id}
+                    onClick={() => openModal(s)}
+                    className={`bg-white dark:bg-gray-900 rounded-2xl border cursor-pointer transition-all hover:shadow-md hover:scale-[1.01] p-4 flex items-center gap-4 ${
+                      isNova
+                        ? 'border-red-500/50 animate-pulse shadow-red-500/10 shadow-lg'
+                        : 'border-gray-100 dark:border-gray-800'
+                    }`}>
+                    {isNova && (
+                      <span className="flex-shrink-0 w-2.5 h-2.5 rounded-full bg-red-500" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-gray-900 dark:text-white font-mono text-sm">{s.placa}</span>
+                        <span className={prioBadge(s.prioridade)}>{PRIORIDADE_LABEL[s.prioridade || ''] || s.prioridade}</span>
+                        <span className={statusBadge(s.status)}>{STATUS_LABEL[s.status || ''] || s.status}</span>
+                        {isNova && <span className="text-[9px] font-black text-red-400 uppercase tracking-widest">NOVA</span>}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                        <span>{s.projeto}</span>
+                        <span>·</span>
+                        <span>{s.nome_solicitante}</span>
+                        <span>·</span>
+                        <span>{(s.tipo_manutencao || []).join(', ')}</span>
+                        <span>·</span>
+                        <span>{fmtDate(s.created_at)}</span>
+                      </div>
+                    </div>
+                    <EyeIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Page Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2.5">
-              <div className="bg-indigo-500/10 p-2 rounded-xl">
-                <WrenchScrewdriverIcon className="w-5 h-5 text-indigo-500" />
-              </div>
-              Solicitações de Manutenção
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Gestão e acompanhamento das solicitações da frota
-            </p>
-          </div>
-          <button
-            onClick={fetchSolicitacoes}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-white dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700/40 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors shadow-sm"
-          >
-            <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 bg-gray-100 dark:bg-gray-800/60 p-1 rounded-xl w-fit">
-          {(
-            [
-              { key: 'solicitacoes', label: 'Solicitações', icon: WrenchScrewdriverIcon },
-              { key: 'veiculos', label: 'Veículos', icon: TruckIcon },
-            ] as { key: TabType; label: string; icon: React.ElementType }[]
-          ).map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                tab === key
-                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* ── SOLICITAÇÕES TAB ── */}
-        {tab === 'solicitacoes' && (
-          <>
-            {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard
-                icon={WrenchScrewdriverIcon}
-                label="Total Solicitações"
-                value={stats.total}
-                color="bg-indigo-500/10 text-indigo-500"
-              />
-              <StatCard
-                icon={ExclamationTriangleIcon}
-                label="Abertas"
-                value={stats.abertas}
-                color="bg-gray-500/10 text-gray-500"
-              />
-              <StatCard
-                icon={ClockIcon}
-                label="Em Andamento"
-                value={stats.em_andamento}
-                color="bg-amber-500/10 text-amber-500"
-              />
-              <StatCard
-                icon={CheckCircleIcon}
-                label="Concluídas"
-                value={stats.concluidas}
-                color="bg-emerald-500/10 text-emerald-500"
-              />
-            </div>
-
-            {/* Filters */}
-            <div className="bg-white dark:bg-gray-800/60 rounded-2xl border border-gray-200/60 dark:border-gray-700/40 p-4 shadow-sm">
-              <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
-                {/* Search */}
-                <div className="relative flex-1 min-w-0">
-                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por placa, solicitante, projeto..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200/60 dark:border-gray-600/40 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all"
-                  />
-                </div>
-
-                {/* Status filter buttons */}
-                <div className="flex flex-wrap gap-1.5">
-                  {STATUS_FILTERS.map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() => setStatusFilter(key)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all border ${
-                        statusFilter === key
-                          ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                          : 'bg-transparent text-gray-500 dark:text-gray-400 border-gray-200/60 dark:border-gray-600/40 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Prioridade dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowPrioridadeDropdown((v) => !v)}
-                    className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200/60 dark:border-gray-600/40 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    {PRIORIDADE_FILTERS.find((f) => f.key === prioridadeFilter)?.label}
-                    <ChevronDownIcon
-                      className={`w-4 h-4 text-gray-400 transition-transform ${showPrioridadeDropdown ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-                  {showPrioridadeDropdown && (
-                    <div className="absolute right-0 top-full mt-1 z-30 w-48 bg-white dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700/40 rounded-xl shadow-xl overflow-hidden">
-                      {PRIORIDADE_FILTERS.map(({ key, label }) => (
-                        <button
-                          key={key}
-                          onClick={() => {
-                            setPrioridadeFilter(key);
-                            setShowPrioridadeDropdown(false);
-                          }}
-                          className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors ${
-                            prioridadeFilter === key
-                              ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+      {/* Modal */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border border-gray-200 dark:border-gray-800 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-900 rounded-t-[2rem] px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800 flex items-start justify-between z-10">
+              <div>
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  <WrenchScrewdriverIcon className="w-5 h-5 text-[#0b7336]" />
+                  Placa {selected.placa}
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">Solicitado em {fmtDate(selected.created_at)}</p>
+                <div className="flex gap-2 mt-2">
+                  <span className={prioBadge(selected.prioridade)}>{PRIORIDADE_LABEL[selected.prioridade || ''] || selected.prioridade}</span>
+                  <span className={statusBadge(selected.status)}>{STATUS_LABEL[selected.status || ''] || selected.status}</span>
                 </div>
               </div>
-            </div>
-
-            {/* List */}
-            <div className="bg-white dark:bg-gray-800/60 rounded-2xl border border-gray-200/60 dark:border-gray-700/40 shadow-sm overflow-hidden">
-              {loading ? (
-                <div className="flex items-center justify-center py-20 gap-3">
-                  <ArrowPathIcon className="w-5 h-5 text-indigo-500 animate-spin" />
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Carregando...</span>
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3">
-                  <WrenchScrewdriverIcon className="w-10 h-10 text-gray-300 dark:text-gray-600" />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Nenhuma solicitação encontrada
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {/* Table header (md+) */}
-                  <div className="hidden md:grid grid-cols-[1fr_1.5fr_auto_auto_1fr_1fr_auto] gap-3 px-5 py-3 border-b border-gray-100 dark:border-gray-700/40 bg-gray-50/80 dark:bg-gray-700/20 text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-medium">
-                    <span>Placa</span>
-                    <span>Tipo Manutenção</span>
-                    <span>Prioridade</span>
-                    <span>Status</span>
-                    <span>Projeto</span>
-                    <span>Solicitante</span>
-                    <span>Data</span>
-                  </div>
-
-                  {/* Rows */}
-                  <div className="divide-y divide-gray-100 dark:divide-gray-700/40">
-                    {filtered.map((sol) => (
-                      <button
-                        key={sol.id}
-                        onClick={() => setSelected(sol)}
-                        className="w-full text-left hover:bg-gray-50/80 dark:hover:bg-gray-700/30 transition-colors"
-                      >
-                        {/* Desktop row */}
-                        <div className="hidden md:grid grid-cols-[1fr_1.5fr_auto_auto_1fr_1fr_auto] gap-3 items-center px-5 py-3.5">
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                            {sol.placa}
-                          </span>
-                          <span className="text-sm text-gray-600 dark:text-gray-300 truncate">
-                            {sol.tipo_manutencao || '—'}
-                          </span>
-                          <span
-                            className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${prioridadeBadge(sol.prioridade)}`}
-                          >
-                            {PRIORIDADE_LABELS[sol.prioridade ?? ''] ?? sol.prioridade ?? '—'}
-                          </span>
-                          <span
-                            className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${statusBadge(sol.status)}`}
-                          >
-                            {STATUS_LABELS[sol.status ?? ''] ?? sol.status ?? '—'}
-                          </span>
-                          <span className="text-sm text-gray-600 dark:text-gray-300 truncate">
-                            {sol.projeto || '—'}
-                          </span>
-                          <span className="text-sm text-gray-600 dark:text-gray-300 truncate">
-                            {sol.nome_solicitante || '—'}
-                          </span>
-                          <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                            {formatDateShort(sol.created_at)}
-                          </span>
-                        </div>
-
-                        {/* Mobile card */}
-                        <div className="md:hidden p-4 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {sol.placa}
-                            </span>
-                            <span className="text-xs text-gray-400">{formatDateShort(sol.created_at)}</span>
-                          </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            {sol.tipo_manutencao || '—'}
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${prioridadeBadge(sol.prioridade)}`}>
-                              {PRIORIDADE_LABELS[sol.prioridade ?? ''] ?? sol.prioridade ?? '—'}
-                            </span>
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadge(sol.status)}`}>
-                              {STATUS_LABELS[sol.status ?? ''] ?? sol.status ?? '—'}
-                            </span>
-                          </div>
-                          <div className="flex gap-2 text-xs text-gray-500 dark:text-gray-400">
-                            <span>{sol.projeto}</span>
-                            {sol.nome_solicitante && <span>· {sol.nome_solicitante}</span>}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Footer count */}
-                  <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700/40 bg-gray-50/50 dark:bg-gray-700/10">
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      Mostrando {filtered.length} de {solicitacoes.length} solicitações
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* ── VEÍCULOS TAB ── */}
-        {tab === 'veiculos' && (
-          <div className="bg-white dark:bg-gray-800/60 rounded-2xl border border-gray-200/60 dark:border-gray-700/40 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700/40">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <TruckIcon className="w-4 h-4 text-indigo-500" />
-                Frota de Veículos
-              </h2>
-              <button
-                onClick={fetchVeiculos}
-                disabled={loadingVeiculos}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200/60 dark:border-gray-600/40 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <ArrowPathIcon className={`w-3.5 h-3.5 ${loadingVeiculos ? 'animate-spin' : ''}`} />
-                Atualizar
+              <button onClick={() => setSelected(null)} className="p-2 rounded-xl text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <XMarkIcon className="w-5 h-5" />
               </button>
             </div>
 
-            {loadingVeiculos ? (
-              <div className="flex items-center justify-center py-20 gap-3">
-                <ArrowPathIcon className="w-5 h-5 text-indigo-500 animate-spin" />
-                <span className="text-sm text-gray-500 dark:text-gray-400">Carregando veículos...</span>
-              </div>
-            ) : veiculos.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-3">
-                <TruckIcon className="w-10 h-10 text-gray-300 dark:text-gray-600" />
-                <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum veículo cadastrado</p>
-              </div>
-            ) : (
-              <>
-                {/* Table header */}
-                <div className="grid grid-cols-[1.5fr_2fr_1.5fr] gap-4 px-5 py-3 bg-gray-50/80 dark:bg-gray-700/20 text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-medium border-b border-gray-100 dark:border-gray-700/40">
-                  <span>Placa</span>
-                  <span>Modelo</span>
-                  <span>Projeto</span>
+            <div className="px-6 py-4 space-y-6">
+              {/* Identificação */}
+              <section>
+                <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Identificação</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <InfoRow label="Projeto" value={selected.projeto} />
+                  <InfoRow label="Solicitante" value={selected.nome_solicitante} />
+                  <InfoRow label="Função" value={selected.funcao} />
+                  <InfoRow label="Instalação / Base" value={selected.instalacao_base} />
+                  <InfoRow label="Placa" value={selected.placa} />
+                  <InfoRow label="KM Atual" value={selected.km_atual != null ? `${selected.km_atual.toLocaleString('pt-BR')} km` : null} />
+                  <InfoRow label="Tipo de Frota" value={TIPO_FROTA_LABEL[selected.tipo_frota || ''] || selected.tipo_frota} />
                 </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-700/40">
-                  {veiculos.map((v) => (
-                    <div
-                      key={v.id}
-                      className="grid grid-cols-[1.5fr_2fr_1.5fr] gap-4 items-center px-5 py-3.5 hover:bg-gray-50/80 dark:hover:bg-gray-700/20 transition-colors"
-                    >
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {v.placa}
-                      </span>
-                      <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {v.modelo || '—'}
-                      </span>
-                      <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {v.projeto || '—'}
-                      </span>
-                    </div>
+              </section>
+
+              {/* Manutenção */}
+              <section>
+                <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Manutenção</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <InfoRow label="Tipo de Manutenção" value={(selected.tipo_manutencao || []).join(', ')} />
+                    {selected.tipo_manutencao_outro && <p className="text-xs text-gray-500 mt-1">Outros: {selected.tipo_manutencao_outro}</p>}
+                  </div>
+                  <InfoRow label="Veículo pode operar?" value={PODE_OPERAR_LABEL[selected.pode_operar || ''] || selected.pode_operar} />
+                  <InfoRow label="Prioridade" value={PRIORIDADE_LABEL[selected.prioridade || ''] || selected.prioridade} />
+                  <div className="col-span-2">
+                    <InfoRow label="Impacto Operacional" value={IMPACTO_LABEL[selected.impacto_operacional || ''] || selected.impacto_operacional} />
+                  </div>
+                </div>
+              </section>
+
+              {/* Descrição */}
+              <section>
+                <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Descrição</h3>
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap bg-gray-50 dark:bg-gray-800 rounded-xl p-3">{selected.descricao || '—'}</p>
+              </section>
+
+              {/* Categoria */}
+              <section>
+                <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Categoria do Serviço</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(selected.categoria_servico || []).map(c => (
+                    <span key={c} className="text-xs font-bold px-2 py-1 rounded-lg bg-[#0b7336]/10 text-[#0b7336] border border-[#0b7336]/20">{c}</span>
                   ))}
                 </div>
-                <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700/40 bg-gray-50/50 dark:bg-gray-700/10">
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    {veiculos.length} veículo{veiculos.length !== 1 ? 's' : ''} cadastrado{veiculos.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-              </>
-            )}
+                {selected.categoria_outro && <p className="text-xs text-gray-500 mt-2">Outra: {selected.categoria_outro}</p>}
+              </section>
+
+              {/* Fotos */}
+              {selected.fotos && selected.fotos.length > 0 && (
+                <section>
+                  <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Fotos ({selected.fotos.length})</h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {selected.fotos.map((path, i) => (
+                      <a key={i} href={getPhotoUrl(path)} target="_blank" rel="noopener noreferrer">
+                        <img src={getPhotoUrl(path)} alt={`Foto ${i + 1}`}
+                          className="w-full h-28 object-cover rounded-xl border border-gray-200 dark:border-gray-700 hover:opacity-80 transition-opacity" />
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Status */}
+              {selected.status !== 'concluido' && selected.status !== 'cancelado' && (
+                <section>
+                  <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Alterar Status</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selected.status !== 'em_andamento' && (
+                      <button onClick={() => updateStatus(selected.id, 'em_andamento')}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold text-sm hover:bg-amber-500/25 transition-all">
+                        <ClockIcon className="w-4 h-4" /> Marcar Em Andamento
+                      </button>
+                    )}
+                    <button onClick={() => updateStatus(selected.id, 'concluido')}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold text-sm hover:bg-emerald-500/25 transition-all">
+                      <CheckCircleIcon className="w-4 h-4" /> Marcar Concluído
+                    </button>
+                    <button onClick={() => updateStatus(selected.id, 'cancelado')}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 font-bold text-sm hover:bg-rose-500/25 transition-all">
+                      <XCircleIcon className="w-4 h-4" /> Cancelar
+                    </button>
+                  </div>
+                </section>
+              )}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
