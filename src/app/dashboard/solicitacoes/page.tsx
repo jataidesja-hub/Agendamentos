@@ -355,6 +355,10 @@ export default function SolicitacoesPage() {
     if (filterPrio !== 'todos' && s.prioridade !== filterPrio) return false;
     if (filterProjetos.length > 0 && s.projeto && !filterProjetos.includes(s.projeto)) return false;
     return true;
+  }).sort((a, b) => {
+    if (a.status === 'concluido' && b.status !== 'concluido') return 1;
+    if (a.status !== 'concluido' && b.status === 'concluido') return -1;
+    return 0;
   });
 
   const uniqueProjetos = Array.from(new Set(veiculos.map(v => v.projeto).filter(Boolean))).sort();
