@@ -74,10 +74,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function getPhotoUrl(path: string) {
-  const { data } = supabase.storage.from('manutencao-fotos').getPublicUrl(path);
-  return data.publicUrl;
-}
+// Photo URL is handled async in the component now
 
 export default function SolicitacoesPage() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
@@ -90,6 +87,7 @@ export default function SolicitacoesPage() {
   const [novas, setNovas] = useState<Set<string>>(new Set());
   const [vistas, setVistas] = useState<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
 
   const fetchVeiculos = useCallback(async () => {
     const { data } = await supabase.from('frota_veiculos').select('placa, modelo, projeto').order('placa');
@@ -151,7 +149,16 @@ export default function SolicitacoesPage() {
         fetchSolicitacoes(true);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    // Fallback polling every 15 seconds
+    const intervalId = setInterval(() => {
+      fetchSolicitacoes(true);
+    }, 15000);
+
+    return () => { 
+      supabase.removeChannel(channel); 
+      clearInterval(intervalId);
+    };
   }, [fetchSolicitacoes]);
 
   async function updateStatus(id: string, status: string) {
@@ -165,11 +172,29 @@ export default function SolicitacoesPage() {
     setSelected(prev => prev ? { ...prev, status } : prev);
   }
 
-  function openModal(s: Solicitacao) {
+  async function openModal(s: Solicitacao) {
     setSelected(s);
     // marca como vista
     setNovas(prev => { const n = new Set(prev); n.delete(s.id); return n; });
     setVistas(prev => new Set([...prev, s.id]));
+
+    // Fetch signed URLs for photos
+    if (s.fotos && s.fotos.length > 0) {
+      const urls: Record<string, string> = {};
+      for (const path of s.fotos) {
+        const { data } = await supabase.storage.from('manutencao-fotos').createSignedUrl(path, 3600);
+        if (data?.signedUrl) {
+          urls[path] = data.signedUrl;
+        } else {
+          // Fallback to public URL if signed URL fails
+          const { data: pubData } = supabase.storage.from('manutencao-fotos').getPublicUrl(path);
+          urls[path] = pubData.publicUrl;
+        }
+      }
+      setPhotoUrls(urls);
+    } else {
+      setPhotoUrls({});
+    }
   }
 
   const filtered = solicitacoes.filter(s => {
@@ -389,12 +414,16 @@ export default function SolicitacoesPage() {
                 <section>
                   <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Fotos ({selected.fotos.length})</h3>
                   <div className="grid grid-cols-3 gap-2">
-                    {selected.fotos.map((path, i) => (
-                      <a key={i} href={getPhotoUrl(path)} target="_blank" rel="noopener noreferrer">
-                        <img src={getPhotoUrl(path)} alt={`Foto ${i + 1}`}
-                          className="w-full h-28 object-cover rounded-xl border border-gray-200 dark:border-gray-700 hover:opacity-80 transition-opacity" />
-                      </a>
-                    ))}
+                    {selected.fotos.map((path, i) => {
+                      const url = photoUrls[path];
+                      if (!url) return <div key={i} className="w-full h-28 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse"></div>;
+                      return (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          <img src={url} alt={`Foto ${i + 1}`}
+                            className="w-full h-28 object-cover rounded-xl border border-gray-200 dark:border-gray-700 hover:opacity-80 transition-opacity" />
+                        </a>
+                      );
+                    })}
                   </div>
                 </section>
               )}
