@@ -29,7 +29,7 @@ const PRIORIDADE_OPTIONS = [
   { label: 'Baixa', value: 'baixa', color: 'bg-blue-600', ring: 'ring-blue-500' },
   { label: 'Média', value: 'media', color: 'bg-yellow-500', ring: 'ring-yellow-400' },
   { label: 'Alta', value: 'alta', color: 'bg-orange-500', ring: 'ring-orange-400' },
-  { label: 'Operacional', value: 'operacional', color: 'bg-red-600', ring: 'ring-red-500' },
+  { label: 'Emergencial', value: 'emergencial', color: 'bg-red-600', ring: 'ring-red-500' },
 ];
 
 interface FormState {
@@ -79,15 +79,10 @@ export default function SolicitacaoManutencaoPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('frota_veiculos')
-        .select('projeto');
-      if (data) {
-        const unique = [...new Set(data.map((r: { projeto: string }) => r.projeto).filter(Boolean))].sort();
-        setProjetos(unique as string[]);
-      }
-    })();
+    fetch('/api/frota-publica')
+      .then(r => r.json())
+      .then(d => setProjetos(d.projetos || []))
+      .catch(() => toast.error('Erro ao carregar projetos'));
   }, []);
 
   useEffect(() => {
@@ -96,17 +91,13 @@ export default function SolicitacaoManutencaoPage() {
       setForm(f => ({ ...f, placa: '' }));
       return;
     }
-    (async () => {
-      const { data } = await supabase
-        .from('frota_veiculos')
-        .select('placa')
-        .eq('projeto', form.projeto);
-      if (data) {
-        const unique = [...new Set(data.map((r: { placa: string }) => r.placa).filter(Boolean))].sort();
-        setPlacas(unique as string[]);
-      }
-      setForm(f => ({ ...f, placa: '' }));
-    })();
+    fetch(`/api/frota-publica?projeto=${encodeURIComponent(form.projeto)}`)
+      .then(r => r.json())
+      .then(d => {
+        setPlacas(d.placas || []);
+        setForm(f => ({ ...f, placa: '' }));
+      })
+      .catch(() => toast.error('Erro ao carregar placas'));
   }, [form.projeto]);
 
   function handleFotoChange(e: ChangeEvent<HTMLInputElement>) {
