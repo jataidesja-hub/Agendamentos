@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   WrenchScrewdriverIcon, TruckIcon, ClockIcon, CheckCircleIcon,
   XCircleIcon, ExclamationTriangleIcon, XMarkIcon, PhotoIcon,
-  BellAlertIcon, EyeIcon, TrashIcon, DocumentArrowDownIcon
+  BellAlertIcon, EyeIcon, TrashIcon, DocumentArrowDownIcon, ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
@@ -89,6 +89,29 @@ export default function SolicitacoesPage() {
   const [vistas, setVistas] = useState<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [userEmail, setUserEmail] = useState('');
+  const [filterProjetos, setFilterProjetos] = useState<string[]>([]);
+  const [showProjetoFilter, setShowProjetoFilter] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) {
+        setUserEmail(data.user.email);
+        const saved = localStorage.getItem(`filtro_solicitacoes_projetos_${data.user.email}`);
+        if (saved) {
+          try { setFilterProjetos(JSON.parse(saved)); } catch {}
+        }
+      }
+    });
+  }, []);
+
+  function toggleFilterProjeto(p: string) {
+    setFilterProjetos(prev => {
+      const n = prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p];
+      if (userEmail) localStorage.setItem(`filtro_solicitacoes_projetos_${userEmail}`, JSON.stringify(n));
+      return n;
+    });
+  }
 
   const fetchVeiculos = useCallback(async () => {
     const { data } = await supabase.from('frota_veiculos').select('placa, modelo, projeto').order('placa');
@@ -282,8 +305,11 @@ export default function SolicitacoesPage() {
   const filtered = solicitacoes.filter(s => {
     if (filterStatus !== 'todos' && s.status !== filterStatus) return false;
     if (filterPrio !== 'todos' && s.prioridade !== filterPrio) return false;
+    if (filterProjetos.length > 0 && s.projeto && !filterProjetos.includes(s.projeto)) return false;
     return true;
   });
+
+  const uniqueProjetos = Array.from(new Set(veiculos.map(v => v.projeto).filter(Boolean))).sort();
 
   const counts = {
     total: solicitacoes.length,
@@ -372,6 +398,35 @@ export default function SolicitacoesPage() {
                 {p === 'todos' ? 'Todas prioridades' : PRIORIDADE_LABEL[p]}
               </button>
             ))}
+          </div>
+
+          {/* Filtro Projetos Dropdown */}
+          <div className="relative">
+            <button onClick={() => setShowProjetoFilter(!showProjetoFilter)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+              Projetos ({filterProjetos.length > 0 ? filterProjetos.length : 'Todos'})
+              <ChevronDownIcon className="w-4 h-4" />
+            </button>
+            {showProjetoFilter && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowProjetoFilter(false)} />
+                <div className="absolute top-full left-0 mt-2 w-64 max-h-64 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl z-20 p-2">
+                  <div className="px-2 py-1.5 text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-100 dark:border-gray-800 mb-2">
+                    Filtrar Projetos
+                  </div>
+                  {uniqueProjetos.map(p => (
+                    <label key={p} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg cursor-pointer transition-colors">
+                      <input type="checkbox" checked={filterProjetos.includes(p)} onChange={() => toggleFilterProjeto(p)}
+                        className="w-4 h-4 text-[#0b7336] rounded border-gray-300 focus:ring-[#0b7336]" />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{p}</span>
+                    </label>
+                  ))}
+                  {uniqueProjetos.length === 0 && (
+                    <div className="px-2 py-2 text-sm text-gray-500">Nenhum projeto encontrado.</div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* List */}
