@@ -168,7 +168,7 @@ export default function SolicitacaoManutencaoPage() {
     setSubmitting(true);
 
     try {
-      // Upload fotos
+      // Upload fotos (ignora se bucket não existir)
       const fotoPaths: string[] = [];
       for (const file of fotos) {
         const ext = file.name.split('.').pop();
@@ -176,8 +176,7 @@ export default function SolicitacaoManutencaoPage() {
         const { error: upErr } = await supabase.storage
           .from('manutencao-fotos')
           .upload(path, file, { upsert: false });
-        if (upErr) throw upErr;
-        fotoPaths.push(path);
+        if (!upErr) fotoPaths.push(path);
       }
 
       // Insert row
