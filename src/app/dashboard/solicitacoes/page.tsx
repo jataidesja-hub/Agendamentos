@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   WrenchScrewdriverIcon, TruckIcon, ClockIcon, CheckCircleIcon,
   XCircleIcon, ExclamationTriangleIcon, XMarkIcon, PhotoIcon,
-  BellAlertIcon, EyeIcon, TrashIcon
+  BellAlertIcon, EyeIcon, TrashIcon, DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import jsPDF from 'jspdf';
 
 interface Solicitacao {
   id: string;
@@ -179,6 +180,78 @@ export default function SolicitacoesPage() {
     toast.success('Solicitação excluída');
     fetchSolicitacoes(true);
     setSelected(null);
+  }
+
+  function exportToPDF(s: Solicitacao) {
+    const doc = new jsPDF();
+    const margin = 20;
+    let y = 20;
+
+    // Cabeçalho
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Solicitação de Manutenção - ${s.placa}`, margin, y);
+    y += 10;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text(`Criado em: ${fmtDate(s.created_at)}`, margin, y);
+    y += 15;
+
+    doc.setTextColor(0);
+    
+    // Função helper para adicionar seções
+    const addSection = (title: string, data: [string, string][]) => {
+      if (y > 270) { doc.addPage(); y = 20; }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(title.toUpperCase(), margin, y);
+      y += 6;
+      doc.setDrawColor(200);
+      doc.line(margin, y, 190, y);
+      y += 8;
+
+      doc.setFontSize(10);
+      data.forEach(([label, value]) => {
+        if (y > 280) { doc.addPage(); y = 20; }
+        doc.setFont("helvetica", "bold");
+        doc.text(`${label}:`, margin, y);
+        doc.setFont("helvetica", "normal");
+        
+        // Multi-line value support
+        const splitText = doc.splitTextToSize(value || '—', 120);
+        doc.text(splitText, margin + 45, y);
+        y += (splitText.length * 5) + 3;
+      });
+      y += 5;
+    };
+
+    addSection("Identificação", [
+      ["Projeto", s.projeto || '—'],
+      ["Solicitante", s.nome_solicitante || '—'],
+      ["Função", s.funcao || '—'],
+      ["Instalação/Base", s.instalacao_base || '—'],
+      ["Placa", s.placa || '—'],
+      ["KM Atual", s.km_atual != null ? `${s.km_atual.toLocaleString('pt-BR')} km` : '—'],
+      ["Tipo de Frota", TIPO_FROTA_LABEL[s.tipo_frota || ''] || s.tipo_frota || '—']
+    ]);
+
+    addSection("Manutenção", [
+      ["Tipo", (s.tipo_manutencao || []).join(', ') + (s.tipo_manutencao_outro ? ` (${s.tipo_manutencao_outro})` : '')],
+      ["Pode Operar?", PODE_OPERAR_LABEL[s.pode_operar || ''] || s.pode_operar || '—'],
+      ["Prioridade", PRIORIDADE_LABEL[s.prioridade || ''] || s.prioridade || '—'],
+      ["Impacto", IMPACTO_LABEL[s.impacto_operacional || ''] || s.impacto_operacional || '—']
+    ]);
+
+    addSection("Categoria do Serviço", [
+      ["Categorias", (s.categoria_servico || []).join(', ') + (s.categoria_outro ? ` (${s.categoria_outro})` : '')]
+    ]);
+
+    addSection("Descrição Detalhada", [
+      ["", s.descricao || '—']
+    ]);
+
+    doc.save(`manutencao_${s.placa}_${new Date().getTime()}.pdf`);
   }
 
   async function openModal(s: Solicitacao) {
@@ -459,8 +532,12 @@ export default function SolicitacoesPage() {
                       </button>
                     </>
                   )}
+                  <button onClick={() => exportToPDF(selected)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 font-bold text-sm hover:bg-blue-500/15 hover:text-blue-600 hover:border-blue-500/30 transition-all ml-auto">
+                    <DocumentArrowDownIcon className="w-4 h-4" /> Baixar PDF
+                  </button>
                   <button onClick={() => deleteSolicitacao(selected.id)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-500/10 text-gray-500 border border-gray-500/20 font-bold text-sm hover:bg-red-500/15 hover:text-red-500 hover:border-red-500/30 transition-all ml-auto">
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-500/10 text-gray-500 border border-gray-500/20 font-bold text-sm hover:bg-red-500/15 hover:text-red-500 hover:border-red-500/30 transition-all">
                     <TrashIcon className="w-4 h-4" /> Excluir
                   </button>
                 </div>
