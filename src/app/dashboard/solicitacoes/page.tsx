@@ -26,9 +26,10 @@ interface Solicitacao {
   impacto_operacional: string | null;
   descricao: string | null;
   categoria_servico: string[] | null;
-  categoria_outro: string | null;
   fotos: string[] | null;
   status: string | null;
+  conclusao_descricao: string | null;
+  conclusao_pdf: string | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -92,6 +93,11 @@ export default function SolicitacoesPage() {
   const [userEmail, setUserEmail] = useState('');
   const [filterProjetos, setFilterProjetos] = useState<string[]>([]);
   const [showProjetoFilter, setShowProjetoFilter] = useState(false);
+
+  const [showConclusaoForm, setShowConclusaoForm] = useState(false);
+  const [conclusaoDesc, setConclusaoDesc] = useState('');
+  const [conclusaoPdf, setConclusaoPdf] = useState<File | null>(null);
+  const [concluindo, setConcluindo] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -196,6 +202,45 @@ export default function SolicitacoesPage() {
     setSelected(prev => prev ? { ...prev, status } : prev);
   }
 
+  async function handleConcluir() {
+    if (!selected) return;
+    setConcluindo(true);
+    let pdfPath = null;
+    
+    if (conclusaoPdf) {
+      const ext = conclusaoPdf.name.split('.').pop();
+      pdfPath = `orcamento_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('manutencao-pdfs').upload(pdfPath, conclusaoPdf);
+      if (upErr) {
+        toast.error('Erro ao enviar o PDF. Verifique se o bucket manutencao-pdfs existe e tem permissão.');
+        setConcluindo(false);
+        return;
+      }
+    }
+
+    const { error } = await supabase
+      .from('manutencao_solicitacoes')
+      .update({
+         status: 'concluido',
+         conclusao_descricao: conclusaoDesc || null,
+         conclusao_pdf: pdfPath,
+         updated_at: new Date().toISOString()
+      })
+      .eq('id', selected.id);
+
+    if (error) {
+      toast.error('Erro ao concluir');
+    } else {
+      toast.success('Solicitação concluída');
+      fetchSolicitacoes(true);
+      setShowConclusaoForm(false);
+      setConclusaoDesc('');
+      setConclusaoPdf(null);
+      setSelected({ ...selected, status: 'concluido', conclusao_descricao: conclusaoDesc || null, conclusao_pdf: pdfPath });
+    }
+    setConcluindo(false);
+  }
+
   async function deleteSolicitacao(id: string) {
     if (!window.confirm("Tem certeza que deseja excluir esta solicitação permanentemente?")) return;
     const { error } = await supabase.from('manutencao_solicitacoes').delete().eq('id', id);
@@ -279,6 +324,9 @@ export default function SolicitacoesPage() {
 
   async function openModal(s: Solicitacao) {
     setSelected(s);
+    setShowConclusaoForm(false);
+    setConclusaoDesc('');
+    setConclusaoPdf(null);
     // marca como vista
     setNovas(prev => { const n = new Set(prev); n.delete(s.id); return n; });
     setVistas(prev => new Set([...prev, s.id]));
@@ -568,35 +616,85 @@ export default function SolicitacoesPage() {
               {/* Ações */}
               <section>
                 <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Ações</h3>
-                <div className="flex flex-wrap gap-2 items-center">
-                  {selected.status !== 'concluido' && selected.status !== 'cancelado' && (
-                    <>
-                      {selected.status !== 'em_andamento' && (
-                        <button onClick={() => updateStatus(selected.id, 'em_andamento')}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold text-sm hover:bg-amber-500/25 transition-all">
-                          <ClockIcon className="w-4 h-4" /> Marcar Em Andamento
+                {showConclusaoForm ? (
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl space-y-4 border border-gray-200 dark:border-gray-700">
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <CheckCircleIcon className="w-5 h-5 text-emerald-500" /> Confirmar Conclusão
+                    </h4>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Descrição / Observações (Opcional)</label>
+                      <textarea value={conclusaoDesc} onChange={e => setConclusaoDesc(e.target.value)} 
+                        className="w-full p-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all" 
+                        rows={3} placeholder="Descreva o que foi feito..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Orçamento / Comprovante PDF (Opcional)</label>
+                      <input type="file" accept=".pdf" onChange={e => setConclusaoPdf(e.target.files?.[0] || null)} 
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-500/10 file:text-emerald-600 hover:file:bg-emerald-500/20 transition-all cursor-pointer" />
+                    </div>
+                    <div className="flex gap-2 justify-end pt-2">
+                      <button onClick={() => setShowConclusaoForm(false)} 
+                        className="px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">Cancelar</button>
+                      <button onClick={handleConcluir} disabled={concluindo} 
+                        className="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/30 flex items-center gap-2">
+                        {concluindo && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                        Concluir Solicitação
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {selected.status !== 'concluido' && selected.status !== 'cancelado' && (
+                      <>
+                        {selected.status !== 'em_andamento' && (
+                          <button onClick={() => updateStatus(selected.id, 'em_andamento')}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold text-sm hover:bg-amber-500/25 transition-all">
+                            <ClockIcon className="w-4 h-4" /> Marcar Em Andamento
+                          </button>
+                        )}
+                        <button onClick={() => setShowConclusaoForm(true)}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold text-sm hover:bg-emerald-500/25 transition-all">
+                          <CheckCircleIcon className="w-4 h-4" /> Marcar Concluído
                         </button>
-                      )}
-                      <button onClick={() => updateStatus(selected.id, 'concluido')}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold text-sm hover:bg-emerald-500/25 transition-all">
-                        <CheckCircleIcon className="w-4 h-4" /> Marcar Concluído
-                      </button>
-                      <button onClick={() => updateStatus(selected.id, 'cancelado')}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 font-bold text-sm hover:bg-rose-500/25 transition-all">
-                        <XCircleIcon className="w-4 h-4" /> Cancelar
-                      </button>
-                    </>
-                  )}
-                  <button onClick={() => exportToPDF(selected)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 font-bold text-sm hover:bg-blue-500/15 hover:text-blue-600 hover:border-blue-500/30 transition-all ml-auto">
-                    <DocumentArrowDownIcon className="w-4 h-4" /> Baixar PDF
-                  </button>
-                  <button onClick={() => deleteSolicitacao(selected.id)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-500/10 text-gray-500 border border-gray-500/20 font-bold text-sm hover:bg-red-500/15 hover:text-red-500 hover:border-red-500/30 transition-all">
-                    <TrashIcon className="w-4 h-4" /> Excluir
-                  </button>
-                </div>
+                        <button onClick={() => updateStatus(selected.id, 'cancelado')}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 font-bold text-sm hover:bg-rose-500/25 transition-all">
+                          <XCircleIcon className="w-4 h-4" /> Cancelar
+                        </button>
+                      </>
+                    )}
+                    <button onClick={() => exportToPDF(selected!)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 font-bold text-sm hover:bg-blue-500/15 hover:text-blue-600 hover:border-blue-500/30 transition-all ml-auto">
+                      <DocumentArrowDownIcon className="w-4 h-4" /> Baixar PDF
+                    </button>
+                    <button onClick={() => deleteSolicitacao(selected.id)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-500/10 text-gray-500 border border-gray-500/20 font-bold text-sm hover:bg-red-500/15 hover:text-red-500 hover:border-red-500/30 transition-all">
+                      <TrashIcon className="w-4 h-4" /> Excluir
+                    </button>
+                  </div>
+                )}
               </section>
+
+              {/* Conclusão Details */}
+              {selected.status === 'concluido' && (selected.conclusao_descricao || selected.conclusao_pdf) && (
+                <section>
+                  <h3 className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <CheckCircleIcon className="w-4 h-4" /> Detalhes da Conclusão
+                  </h3>
+                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
+                    {selected.conclusao_descricao && (
+                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap mb-4">
+                        {selected.conclusao_descricao}
+                      </p>
+                    )}
+                    {selected.conclusao_pdf && (
+                      <a href={supabase.storage.from('manutencao-pdfs').getPublicUrl(selected.conclusao_pdf).data.publicUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-gray-900 border border-emerald-500/30 text-sm font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all">
+                        <DocumentArrowDownIcon className="w-5 h-5" /> Abrir PDF do Orçamento
+                      </a>
+                    )}
+                  </div>
+                </section>
+              )}
             </div>
           </div>
         </div>
