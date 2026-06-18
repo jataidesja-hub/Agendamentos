@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   WrenchScrewdriverIcon, TruckIcon, ClockIcon, CheckCircleIcon,
   XCircleIcon, ExclamationTriangleIcon, XMarkIcon, PhotoIcon,
-  BellAlertIcon, EyeIcon,
+  BellAlertIcon, EyeIcon, TrashIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
@@ -170,6 +170,15 @@ export default function SolicitacoesPage() {
     toast.success('Status atualizado');
     fetchSolicitacoes(true);
     setSelected(prev => prev ? { ...prev, status } : prev);
+  }
+
+  async function deleteSolicitacao(id: string) {
+    if (!window.confirm("Tem certeza que deseja excluir esta solicitação permanentemente?")) return;
+    const { error } = await supabase.from('manutencao_solicitacoes').delete().eq('id', id);
+    if (error) { toast.error('Erro ao excluir'); return; }
+    toast.success('Solicitação excluída');
+    fetchSolicitacoes(true);
+    setSelected(null);
   }
 
   async function openModal(s: Solicitacao) {
@@ -428,28 +437,34 @@ export default function SolicitacoesPage() {
                 </section>
               )}
 
-              {/* Status */}
-              {selected.status !== 'concluido' && selected.status !== 'cancelado' && (
-                <section>
-                  <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Alterar Status</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selected.status !== 'em_andamento' && (
-                      <button onClick={() => updateStatus(selected.id, 'em_andamento')}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold text-sm hover:bg-amber-500/25 transition-all">
-                        <ClockIcon className="w-4 h-4" /> Marcar Em Andamento
+              {/* Ações */}
+              <section>
+                <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Ações</h3>
+                <div className="flex flex-wrap gap-2 items-center">
+                  {selected.status !== 'concluido' && selected.status !== 'cancelado' && (
+                    <>
+                      {selected.status !== 'em_andamento' && (
+                        <button onClick={() => updateStatus(selected.id, 'em_andamento')}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold text-sm hover:bg-amber-500/25 transition-all">
+                          <ClockIcon className="w-4 h-4" /> Marcar Em Andamento
+                        </button>
+                      )}
+                      <button onClick={() => updateStatus(selected.id, 'concluido')}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold text-sm hover:bg-emerald-500/25 transition-all">
+                        <CheckCircleIcon className="w-4 h-4" /> Marcar Concluído
                       </button>
-                    )}
-                    <button onClick={() => updateStatus(selected.id, 'concluido')}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold text-sm hover:bg-emerald-500/25 transition-all">
-                      <CheckCircleIcon className="w-4 h-4" /> Marcar Concluído
-                    </button>
-                    <button onClick={() => updateStatus(selected.id, 'cancelado')}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 font-bold text-sm hover:bg-rose-500/25 transition-all">
-                      <XCircleIcon className="w-4 h-4" /> Cancelar
-                    </button>
-                  </div>
-                </section>
-              )}
+                      <button onClick={() => updateStatus(selected.id, 'cancelado')}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 font-bold text-sm hover:bg-rose-500/25 transition-all">
+                        <XCircleIcon className="w-4 h-4" /> Cancelar
+                      </button>
+                    </>
+                  )}
+                  <button onClick={() => deleteSolicitacao(selected.id)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-500/10 text-gray-500 border border-gray-500/20 font-bold text-sm hover:bg-red-500/15 hover:text-red-500 hover:border-red-500/30 transition-all ml-auto">
+                    <TrashIcon className="w-4 h-4" /> Excluir
+                  </button>
+                </div>
+              </section>
             </div>
           </div>
         </div>
