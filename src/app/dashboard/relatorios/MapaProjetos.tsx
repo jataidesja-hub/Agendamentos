@@ -455,6 +455,10 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                                </p>
                              </div>
                              <div className="text-right">
+                               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">KM Rodado</p>
+                               <p className="text-sm font-black text-gray-800">{groupedData[projName].vehicles[placa].km.toLocaleString('pt-BR')} km</p>
+                             </div>
+                             <div className="text-right">
                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Volume</p>
                                <p className="text-sm font-black text-gray-800">{groupedData[projName].vehicles[placa].liters.toFixed(2)} L</p>
                              </div>
