@@ -52,7 +52,8 @@ export default function RelatorioEficiencia() {
         if (!data || data.length === 0) {
           hasMore = false;
         } else {
-          allAbastecimentos = [...allAbastecimentos, ...data];
+          const filteredData = data.filter((a: any) => !String(a.tipo_combustivel || '').toUpperCase().includes("ARLA"));
+          allAbastecimentos = [...allAbastecimentos, ...filteredData];
           if (data.length < 1000) hasMore = false;
           else { from += 1000; to += 1000; }
         }
@@ -89,6 +90,8 @@ export default function RelatorioEficiencia() {
 
     abastecimentos.forEach((a: any) => {
       if (!a.data_transacao) return;
+      if (String(a.tipo_combustivel || '').toUpperCase().includes("ARLA")) return;
+      
       const month = String(a.data_transacao).slice(0, 7);
       if (month >= currentMonth) return;
       const normPlaca = normalize(a.placa);
@@ -119,6 +122,8 @@ export default function RelatorioEficiencia() {
     const vehicleStats: Record<string, { km: number, liters: number, count: number, proj: string, gestor: string, modelo: string }> = {};
 
     currentMonthData.forEach(a => {
+      if (String(a.tipo_combustivel || '').toUpperCase().includes("ARLA")) return;
+      
       const placaNorm = normalize(a.placa);
       if (!vehicleStats[placaNorm]) {
         vehicleStats[placaNorm] = {

@@ -161,7 +161,8 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
           if (!data || data.length === 0) {
             hasMore = false;
           } else {
-            allAbastecimentos = [...allAbastecimentos, ...data];
+            const filteredData = data.filter((a: any) => !String(a.tipo_combustivel || '').toUpperCase().includes("ARLA"));
+            allAbastecimentos = [...allAbastecimentos, ...filteredData];
             if (data.length < 1000) {
               hasMore = false;
             } else {
