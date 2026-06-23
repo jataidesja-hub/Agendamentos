@@ -101,7 +101,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
         // 1. Busca todos os veículos ativos com metadados estendidos (com fallback de segurança)
         let { data: frota, error: errFrota } = await supabase
           .from('frota_veiculos')
-          .select('placa, projeto, email_gerente, email_administrativo')
+          .select('placa, projeto, email_gerente, email_administrativo, modelo')
           .eq('status', 'Ativo');
         
         // Fallback: Se der erro (provavelmente colunas de e-mail não existem ainda no banco)
@@ -109,7 +109,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
           console.warn("Colunas de e-mail não encontradas, tentando fallback para dados básicos.");
           const resFallback = await supabase
             .from('frota_veiculos')
-            .select('placa, projeto')
+            .select('placa, projeto, modelo')
             .eq('status', 'Ativo');
           frota = resFallback.data as typeof frota;
           errFrota = resFallback.error;
@@ -120,6 +120,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
           const placaToProject = new Map<string, string>();
           const placaToGerente = new Map<string, string>();
           const placaToAdmin = new Map<string, string>();
+          const placaToModel = new Map<string, string>();
           
           frota.forEach((v: any) => {
             const norm = normalize(v.placa);
@@ -127,6 +128,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
             if (v.projeto) placaToProject.set(norm, v.projeto);
             if (v.email_gerente) placaToGerente.set(norm, v.email_gerente);
             if (v.email_administrativo) placaToAdmin.set(norm, v.email_administrativo);
+            if (v.modelo) placaToModel.set(norm, v.modelo);
           });
 
           setVeiculosAtivos(setAtivos);
@@ -137,6 +139,8 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
           dataCache.placaToGerente = placaToGerente;
           // @ts-ignore
           dataCache.placaToAdmin = placaToAdmin;
+          // @ts-ignore
+          dataCache.placaToModel = placaToModel;
         }
 
         // 2. Busca exaustiva de todos os abastecimentos
@@ -213,10 +217,13 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
       // @ts-ignore
       const placaToProject = dataCache.placaToProject || new Map();
+      // @ts-ignore
+      const placaToModel = dataCache.placaToModel || new Map();
 
       filteredData.forEach((a: any) => {
         const normPlaca = normalize(a.placa);
         const projName = String(a.projeto || placaToProject.get(normPlaca) || "SEM PROJETO").toUpperCase();
+        const modelo = String(a.modelo_veiculo || placaToModel.get(normPlaca) || "");
         
         if (!groups[projName]) {
           groups[projName] = { vehicles: {}, totalLiters: 0, totalValue: 0 };
@@ -224,7 +231,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
         
         const placa = a.placa || "N/A";
         if (!groups[projName].vehicles[placa]) {
-          groups[projName].vehicles[placa] = { items: [], liters: 0, value: 0, km: 0 };
+          groups[projName].vehicles[placa] = { items: [], liters: 0, value: 0, km: 0, modelo };
         }
 
         const km = Number(a.km_rodados_horas || a.km_rodados) || 0;
@@ -393,6 +400,9 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                           <div className="flex items-center">
                             <TruckIcon className="w-4 h-4 text-gray-400 mr-3" />
                             <span className="bg-gray-100 px-3 py-1 rounded-lg font-black text-gray-700 text-sm">{placa}</span>
+                            {groupedData[projName].vehicles[placa].modelo && (
+                              <span className="ml-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">{groupedData[projName].vehicles[placa].modelo}</span>
+                            )}
                             <span className="ml-4 text-xs font-bold text-gray-500 uppercase">{groupedData[projName].vehicles[placa].items.length} abastecimentos</span>
                           </div>
                           <div className="flex items-center gap-6">
