@@ -224,12 +224,15 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
         
         const placa = a.placa || "N/A";
         if (!groups[projName].vehicles[placa]) {
-          groups[projName].vehicles[placa] = { items: [], liters: 0, value: 0 };
+          groups[projName].vehicles[placa] = { items: [], liters: 0, value: 0, km: 0 };
         }
+
+        const km = Number(a.km_rodados_horas || a.km_rodados) || 0;
 
         groups[projName].vehicles[placa].items.push(a);
         groups[projName].vehicles[placa].liters += (Number(a.litros) || 0);
         groups[projName].vehicles[placa].value += (Number(a.valor_emissao) || 0);
+        groups[projName].vehicles[placa].km += km;
         
         groups[projName].totalLiters += (Number(a.litros) || 0);
         groups[projName].totalValue += (Number(a.valor_emissao) || 0);
@@ -393,7 +396,18 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                             <span className="ml-4 text-xs font-bold text-gray-500 uppercase">{groupedData[projName].vehicles[placa].items.length} abastecimentos</span>
                           </div>
                           <div className="flex items-center gap-6">
-                             <p className="text-sm font-black text-gray-800">{groupedData[projName].vehicles[placa].liters.toFixed(2)} L</p>
+                             <div className="text-right">
+                               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Média</p>
+                               <p className="text-sm font-black text-[#0b7336]">
+                                 {groupedData[projName].vehicles[placa].liters > 0 
+                                   ? (groupedData[projName].vehicles[placa].km / groupedData[projName].vehicles[placa].liters).toFixed(2) + ' km/l' 
+                                   : '---'}
+                               </p>
+                             </div>
+                             <div className="text-right">
+                               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Volume</p>
+                               <p className="text-sm font-black text-gray-800">{groupedData[projName].vehicles[placa].liters.toFixed(2)} L</p>
+                             </div>
                              {expandedVehicle === placa ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
                           </div>
                         </button>
