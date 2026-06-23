@@ -138,9 +138,13 @@ export default function RelatorioEficiencia() {
     // Calcula kml e agrupa
     // Estrutura: proj -> gestor -> modelo -> vehicles[]
     const grouped: any = {};
+    const targetModels = ['POLO', 'RANGER', 'S10', 'MONTANA', 'FIORINO', 'STRADA', 'SAVEIRO'];
 
     for (const placa in vehicleStats) {
       const stats = vehicleStats[placa];
+      const isTarget = targetModels.some(m => stats.modelo.includes(m));
+      if (!isTarget) continue;
+
       let kml = stats.liters > 0 ? stats.km / stats.liters : 0;
       let isHistorical = false;
       
