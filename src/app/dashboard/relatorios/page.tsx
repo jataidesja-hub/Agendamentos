@@ -6,17 +6,19 @@ import {
   BuildingStorefrontIcon,
   TruckIcon,
   MapIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  BoltIcon
 } from "@heroicons/react/24/outline";
 import MapaRelatorio from "./MapaRelatorio";
 import RelatorioPostos from "./RelatorioPostos";
 import RelatorioGestores from "./RelatorioGestores";
 import MapaAbastecimentosRelatorio from "./MapaAbastecimentosRelatorio";
+import RelatorioEficiencia from "./RelatorioEficiencia";
 import { supabase } from "@/lib/supabase";
 
 export default function Relatorios() {
-  const [activeTab, setActiveTab] = useState<'projetos' | 'postos' | 'gestores' | 'mapa'>('projetos');
-  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(['projetos', 'postos', 'gestores', 'mapa']);
+  const [activeTab, setActiveTab] = useState<'projetos' | 'postos' | 'gestores' | 'mapa' | 'eficiencia'>('projetos');
+  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(['projetos', 'postos', 'gestores', 'mapa', 'eficiencia']);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -92,6 +94,16 @@ export default function Relatorios() {
               <MapIcon className="w-4 h-4" /> MAPA
             </button>
           )}
+          {abasPermitidas.includes('eficiencia') && (
+            <button
+              onClick={() => setActiveTab('eficiencia')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-2.5xl text-xs font-black tracking-widest transition-all ${
+                activeTab === 'eficiencia' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-500 hover:text-indigo-600'
+              }`}
+            >
+              <BoltIcon className="w-4 h-4" /> EFICIÊNCIA
+            </button>
+          )}
         </div>
       </div>
 
@@ -105,6 +117,8 @@ export default function Relatorios() {
           <RelatorioPostos />
         ) : activeTab === 'gestores' ? (
           <RelatorioGestores />
+        ) : activeTab === 'eficiencia' ? (
+          <RelatorioEficiencia />
         ) : (
           <MapaAbastecimentosRelatorio />
         )}

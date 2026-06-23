@@ -281,6 +281,36 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
       return averages;
     }, [abastecimentos]);
 
+    const vehicleHistoricalKmL = useMemo(() => {
+      const totals: Record<string, { km: number, liters: number }> = {};
+      const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+      const currentMonth = new Date().toISOString().slice(0, 7);
+
+      abastecimentos.forEach((a: any) => {
+        if (!a.data_transacao) return;
+        const month = String(a.data_transacao).slice(0, 7);
+        // Filtra apenas meses anteriores
+        if (month >= currentMonth) return;
+        
+        const normPlaca = normalize(a.placa);
+        if (!normPlaca) return;
+        
+        if (!totals[normPlaca]) {
+          totals[normPlaca] = { km: 0, liters: 0 };
+        }
+        
+        const km = Number(a.km_rodados_horas || a.km_rodados) || 0;
+        totals[normPlaca].km += km;
+        totals[normPlaca].liters += (Number(a.litros) || 0);
+      });
+
+      const averages: Record<string, number> = {};
+      for (const placa in totals) {
+        averages[placa] = totals[placa].liters > 0 ? totals[placa].km / totals[placa].liters : 0;
+      }
+      return averages;
+    }, [abastecimentos]);
+
     if (loading) {
       return (
         <div className="flex flex-col items-center justify-center p-20 animate-pulse bg-white/50 backdrop-blur-xl rounded-[3rem]">
@@ -409,9 +439,18 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                              <div className="text-right">
                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Média</p>
                                <p className="text-sm font-black text-[#0b7336]">
-                                 {groupedData[projName].vehicles[placa].liters > 0 
-                                   ? (groupedData[projName].vehicles[placa].km / groupedData[projName].vehicles[placa].liters).toFixed(2) + ' km/l' 
-                                   : '---'}
+                                 {(() => {
+                                   const isSingle = groupedData[projName].vehicles[placa].items.length === 1;
+                                   let kml = 0;
+                                   if (isSingle && vehicleHistoricalKmL[placa] > 0) {
+                                     kml = vehicleHistoricalKmL[placa];
+                                   } else if (groupedData[projName].vehicles[placa].liters > 0) {
+                                     kml = groupedData[projName].vehicles[placa].km / groupedData[projName].vehicles[placa].liters;
+                                   }
+                                   return kml > 0 
+                                     ? kml.toFixed(2) + ' km/l' + (isSingle && vehicleHistoricalKmL[placa] > 0 ? ' *' : '') 
+                                     : '---';
+                                 })()}
                                </p>
                              </div>
                              <div className="text-right">
