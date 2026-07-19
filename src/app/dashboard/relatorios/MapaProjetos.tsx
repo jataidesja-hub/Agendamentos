@@ -403,8 +403,10 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-[2rem] p-6 text-white shadow-lg shadow-emerald-500/20">
               <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">Economia Geral no Mês</p>
-              <p className={`text-2xl font-black ${economiaData.geral.economizado >= 0 ? 'text-white' : 'text-red-200'}`}>
-                {economiaData.geral.economizado >= 0 ? '+' : ''}{economiaData.geral.economizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              <p className="text-2xl font-black text-white">
+                +{Object.values(economiaData.porProjeto)
+                  .reduce((s: number, v: any) => s + (v.economizado > 0 ? v.economizado : 0), 0)
+                  .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
               <p className="text-[10px] opacity-60 mt-1">vs preço médio de {economiaData.geral.precoMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/L</p>
             </div>
