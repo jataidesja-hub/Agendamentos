@@ -160,20 +160,22 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
         const totalValor = items.reduce((s, a) => s + (Number(a.valor_emissao) || 0), 0);
         const precoMedio = totalLitros > 0 ? totalValor / totalLitros : 0;
 
-        // Economia por projeto
+        // Economia por projeto — soma só os abastecimentos mais baratos que a média
         const porProjeto: Record<string, { economizado: number, litros: number, valor: number }> = {};
         items.forEach(a => {
           const preco = Number(a.valor_litro) || 0;
           const litros = Number(a.litros) || 0;
           if (!preco || !litros) return;
+          const saving = (precoMedio - preco) * litros;
+          if (saving <= 0) return; // ignora abastecimentos acima da média
           const proj = String(a.projeto || 'SEM PROJETO').toUpperCase();
           if (!porProjeto[proj]) porProjeto[proj] = { economizado: 0, litros: 0, valor: 0 };
-          porProjeto[proj].economizado += (precoMedio - preco) * litros;
+          porProjeto[proj].economizado += saving;
           porProjeto[proj].litros += litros;
           porProjeto[proj].valor += Number(a.valor_emissao) || 0;
         });
 
-        const totalEconomizado = Object.values(porProjeto).reduce((s, v) => s + (v.economizado > 0 ? v.economizado : 0), 0);
+        const totalEconomizado = Object.values(porProjeto).reduce((s, v) => s + v.economizado, 0);
 
         return { month, items, totalLitros, totalValor, precoMedio, porProjeto, totalEconomizado };
       });

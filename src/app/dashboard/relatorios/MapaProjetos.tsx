@@ -326,22 +326,22 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
       const placaToProject = dataCache.placaToProject || new Map();
 
       const porProjeto: Record<string, { economizado: number, litros: number }> = {};
-      let geralEconomizado = 0;
 
       filteredData.forEach((a: any) => {
         const preco = Number(a.valor_litro) || 0;
         const litros = Number(a.litros) || 0;
         if (!preco || !litros) return;
-        const diff = (precoMedio - preco) * litros; // positivo = mais barato que a média = economizou
-        geralEconomizado += diff;
+        const saving = (precoMedio - preco) * litros;
+        if (saving <= 0) return; // só contabiliza abastecimentos abaixo da média
 
         const normPlaca = normalize(a.placa);
         const proj = String(a.projeto || placaToProject.get(normPlaca) || 'SEM PROJETO').toUpperCase();
         if (!porProjeto[proj]) porProjeto[proj] = { economizado: 0, litros: 0 };
-        porProjeto[proj].economizado += diff;
+        porProjeto[proj].economizado += saving;
         porProjeto[proj].litros += litros;
       });
 
+      const geralEconomizado = Object.values(porProjeto).reduce((s: number, v: any) => s + v.economizado, 0);
       return { porProjeto, geral: { economizado: geralEconomizado, totalLitros, precoMedio } };
     }, [filteredData]);
 
