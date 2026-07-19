@@ -426,9 +426,11 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                   ))}
               </div>
               <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
-                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total</span>
-                <span className={`text-sm font-black ${economiaData.geral.economizado >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                  {economiaData.geral.economizado >= 0 ? '+' : ''}{economiaData.geral.economizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Economizado</span>
+                <span className="text-sm font-black text-emerald-600">
+                  +{Object.values(economiaData.porProjeto)
+                    .reduce((s: number, v: any) => s + (v.economizado > 0 ? v.economizado : 0), 0)
+                    .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               </div>
             </div>
