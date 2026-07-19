@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { dataCache } from '@/lib/cache';
 import toast from 'react-hot-toast';
+import RelatorioPDFButton from './RelatorioPDFButton';
 
 const RelatorioProjetos = () => {
     const [abastecimentos, setAbastecimentos] = useState<any[]>([]);
@@ -393,6 +394,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                 GERAR E-MAIL {selectedProjects.size > 0 && `(${selectedProjects.size})`}
               </button>
             )}
+            <RelatorioPDFButton abastecimentos={abastecimentos} availableMonths={availableMonths} />
           </div>
         </div>
 
