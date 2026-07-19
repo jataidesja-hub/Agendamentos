@@ -312,6 +312,38 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
       return averages;
     }, [abastecimentos]);
 
+    const economiaData = useMemo(() => {
+      if (!filteredData.length) return { porProjeto: {}, geral: { economizado: 0, totalLitros: 0, precoMedio: 0 } };
+
+      // Calcula preço médio por litro de todos os abastecimentos do mês
+      const totalValor = filteredData.reduce((s: number, a: any) => s + (Number(a.valor_emissao) || 0), 0);
+      const totalLitros = filteredData.reduce((s: number, a: any) => s + (Number(a.litros) || 0), 0);
+      const precoMedio = totalLitros > 0 ? totalValor / totalLitros : 0;
+
+      const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || '';
+      // @ts-ignore
+      const placaToProject = dataCache.placaToProject || new Map();
+
+      const porProjeto: Record<string, { economizado: number, litros: number }> = {};
+      let geralEconomizado = 0;
+
+      filteredData.forEach((a: any) => {
+        const preco = Number(a.valor_litro) || 0;
+        const litros = Number(a.litros) || 0;
+        if (!preco || !litros) return;
+        const diff = (precoMedio - preco) * litros; // positivo = mais barato que a média = economizou
+        geralEconomizado += diff;
+
+        const normPlaca = normalize(a.placa);
+        const proj = String(a.projeto || placaToProject.get(normPlaca) || 'SEM PROJETO').toUpperCase();
+        if (!porProjeto[proj]) porProjeto[proj] = { economizado: 0, litros: 0 };
+        porProjeto[proj].economizado += diff;
+        porProjeto[proj].litros += litros;
+      });
+
+      return { porProjeto, geral: { economizado: geralEconomizado, totalLitros, precoMedio } };
+    }, [filteredData]);
+
     if (loading) {
       return (
         <div className="flex flex-col items-center justify-center p-20 animate-pulse bg-white/50 backdrop-blur-xl rounded-[3rem]">
@@ -363,6 +395,39 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
             )}
           </div>
         </div>
+
+        {/* Cartões de Economia */}
+        {economiaData.geral.precoMedio > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-[2rem] p-6 text-white shadow-lg shadow-emerald-500/20">
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">Economia Geral no Mês</p>
+              <p className={`text-2xl font-black ${economiaData.geral.economizado >= 0 ? 'text-white' : 'text-red-200'}`}>
+                {economiaData.geral.economizado >= 0 ? '+' : ''}{economiaData.geral.economizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+              <p className="text-[10px] opacity-60 mt-1">vs preço médio de {economiaData.geral.precoMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/L</p>
+            </div>
+            <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Preço Médio do Período</p>
+              <p className="text-2xl font-black text-gray-900">{economiaData.geral.precoMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/L</p>
+              <p className="text-[10px] text-gray-400 mt-1">{economiaData.geral.totalLitros.toFixed(0)} L abastecidos</p>
+            </div>
+            <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Economia por Projeto</p>
+              <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+                {Object.entries(economiaData.porProjeto)
+                  .sort(([,a]: any, [,b]: any) => b.economizado - a.economizado)
+                  .map(([proj, val]: any) => (
+                    <div key={proj} className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-gray-600 truncate max-w-[55%]">{proj}</span>
+                      <span className={`text-[11px] font-black ${val.economizado >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {val.economizado >= 0 ? '+' : ''}{val.economizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Lista de Projetos */}
         <div className="space-y-4">
