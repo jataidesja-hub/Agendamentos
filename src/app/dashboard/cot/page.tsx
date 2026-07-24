@@ -1334,6 +1334,13 @@ export default function CotPage() {
               if (t.subtipo !== sub) return false;
               if (filtroTipo !== "todos" && t.tipo_atividade !== filtroTipo) return false;
               if (filtroStatus !== "todos" && t.status !== filtroStatus) return false;
+              if (filtroDocExt !== "todos") {
+                if (filtroDocExt === "nao_possui") {
+                  if (t.doc_externo && t.doc_externo !== "nao_possui") return false;
+                } else {
+                  if (t.doc_externo !== filtroDocExt) return false;
+                }
+              }
               return true;
             });
             const tArquivadas = base.filter(t => t.arquivada).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
