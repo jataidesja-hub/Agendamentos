@@ -231,6 +231,7 @@ export default function CotPage() {
 
   const [filtroTipo, setFiltroTipo] = useState<TipoAtividade | "todos">("todos");
   const [filtroStatus, setFiltroStatus] = useState<StatusTarefa | "todos">("todos");
+  const [filtroDocExt, setFiltroDocExt] = useState<string>("todos");
 
   // Ordenação tarefas
   const [sortCol, setSortCol] = useState<string>("data_fim");
@@ -341,6 +342,13 @@ export default function CotPage() {
     const base = tarefas.filter(t => {
       if (filtroTipo !== "todos" && t.tipo_atividade !== filtroTipo) return false;
       if (filtroStatus !== "todos" && t.status !== filtroStatus) return false;
+      if (filtroDocExt !== "todos") {
+        if (filtroDocExt === "nao_possui") {
+          if (t.doc_externo && t.doc_externo !== "nao_possui") return false;
+        } else {
+          if (t.doc_externo !== filtroDocExt) return false;
+        }
+      }
       return true;
     });
     const arquivadas = base.filter(t => t.arquivada)
@@ -369,7 +377,7 @@ export default function CotPage() {
         return tb - ta;
       });
     return { tarefasAtivas: ativas, tarefasConcluidas: concluidas, tarefasArquivadas: arquivadas };
-  }, [tarefas, subtipoAtivo, filtroTipo, filtroStatus]);
+  }, [tarefas, subtipoAtivo, filtroTipo, filtroStatus, filtroDocExt]);
 
   const statsEventos = useMemo(() => {
     const calc = (tipo: TipoEvento) => {
@@ -1177,6 +1185,16 @@ export default function CotPage() {
                   </button>
                 ))}
               </div>
+              {viewMode === "doc_ext" && (
+                <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+                  {(["todos", "nao_possui", "MO", "AI", "ATEE", "ATEIE"] as const).map(v => (
+                    <button key={v} onClick={() => setFiltroDocExt(v)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filtroDocExt === v ? "bg-violet-600 text-white shadow" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                      {v === "todos" ? "Todos" : v === "nao_possui" ? "Não possui" : v}
+                    </button>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
