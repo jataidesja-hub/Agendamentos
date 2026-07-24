@@ -1130,6 +1130,22 @@ export default function CotPage() {
       <div className="flex flex-wrap gap-3 mb-4 items-center justify-between">
         <div className="flex flex-wrap gap-3 items-center">
           <FunnelIcon className="w-4 h-4 text-gray-400" />
+          {/* Filtro por tipo de doc */}
+          <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
+            {([
+              { v: 'geral', label: 'Todos', color: 'bg-[#0b7336]' },
+              { v: 'pes', label: 'PES', color: 'bg-[#0b7336]' },
+              { v: 'doc_ext', label: 'DOC EXT.', color: 'bg-[#0b7336]' },
+              { v: 'indisponibilidade', label: 'Indispon.', color: 'bg-amber-500' },
+              { v: 'anormalidade', label: 'Anormal.', color: 'bg-rose-500' },
+              { v: 'conv_op', label: 'Conv. Op.', color: 'bg-purple-500' },
+            ] as const).map(({ v, label, color }) => (
+              <button key={v} onClick={() => { setViewMode(v); setMostrarArquivados(false); setSelecionados(new Set()); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === v ? `${color} text-white shadow` : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
           {viewMode === "indisponibilidade" || viewMode === "anormalidade" || viewMode === "conv_op" ? (
             <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
               {(["todos", "ativa", "sem_previsao", "previsao_vencida", "normalizada"] as const).map(v => (
