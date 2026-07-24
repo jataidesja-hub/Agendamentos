@@ -1185,7 +1185,7 @@ export default function CotPage() {
                   </button>
                 ))}
               </div>
-              {viewMode === "doc_ext" && (
+              {(viewMode === "doc_ext" || viewMode === "pes") && (
                 <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 border border-gray-100 dark:border-gray-700">
                   {(["todos", "nao_possui", "MO", "AI", "ATEE", "ATEIE"] as const).map(v => (
                     <button key={v} onClick={() => setFiltroDocExt(v)}
