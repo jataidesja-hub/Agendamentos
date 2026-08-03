@@ -1,19 +1,64 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { TruckIcon, PlusIcon, TrashIcon, DocumentArrowUpIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
+import {
+  TruckIcon, PlusIcon, DocumentArrowUpIcon,
+  ChevronDownIcon, ChevronUpIcon, ArchiveBoxIcon,
+  CreditCardIcon, BuildingOfficeIcon,
+} from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 
-export default function VeiculosPage() {
+// ─── helpers ────────────────────────────────────────────────────────────────
+const fmt = (v: number) =>
+  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+function LimitBar({ limite, usado }: { limite: number; usado: number }) {
+  if (!limite || limite <= 0) return null;
+  const pct = Math.min((usado / limite) * 100, 100);
+  const color =
+    pct >= 100 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-500';
+  const textColor =
+    pct >= 100 ? 'text-red-600 dark:text-red-400' :
+    pct >= 70  ? 'text-amber-600 dark:text-amber-400' :
+                 'text-emerald-600 dark:text-emerald-400';
+  const label =
+    pct >= 100 ? '🔴 Estourado' : pct >= 70 ? '🟡 Atenção' : '🟢 OK';
+  const disponivel = Math.max(limite - usado, 0);
+
+  return (
+    <div className="mt-3 flex flex-col gap-1.5">
+      <div className="flex items-center justify-between text-[10px] font-black uppercase">
+        <span className="text-gray-400">Limite do Cartão</span>
+        <span className={textColor}>{label}</span>
+      </div>
+      <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
+        <div className={`${color} h-2 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="flex justify-between text-[10px] font-bold text-gray-400">
+        <span>Usado: <span className={textColor}>{fmt(usado)}</span></span>
+        <span>Limite: {fmt(limite)}</span>
+      </div>
+      {disponivel > 0 && (
+        <div className="text-[10px] font-bold text-gray-400 text-right">
+          Disponível: <span className="text-gray-600 dark:text-gray-300">{fmt(disponivel)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── main component ──────────────────────────────────────────────────────────
+export default function FrotasPage() {
   const [veiculos, setVeiculos] = useState<any[]>([]);
+  const [usoPorPlaca, setUsoPorPlaca] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [busca, setBusca] = useState('');
   const [projetosPermitidos, setProjetosPermitidos] = useState<string[] | null>(null);
   const [isMaster, setIsMaster] = useState(false);
-  const [projetosExpandidos, setProjetosExpandidos] = useState<Record<string, boolean>>({});
+  const [gruposExpandidos, setGruposExpandidos] = useState<Record<string, boolean>>({});
 
   // Form states
   const [placa, setPlaca] = useState('');
@@ -26,8 +71,10 @@ export default function VeiculosPage() {
   useEffect(() => {
     fetchPerfil();
     fetchVeiculos();
+    fetchUsoMensal();
   }, []);
 
+  // ── fetch perfil ───────────────────────────────────────────────────────────
   async function fetchPerfil() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
@@ -36,241 +83,324 @@ export default function VeiculosPage() {
       .select('master, projetos_acesso')
       .eq('email', session.user.email)
       .single();
-    if (data?.master) {
-      setIsMaster(true);
-    } else if (data) {
-      setProjetosPermitidos(data.projetos_acesso || []);
-    }
+    if (data?.master) setIsMaster(true);
+    else if (data) setProjetosPermitidos(data.projetos_acesso || []);
   }
 
+  // ── fetch veículos (excluindo arquivados) ──────────────────────────────────
   async function fetchVeiculos() {
     try {
       const { data, error } = await supabase
         .from('frota_veiculos')
         .select('*')
+        .eq('arquivado', false)
         .order('projeto', { ascending: true })
         .order('placa', { ascending: true });
-      if (error) {
-        console.warn('Tabela frota_veiculos error', error);
-        setVeiculos([]);
-      } else {
-        setVeiculos(data || []);
-      }
-    } catch {
-      toast.error('Erro ao carregar veículos');
-    } finally {
-      setLoading(false);
+      if (error) { console.warn(error); setVeiculos([]); }
+      else setVeiculos(data || []);
+    } catch { toast.error('Erro ao carregar frotas'); }
+    finally { setLoading(false); }
+  }
+
+  // ── uso do mês atual por placa (soma valor_total em abastecimentos) ─────────
+  async function fetchUsoMensal() {
+    const agora = new Date();
+    const inicio = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-01`;
+    const { data } = await supabase
+      .from('abastecimentos')
+      .select('placa, valor_total')
+      .gte('data_transacao', inicio);
+    if (data) {
+      const agg: Record<string, number> = {};
+      data.forEach((r: any) => {
+        const p = String(r.placa || '').toUpperCase().trim();
+        agg[p] = (agg[p] || 0) + Number(r.valor_total || 0);
+      });
+      setUsoPorPlaca(agg);
     }
   }
 
+  // ── salvar novo veículo ────────────────────────────────────────────────────
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const { error } = await supabase.from('frota_veiculos').insert({
-        placa,
-        modelo,
-        status,
-        projeto,
-        subprojeto: base,
-        propriedade,
+        placa, modelo, status, projeto, subprojeto: base, propriedade, arquivado: false,
       });
       if (!error) toast.success('Veículo registrado!');
       setShowForm(false);
       fetchVeiculos();
       setPlaca(''); setModelo(''); setStatus('Ativo'); setProjeto(''); setBase(''); setPropriedade('');
-    } catch {
-      toast.error('Erro ao salvar veículo');
-    }
+    } catch { toast.error('Erro ao salvar'); }
   };
 
+  // ── update status ──────────────────────────────────────────────────────────
   const handleUpdateStatus = async (id: string, newStatus: string) => {
-    const originalVeiculos = [...veiculos];
+    const original = [...veiculos];
     setVeiculos(prev => prev.map(v => v.id === id ? { ...v, status: newStatus } : v));
-    try {
-      const { error } = await supabase.from('frota_veiculos').update({ status: newStatus }).eq('id', id);
-      if (error) {
-        setVeiculos(originalVeiculos);
-        toast.error('Erro ao salvar no banco: ' + error.message);
-      } else {
-        toast.success('Status atualizado!');
-      }
-    } catch {
-      setVeiculos(originalVeiculos);
-      toast.error('Falha na conexão ao atualizar status');
-    }
+    const { error } = await supabase.from('frota_veiculos').update({ status: newStatus }).eq('id', id);
+    if (error) { setVeiculos(original); toast.error(error.message); }
+    else toast.success('Status atualizado!');
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Deseja realmente excluir este veículo da frota?')) return;
-    try {
-      const { error } = await supabase.from('frota_veiculos').delete().eq('id', id);
-      if (!error) { toast.success('Veículo removido!'); fetchVeiculos(); }
-    } catch {
-      toast.error('Erro ao excluir veículo');
-    }
+  // ── arquivar ───────────────────────────────────────────────────────────────
+  const handleArchivar = async (id: string, placaV: string) => {
+    if (!confirm(`Arquivar veículo ${placaV}? Ele não aparecerá mais na listagem ativa.`)) return;
+    const { error } = await supabase.from('frota_veiculos').update({ arquivado: true }).eq('id', id);
+    if (!error) { toast.success(`${placaV} arquivado!`); fetchVeiculos(); }
+    else toast.error(error.message);
   };
 
-  const toggleProjeto = (p: string) => {
-    setProjetosExpandidos(prev => ({ ...prev, [p]: !prev[p] }));
+  // ── toggle grupo ───────────────────────────────────────────────────────────
+  const toggleGrupo = (k: string) =>
+    setGruposExpandidos(prev => ({ ...prev, [k]: !prev[k] }));
+
+  // ── importar FROTA_PROJETOS ────────────────────────────────────────────────
+  const importarFrota = async (file: File) => {
+    setLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (evt: any) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        const getV = (row: any, names: string[]) => {
+          for (const name of names) {
+            const found = Object.keys(row).find(k => k.toUpperCase().trim().includes(name.toUpperCase()));
+            if (found && row[found] != null) return row[found];
+          }
+          return '';
+        };
+        const getExact = (row: any, names: string[]) => {
+          for (const name of names) {
+            const found = Object.keys(row).find(k => k.toUpperCase().trim() === name.toUpperCase());
+            if (found && row[found] != null) return row[found];
+          }
+          return '';
+        };
+        const normStatus = (s: string) =>
+          s.toUpperCase().includes('DEMOB') || s.toUpperCase().includes('DESMOB') ? 'Desmobilizado' : 'Ativo';
+
+        const rows = rawData.map(row => {
+          const p = String(getExact(row, ['PLACA', 'VEICULO']) || '').trim().toUpperCase();
+          return {
+            placa: p, identificacao: p,
+            projeto: String(getExact(row, ['PROJETO']) || '').trim(),
+            subprojeto: String(getExact(row, ['BASE', 'SUBPROJETO']) || '').trim(),
+            email_gerente: String(getV(row, ['EMAIL_GERENTE', 'EMAIL GERENTE']) || '').trim(),
+            email_administrativo: String(getV(row, ['EMAIL_ADM', 'EMAIL ADM']) || '').trim(),
+            status: normStatus(String(getExact(row, ['STATUS']) || 'Ativo')),
+            propriedade: String(getExact(row, ['PROPRIEDADE']) || '').trim(),
+          };
+        }).filter(x => x.placa);
+
+        const uniqueMap = new Map<string, any>();
+        rows.forEach(r => uniqueMap.set(r.placa, r));
+        const formatted = Array.from(uniqueMap.values());
+
+        if (confirm(`Importar ${formatted.length} veículos (FROTA)?`)) {
+          const { error } = await supabase.from('frota_veiculos').upsert(formatted, { onConflict: 'placa' });
+          if (error) throw error;
+          toast.success('Frota atualizada!');
+          fetchVeiculos();
+        }
+      } catch (err: any) { toast.error('Erro: ' + (err.message || err)); }
+      finally { setLoading(false); }
+    };
+    reader.readAsBinaryString(file);
   };
 
-  // Filtra por projetos permitidos e busca
-  const veiculosFiltrados = veiculos.filter(v => {
-    const projetoV = String(v.projeto || '').toUpperCase();
-    if (projetosPermitidos !== null && !projetosPermitidos.some(p => p.toUpperCase() === projetoV)) return false;
-    const termo = busca.toUpperCase();
-    return (
-      v.placa?.toUpperCase().includes(termo) ||
-      projetoV.includes(termo) ||
-      String(v.subprojeto || '').toUpperCase().includes(termo) ||
-      String(v.modelo || '').toUpperCase().includes(termo) ||
-      String(v.propriedade || '').toUpperCase().includes(termo)
-    );
-  });
+  // ── importar LIMITES DO CARTÃO ─────────────────────────────────────────────
+  const importarLimites = async (file: File) => {
+    setLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (evt: any) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        // Tenta a aba "Página1" ou a primeira aba
+        const sheetName = wb.SheetNames.find(n =>
+          n.toUpperCase().includes('PÁGINA') || n.toUpperCase().includes('PAGINA') || n === wb.SheetNames[0]
+        ) || wb.SheetNames[0];
+        const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
 
-  // Agrupa por projeto
-  const grupos = veiculosFiltrados.reduce((acc: Record<string, any[]>, v) => {
-    const key = String(v.projeto || 'SEM PROJETO').trim().toUpperCase();
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(v);
-    return acc;
-  }, {});
-  const projetosOrdenados = Object.keys(grupos).sort();
+        const getExact = (row: any, names: string[]) => {
+          for (const name of names) {
+            const found = Object.keys(row).find(k => k.toUpperCase().trim() === name.toUpperCase());
+            if (found && row[found] != null) return row[found];
+          }
+          return null;
+        };
+        const getContains = (row: any, names: string[]) => {
+          for (const name of names) {
+            const found = Object.keys(row).find(k => k.toUpperCase().includes(name.toUpperCase()));
+            if (found && row[found] != null) return row[found];
+          }
+          return null;
+        };
 
-  if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse font-bold">Carregando veículos...</div>;
+        let ok = 0;
+        for (const row of rawData) {
+          const placa = String(getExact(row, ['PLACA', 'PLACA ']) || '').trim().toUpperCase();
+          if (!placa) continue;
+          // Tenta "Limite Próximo Período" primeiro, depois "Limite"
+          const limiteRaw = getContains(row, ['LIMITE PRÓXIMO', 'LIMITE PROXIMO', 'LIMITE PRX'])
+            ?? getExact(row, ['LIMITE', 'LIMIT']);
+          const limite = Number(String(limiteRaw || '0').replace(',', '.')) || 0;
+          if (limite <= 0) continue;
+          const { error } = await supabase
+            .from('frota_veiculos')
+            .update({ limite_cartao: limite })
+            .eq('placa', placa);
+          if (!error) ok++;
+        }
+        toast.success(`Limites atualizados: ${ok} veículo(s)!`);
+        fetchVeiculos();
+      } catch (err: any) { toast.error('Erro: ' + (err.message || err)); }
+      finally { setLoading(false); }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // ── filtros e agrupamento ──────────────────────────────────────────────────
+  const veiculosFiltrados = useMemo(() => {
+    return veiculos.filter(v => {
+      const proj = String(v.projeto || '').toUpperCase();
+      if (projetosPermitidos !== null &&
+          !projetosPermitidos.some(p => p.toUpperCase() === proj)) return false;
+      const t = busca.toUpperCase();
+      return (
+        !t ||
+        v.placa?.toUpperCase().includes(t) ||
+        proj.includes(t) ||
+        String(v.subprojeto || '').toUpperCase().includes(t) ||
+        String(v.propriedade || '').toUpperCase().includes(t) ||
+        String(v.modelo || '').toUpperCase().includes(t)
+      );
+    });
+  }, [veiculos, projetosPermitidos, busca]);
+
+  // Agrupa por PROPRIETÁRIO (propriedade)
+  const grupos = useMemo(() => {
+    const g: Record<string, any[]> = {};
+    veiculosFiltrados.forEach(v => {
+      const key = String(v.propriedade || 'SEM PROPRIETÁRIO').trim().toUpperCase();
+      if (!g[key]) g[key] = [];
+      g[key].push(v);
+    });
+    return g;
+  }, [veiculosFiltrados]);
+
+  const proprietariosOrdenados = Object.keys(grupos).sort();
+
+  // Stats globais
+  const totalVeics = veiculosFiltrados.length;
+  const totalOK = veiculosFiltrados.filter(v => {
+    if (!v.limite_cartao) return true;
+    return (usoPorPlaca[v.placa] || 0) / v.limite_cartao < 0.7;
+  }).length;
+  const totalAtencao = veiculosFiltrados.filter(v => {
+    if (!v.limite_cartao) return false;
+    const pct = (usoPorPlaca[v.placa] || 0) / v.limite_cartao;
+    return pct >= 0.7 && pct < 1;
+  }).length;
+  const totalEstourado = veiculosFiltrados.filter(v => {
+    if (!v.limite_cartao) return false;
+    return (usoPorPlaca[v.placa] || 0) >= v.limite_cartao;
+  }).length;
+
+  if (loading) return (
+    <div className="p-8 text-center text-gray-500 animate-pulse font-bold">Carregando frotas...</div>
+  );
 
   return (
-    <div className="p-4 md:p-8 w-full max-w-6xl mx-auto flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+    <div className="p-4 md:p-8 w-full max-w-7xl mx-auto flex flex-col gap-6">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl shadow-lg">
             <TruckIcon className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Frota / Gestão de Frotas</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Cadastro de placas, projetos e bases da operação</p>
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+              Frota / Gestão de Frotas
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">
+              Cadastro de placas, projetos e controle de limites de cartão
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
-            <input
-              type="text"
-              placeholder="Pesquisar placa, projeto, base..."
-              value={busca}
-              onChange={(e) => setBusca(e.target.value.toUpperCase())}
-              className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="Buscar placa, projeto, proprietário..."
+            value={busca}
+            onChange={e => setBusca(e.target.value.toUpperCase())}
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full md:w-56"
+          />
+
+          {/* Importar Frota — só master */}
           {isMaster && (
-            <label className="flex items-center gap-2 bg-gray-800 hover:bg-black text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg cursor-pointer whitespace-nowrap">
-              <DocumentArrowUpIcon className="w-5 h-5" /> Importar Planilha
-              <input type="file" accept=".xlsx, .xls" className="hidden" onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setLoading(true);
-                const reader = new FileReader();
-                reader.onload = async (evt: any) => {
-                  try {
-                    const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                    const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-
-                    const getV = (row: any, names: string[]) => {
-                      for (const name of names) {
-                        const found = Object.keys(row).find(k => k.toUpperCase().trim().includes(name.toUpperCase().trim()));
-                        if (found && row[found] !== undefined && row[found] !== null) return row[found];
-                      }
-                      return "";
-                    };
-                    const getVExact = (row: any, names: string[]) => {
-                      for (const name of names) {
-                        const found = Object.keys(row).find(k => k.toUpperCase().trim() === name.toUpperCase().trim());
-                        if (found && row[found] !== undefined && row[found] !== null) return row[found];
-                      }
-                      return "";
-                    };
-                    const normalizeStatus = (s: string) => {
-                      const u = s.toUpperCase().trim();
-                      if (u.includes("DEMOB") || u.includes("DESMOB")) return "Desmobilizado";
-                      return "Ativo";
-                    };
-
-                    const rawFormatted = rawData.map(row => {
-                      const placa = String(getVExact(row, ["PLACA", "VEICULO"]) || "").trim().toUpperCase();
-                      const emailGerente = String(getV(row, ["EMAIL_GERENTE", "EMAIL GERENTE"]) || "").trim();
-                      const emailAdmin = String(getV(row, ["EMAIL_ADM", "EMAIL ADM", "EMAIL_ADMINISTRATIVO", "EMAIL ADMINISTRATIVO"]) || "").trim();
-                      const rawStatus = String(getVExact(row, ["STATUS"]) || "Ativo").trim();
-                      return {
-                        placa,
-                        identificacao: placa,
-                        projeto: String(getVExact(row, ["PROJETO"]) || "").trim(),
-                        subprojeto: String(getVExact(row, ["BASE", "SUBPROJETO"]) || "").trim(),
-                        email_gerente: emailGerente,
-                        email_administrativo: emailAdmin,
-                        status: normalizeStatus(rawStatus),
-                        propriedade: String(getVExact(row, ["PROPRIEDADE"]) || "").trim(),
-                      };
-                    }).filter(x => x.placa !== "");
-
-                    const uniqueMap = new Map();
-                    rawFormatted.forEach(item => uniqueMap.set(item.placa, item));
-                    const formatted = Array.from(uniqueMap.values());
-
-                    if (confirm(`Importar ${formatted.length} veículos?`)) {
-                      const { error } = await supabase.from('frota_veiculos').upsert(formatted, { onConflict: 'placa' });
-                      if (error) { console.error("Erro detalhes:", error); throw error; }
-                      toast.success('Frota atualizada!');
-                      fetchVeiculos();
-                    }
-                  } catch (err: any) {
-                    console.error("Erro detalhes:", err);
-                    toast.error('Erro ao importar: ' + (err.message || String(err)));
-                  } finally { setLoading(false); }
-                };
-                reader.readAsBinaryString(file);
-              }} />
-            </label>
+            <>
+              <label className="flex items-center gap-2 bg-gray-800 hover:bg-black text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg cursor-pointer whitespace-nowrap">
+                <DocumentArrowUpIcon className="w-4 h-4" /> Importar Frota
+                <input type="file" accept=".xlsx,.xls" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) importarFrota(f); e.target.value = ''; }} />
+              </label>
+              <label className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg cursor-pointer whitespace-nowrap">
+                <CreditCardIcon className="w-4 h-4" /> Importar Limites
+                <input type="file" accept=".xlsx,.xls" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) importarLimites(f); e.target.value = ''; }} />
+              </label>
+            </>
           )}
+
+          {/* Novo Veículo */}
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg hover:scale-105 active:scale-95 whitespace-nowrap"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg hover:scale-105 active:scale-95 whitespace-nowrap"
           >
-            {showForm ? 'Cancelar' : <><PlusIcon className="w-5 h-5" /> Novo Veiculo</>}
+            {showForm ? 'Cancelar' : <><PlusIcon className="w-5 h-5" /> Novo Veículo</>}
           </button>
         </div>
       </div>
 
-      {/* Form */}
+      {/* ── Stats ──────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Veículos', value: totalVeics, color: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' },
+          { label: '🟢 Dentro do Limite', value: totalOK, color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' },
+          { label: '🟡 Atenção', value: totalAtencao, color: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' },
+          { label: '🔴 Estourado', value: totalEstourado, color: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' },
+        ].map(s => (
+          <div key={s.label} className={`${s.color} rounded-2xl p-4 flex flex-col gap-1`}>
+            <span className="text-2xl font-black">{s.value}</span>
+            <span className="text-xs font-bold uppercase tracking-wider opacity-80">{s.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Form ───────────────────────────────────────────────────────────── */}
       {showForm && (
-        <form onSubmit={handleSave} className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-gray-100 dark:border-gray-700/50 rounded-3xl p-6 md:p-8 shadow-xl animate-in slide-in-from-top-4 duration-300">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Placa</label>
-              <input required placeholder="EX: ABC-1234" value={placa} onChange={e => setPlaca(e.target.value.toUpperCase())}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase text-gray-900 dark:text-white" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Modelo</label>
-              <input placeholder="EX: Toyota Hilux" value={modelo} onChange={e => setModelo(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Projeto</label>
-              <input placeholder="EX: MANTIQUEIRA" value={projeto} onChange={e => setProjeto(e.target.value.toUpperCase())}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase text-gray-900 dark:text-white" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Base / Subprojeto</label>
-              <input placeholder="EX: SE ABDON" value={base} onChange={e => setBase(e.target.value.toUpperCase())}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase text-gray-900 dark:text-white" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-1">Propriedade</label>
-              <input placeholder="EX: CYMI, LOCALIZA..." value={propriedade} onChange={e => setPropriedade(e.target.value.toUpperCase())}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase text-gray-900 dark:text-white" />
-            </div>
-            <div className="flex flex-col gap-2">
+        <form onSubmit={handleSave}
+          className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-gray-100 dark:border-gray-700/50 rounded-3xl p-6 shadow-xl animate-in slide-in-from-top-4 duration-300">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+            {[
+              { label: 'Placa', val: placa, set: (v: string) => setPlaca(v.toUpperCase()), ph: 'ABC-1234', req: true },
+              { label: 'Modelo', val: modelo, set: setModelo, ph: 'Toyota Hilux' },
+              { label: 'Projeto', val: projeto, set: (v: string) => setProjeto(v.toUpperCase()), ph: 'MANTIQUEIRA' },
+              { label: 'Base / Subprojeto', val: base, set: (v: string) => setBase(v.toUpperCase()), ph: 'SE ABDON' },
+              { label: 'Proprietário', val: propriedade, set: (v: string) => setPropriedade(v.toUpperCase()), ph: 'CYMI, LOCALIZA...' },
+            ].map(f => (
+              <div key={f.label} className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-400 uppercase ml-1">{f.label}</label>
+                <input required={f.req} placeholder={f.ph} value={f.val}
+                  onChange={e => f.set(e.target.value)}
+                  className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white" />
+              </div>
+            ))}
+            <div className="flex flex-col gap-1">
               <label className="text-xs font-bold text-gray-400 uppercase ml-1">Status</label>
               <select value={status} onChange={e => setStatus(e.target.value)}
                 className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white font-bold">
@@ -281,99 +411,142 @@ export default function VeiculosPage() {
             </div>
           </div>
           <div className="flex justify-end">
-            <button type="submit" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg active:scale-95">
+            <button type="submit"
+              className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg active:scale-95">
               Salvar Veículo
             </button>
           </div>
         </form>
       )}
 
-      {/* Contador */}
-      <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 font-medium">
-        <span>{veiculosFiltrados.length} veículo(s) • {projetosOrdenados.length} projeto(s)</span>
-      </div>
+      {/* ── Contador ───────────────────────────────────────────────────────── */}
+      <p className="text-sm text-gray-400 font-medium">
+        {totalVeics} veículo(s) · {proprietariosOrdenados.length} proprietário(s)
+      </p>
 
-      {/* Cards agrupados por projeto */}
+      {/* ── Grupos por Proprietário ─────────────────────────────────────────── */}
       <div className="flex flex-col gap-6 pb-20">
-        {projetosOrdenados.length === 0 && (
-          <div className="py-24 text-center border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-[3rem] bg-gray-50/50 dark:bg-gray-900/30">
+        {proprietariosOrdenados.length === 0 && (
+          <div className="py-24 text-center border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-[3rem]">
             <TruckIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 font-bold italic">Nenhum veículo cadastrado na frota.</p>
+            <p className="text-gray-500 font-bold italic">Nenhum veículo cadastrado.</p>
           </div>
         )}
 
-        {projetosOrdenados.map(proj => {
-          const isOpen = projetosExpandidos[proj] !== false; // expandido por padrão
-          const veicsGrupo = grupos[proj];
+        {proprietariosOrdenados.map(prop => {
+          const isOpen = gruposExpandidos[prop] !== false;
+          const veicsGrupo = grupos[prop];
+
+          // Stats do grupo
+          const gEstourado = veicsGrupo.filter(v =>
+            v.limite_cartao > 0 && (usoPorPlaca[v.placa] || 0) >= v.limite_cartao).length;
+          const gAtencao = veicsGrupo.filter(v => {
+            if (!v.limite_cartao) return false;
+            const pct = (usoPorPlaca[v.placa] || 0) / v.limite_cartao;
+            return pct >= 0.7 && pct < 1;
+          }).length;
+
+          const headerColor = gEstourado > 0
+            ? 'from-red-600/15 to-transparent border-b border-red-200/30 dark:border-red-800/30'
+            : gAtencao > 0
+            ? 'from-amber-500/15 to-transparent border-b border-amber-200/30 dark:border-amber-800/30'
+            : 'from-blue-600/10 to-transparent border-b border-blue-200/20 dark:border-blue-800/20';
+
           return (
-            <div key={proj} className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl overflow-hidden shadow-lg">
-              {/* Header do grupo */}
-              <button
-                onClick={() => toggleProjeto(proj)}
-                className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-600/10 to-transparent hover:from-blue-600/20 transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50" />
-                  <span className="text-base font-black text-gray-800 dark:text-white uppercase tracking-widest">{proj}</span>
-                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2.5 py-1 rounded-full">
-                    {veicsGrupo.length} veículo(s)
+            <div key={prop}
+              className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl overflow-hidden shadow-lg">
+
+              {/* Header do proprietário */}
+              <button onClick={() => toggleGrupo(prop)}
+                className={`w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r ${headerColor} hover:brightness-95 transition-all`}>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <BuildingOfficeIcon className="w-5 h-5 text-blue-500 shrink-0" />
+                  <span className="text-base font-black text-gray-800 dark:text-white uppercase tracking-wider">{prop}</span>
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2.5 py-0.5 rounded-full">
+                    {veicsGrupo.length} veíc.
                   </span>
+                  {gEstourado > 0 && (
+                    <span className="text-[10px] font-black text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full">
+                      {gEstourado} estourado(s)
+                    </span>
+                  )}
+                  {gAtencao > 0 && (
+                    <span className="text-[10px] font-black text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
+                      {gAtencao} em atenção
+                    </span>
+                  )}
                 </div>
                 {isOpen
-                  ? <ChevronUpIcon className="w-5 h-5 text-gray-400" />
-                  : <ChevronDownIcon className="w-5 h-5 text-gray-400" />
-                }
+                  ? <ChevronUpIcon className="w-5 h-5 text-gray-400 shrink-0" />
+                  : <ChevronDownIcon className="w-5 h-5 text-gray-400 shrink-0" />}
               </button>
 
-              {/* Grid de cards */}
+              {/* Cards */}
               {isOpen && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-                  {veicsGrupo.map(v => (
-                    <div key={v.id} className="bg-white/80 dark:bg-gray-900/60 border border-gray-100 dark:border-gray-700/50 rounded-2xl p-5 flex flex-col justify-between group transition-all duration-300 hover:shadow-blue-500/10 hover:shadow-lg">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-widest leading-none mb-1">{v.placa}</h3>
-                          <p className="text-[11px] font-bold text-gray-400 uppercase truncate">{v.subprojeto || 'SEM BASE'}</p>
-                          {v.propriedade && (
-                            <span className="inline-block mt-1.5 text-[10px] font-black uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
-                              {v.propriedade}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex gap-1.5 ml-2">
-                          <button
-                            onClick={() => handleDelete(v.id)}
-                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
-                            title="Excluir"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                            <TruckIcon className="w-5 h-5 text-white" />
-                          </div>
-                        </div>
-                      </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+                  {veicsGrupo.map(v => {
+                    const usado = usoPorPlaca[String(v.placa || '').toUpperCase()] || 0;
+                    const limite = Number(v.limite_cartao) || 0;
+                    const pct = limite > 0 ? (usado / limite) * 100 : -1;
+                    const cardBorder =
+                      pct >= 100 ? 'border-red-300 dark:border-red-700/50' :
+                      pct >= 70  ? 'border-amber-300 dark:border-amber-700/50' :
+                                   'border-gray-100 dark:border-gray-700/50';
 
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-tighter ml-1">Status Operacional</label>
-                        <select
-                          value={v.status || 'Ativo'}
-                          onChange={(e) => handleUpdateStatus(v.id, e.target.value)}
-                          className={`w-full px-3 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest border-0 focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer ${
-                            v.status === 'Ativo' ? 'bg-green-100 text-green-700' :
-                            v.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' :
-                            v.status === 'Desmobilizado' ? 'bg-gray-200 text-gray-500' :
-                            'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          <option value="Ativo" className="bg-white">✅ Ativo / Em Serviço</option>
-                          <option value="Em Manutenção" className="bg-white">🛠 Em Manutenção</option>
-                          <option value="Desmobilizado" className="bg-white">⬛ Desmobilizado</option>
-                          <option value="Fora de Serviço" className="bg-white">🚫 Fora de Serviço</option>
-                        </select>
+                    return (
+                      <div key={v.id}
+                        className={`bg-white/80 dark:bg-gray-900/60 border ${cardBorder} rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:shadow-lg`}>
+
+                        {/* Top */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-0.5 truncate">
+                              {v.projeto || 'SEM PROJETO'}
+                            </p>
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-widest leading-none mb-1">
+                              {v.placa}
+                            </h3>
+                            <p className="text-[11px] font-bold text-gray-400 uppercase truncate">
+                              {v.subprojeto || 'SEM BASE'}
+                            </p>
+                          </div>
+                          {/* Arquivar */}
+                          <button
+                            onClick={() => handleArchivar(v.id, v.placa)}
+                            className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all"
+                            title="Arquivar veículo"
+                          >
+                            <ArchiveBoxIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Status */}
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-tighter ml-1">
+                            Status Operacional
+                          </label>
+                          <select
+                            value={v.status || 'Ativo'}
+                            onChange={e => handleUpdateStatus(v.id, e.target.value)}
+                            className={`w-full px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border-0 focus:ring-2 focus:ring-blue-500 cursor-pointer ${
+                              v.status === 'Ativo' ? 'bg-green-100 text-green-700' :
+                              v.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' :
+                              v.status === 'Desmobilizado' ? 'bg-gray-200 text-gray-500' :
+                              'bg-red-100 text-red-700'
+                            }`}
+                          >
+                            <option value="Ativo" className="bg-white">✅ Ativo / Em Serviço</option>
+                            <option value="Em Manutenção" className="bg-white">🛠 Em Manutenção</option>
+                            <option value="Desmobilizado" className="bg-white">⬛ Desmobilizado</option>
+                            <option value="Fora de Serviço" className="bg-white">🚫 Fora de Serviço</option>
+                          </select>
+                        </div>
+
+                        {/* Barra de limite */}
+                        <LimitBar limite={limite} usado={usado} />
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
