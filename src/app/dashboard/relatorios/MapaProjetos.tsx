@@ -19,14 +19,16 @@ import RelatorioPDFButton from './RelatorioPDFButton';
 const RelatorioProjetos = () => {
     const [abastecimentos, setAbastecimentos] = useState<any[]>([]);
     const [veiculosAtivos, setVeiculosAtivos] = useState<Set<string>>(new Set());
+    const [orcamentos, setOrcamentos] = useState<Record<string, { valor_locacao: number; valor_combustivel: number }>>({});
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState('');
     const [expandedProject, setExpandedProject] = useState<string | null>(null);
     const [expandedVehicle, setExpandedVehicle] = useState<string | null>(null);
     const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
-    // null = sem restrição (master ou admin), array = projetos permitidos
     const [projetosPermitidos, setProjetosPermitidos] = useState<string[] | null>(null);
     const [isMaster, setIsMaster] = useState(false);
+    // limites cartao por placa
+    const [limitesCartao, setLimitesCartao] = useState<Record<string, number>>({});
 
     const toggleProject = (proj: string) => {
       setSelectedProjects(prev => {
@@ -63,6 +65,8 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
     useEffect(() => {
       fetchPerfil();
       fetchDadosCompletos();
+      fetchOrcamentos();
+      fetchLimitesCartao();
     }, []);
 
     const fetchPerfil = async () => {
@@ -77,6 +81,24 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
         setIsMaster(true);
       } else if (data) {
         setProjetosPermitidos(data.projetos_acesso || []);
+      }
+    };
+
+    const fetchOrcamentos = async () => {
+      const { data } = await supabase.from('orcamento_projetos').select('*');
+      if (data) {
+        const map: Record<string, { valor_locacao: number; valor_combustivel: number }> = {};
+        data.forEach((r: any) => { map[String(r.projeto).toUpperCase()] = { valor_locacao: Number(r.valor_locacao) || 0, valor_combustivel: Number(r.valor_combustivel) || 0 }; });
+        setOrcamentos(map);
+      }
+    };
+
+    const fetchLimitesCartao = async () => {
+      const { data } = await supabase.from('frota_veiculos').select('placa, limite_cartao').not('limite_cartao', 'is', null).gt('limite_cartao', 0);
+      if (data) {
+        const map: Record<string, number> = {};
+        data.forEach((r: any) => { map[String(r.placa).toUpperCase()] = Number(r.limite_cartao) || 0; });
+        setLimitesCartao(map);
       }
     };
 
@@ -496,6 +518,61 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                   </div>
                 </div>
 
+                {/* ── Barras de Orçamento do Projeto ── */}
+                {(() => {
+                  const orc = orcamentos[projName.toUpperCase()];
+                  if (!orc || (orc.valor_combustivel <= 0 && orc.valor_locacao <= 0)) return null;
+                  const gastoMes = groupedData[projName].totalValue;
+                  const limCombust = orc.valor_combustivel;
+                  const limLocacao = orc.valor_locacao;
+                  const limTotal = limCombust + limLocacao;
+                  const pctCombust = limCombust > 0 ? Math.min((gastoMes / limCombust) * 100, 100) : -1;
+                  const pctTotal = limTotal > 0 ? Math.min((gastoMes / limTotal) * 100, 100) : -1;
+                  const barColor = (pct: number) =>
+                    pct >= 100 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-500';
+                  const txtColor = (pct: number) =>
+                    pct >= 100 ? 'text-red-600' : pct >= 70 ? 'text-amber-600' : 'text-emerald-600';
+                  return (
+                    <div className="px-8 pb-5 bg-gray-50/50 border-t border-gray-100">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                        {limCombust > 0 && (
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">🔥 Orç. Combustível</span>
+                              <span className={`text-[10px] font-black ${txtColor(pctCombust)}`}>
+                                {gastoMes.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} / {limCombust.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className={`${barColor(pctCombust)} h-2 rounded-full transition-all`} style={{width:`${Math.max(pctCombust,0)}%`}} />
+                            </div>
+                            <p className={`text-[10px] font-bold mt-0.5 text-right ${txtColor(pctCombust)}`}>
+                              {pctCombust >= 100 ? '🔴 Estourado' : pctCombust >= 70 ? `🟡 ${pctCombust.toFixed(0)}% usado` : `🟢 ${pctCombust.toFixed(0)}% usado`}
+                            </p>
+                          </div>
+                        )}
+                        {limLocacao > 0 && (
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">🚗 Orç. Locação</span>
+                              <span className="text-[10px] font-bold text-gray-500">
+                                Limite: {limLocacao.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className="bg-blue-400 h-2 rounded-full" style={{width:`${Math.min((gastoMes/limLocacao)*100,100)}%`}} />
+                            </div>
+                            <p className="text-[10px] font-bold mt-0.5 text-right text-blue-500">
+                              Total orç.: {limTotal.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+
                 {expandedProject === projName && (
                   <div className="px-8 pb-8 space-y-3 bg-gray-50/30">
                     <div className="h-px bg-gray-100 w-full mb-6" />
@@ -539,6 +616,24 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Volume</p>
                                <p className="text-sm font-black text-gray-800">{groupedData[projName].vehicles[placa].liters.toFixed(2)} L</p>
                              </div>
+                             {/* Limite do cartão */}
+                             {(() => {
+                               const limite = limitesCartao[placa.toUpperCase().replace(/[^A-Z0-9]/g,'').trim()] || limitesCartao[placa.toUpperCase().trim()];
+                               const gasto = groupedData[projName].vehicles[placa].value;
+                               if (!limite) return null;
+                               const pct = Math.min((gasto / limite) * 100, 100);
+                               const cor = pct >= 100 ? 'text-red-600' : pct >= 70 ? 'text-amber-600' : 'text-emerald-600';
+                               const bg = pct >= 100 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-500';
+                               return (
+                                 <div className="text-right min-w-[100px]">
+                                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Cartão</p>
+                                   <div className="w-24 bg-gray-100 rounded-full h-1.5 mb-0.5 ml-auto">
+                                     <div className={`${bg} h-1.5 rounded-full`} style={{width:`${Math.max(pct,0)}%`}} />
+                                   </div>
+                                   <p className={`text-[10px] font-black ${cor}`}>{pct.toFixed(0)}%</p>
+                                 </div>
+                               );
+                             })()}
                              {expandedVehicle === placa ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
                           </div>
                         </button>

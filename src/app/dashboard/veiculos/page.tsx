@@ -260,7 +260,53 @@ export default function FrotasPage() {
     reader.readAsBinaryString(file);
   };
 
-  // ── filtros e agrupamento ──────────────────────────────────────────────────
+  // ── importar ORÇAMENTO POR PROJETO ──────────────────────────────────────────
+  const importarOrcamento = async (file: File) => {
+    setLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (evt: any) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+
+        const getExact = (row: any, names: string[]) => {
+          for (const name of names) {
+            const found = Object.keys(row).find(k => k.toUpperCase().trim() === name.toUpperCase().trim());
+            if (found && row[found] != null) return row[found];
+          }
+          return null;
+        };
+        const getContains = (row: any, names: string[]) => {
+          for (const name of names) {
+            const found = Object.keys(row).find(k => k.toUpperCase().includes(name.toUpperCase()));
+            if (found && row[found] != null) return row[found];
+          }
+          return null;
+        };
+
+        const rows = rawData.map(row => {
+          const projeto = String(getExact(row, ['PROJETO']) || '').trim().toUpperCase();
+          if (!projeto) return null;
+          const locacao = Number(String(getContains(row, ['LOCAÇÃO', 'LOCACAO']) ?? 0).toString().replace(',', '.')) || 0;
+          const combustivel = Number(String(getContains(row, ['COMBUSTÍVEL', 'COMBUSTIVEL']) ?? 0).toString().replace(',', '.')) || 0;
+          return { projeto, valor_locacao: locacao, valor_combustivel: combustivel, updated_at: new Date().toISOString() };
+        }).filter(Boolean) as any[];
+
+        if (!rows.length) { toast.error('Nenhum projeto encontrado na planilha.'); return; }
+
+        if (confirm(`Importar orçamento de ${rows.length} projeto(s)?`)) {
+          const { error } = await supabase
+            .from('orcamento_projetos')
+            .upsert(rows, { onConflict: 'projeto' });
+          if (error) throw error;
+          toast.success(`Orçamento atualizado: ${rows.length} projeto(s)!`);
+        }
+      } catch (err: any) { toast.error('Erro: ' + (err.message || err)); }
+      finally { setLoading(false); }
+    };
+    reader.readAsBinaryString(file);
+  };
+ // ── filtros e agrupamento ──────────────────────────────────────────────────
   const veiculosFiltrados = useMemo(() => {
     return veiculos.filter(v => {
       const proj = String(v.projeto || '').toUpperCase();
@@ -354,6 +400,11 @@ export default function FrotasPage() {
                 <CreditCardIcon className="w-4 h-4" /> Importar Limites
                 <input type="file" accept=".xlsx,.xls" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) importarLimites(f); e.target.value = ''; }} />
+              </label>
+              <label className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg cursor-pointer whitespace-nowrap">
+                <DocumentArrowUpIcon className="w-4 h-4" /> Importar Orçamento
+                <input type="file" accept=".xlsx,.xls" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) importarOrcamento(f); e.target.value = ''; }} />
               </label>
             </>
           )}
