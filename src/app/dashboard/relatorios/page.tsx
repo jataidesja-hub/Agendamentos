@@ -7,18 +7,20 @@ import {
   TruckIcon,
   MapIcon,
   UserGroupIcon,
-  BoltIcon
+  BoltIcon,
+  PresentationChartLineIcon
 } from "@heroicons/react/24/outline";
 import MapaRelatorio from "./MapaRelatorio";
 import RelatorioPostos from "./RelatorioPostos";
 import RelatorioGestores from "./RelatorioGestores";
 import MapaAbastecimentosRelatorio from "./MapaAbastecimentosRelatorio";
 import RelatorioEficiencia from "./RelatorioEficiencia";
+import RelatorioGerencial from "./RelatorioGerencial";
 import { supabase } from "@/lib/supabase";
 
 export default function Relatorios() {
-  const [activeTab, setActiveTab] = useState<'projetos' | 'postos' | 'gestores' | 'mapa' | 'eficiencia'>('projetos');
-  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(['projetos', 'postos', 'gestores', 'mapa', 'eficiencia']);
+  const [activeTab, setActiveTab] = useState<'projetos' | 'postos' | 'gestores' | 'mapa' | 'eficiencia' | 'gerencial'>('projetos');
+  const [abasPermitidas, setAbasPermitidas] = useState<string[]>(['projetos', 'postos', 'gestores', 'mapa', 'eficiencia', 'gerencial']);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -30,9 +32,9 @@ export default function Relatorios() {
         .single()
         .then(({ data }) => {
           if (data?.abas_relatorio?.length) {
-            setAbasPermitidas(data.abas_relatorio);
-            // Navega para a primeira aba disponível se a atual não for permitida
-            setActiveTab(prev => data.abas_relatorio.includes(prev) ? prev : data.abas_relatorio[0]);
+            const abas = Array.from(new Set([...data.abas_relatorio, 'gerencial']));
+            setAbasPermitidas(abas);
+            setActiveTab(prev => abas.includes(prev) ? prev : abas[0]);
           }
         });
     });
@@ -104,6 +106,16 @@ export default function Relatorios() {
               <BoltIcon className="w-4 h-4" /> EFICIÊNCIA
             </button>
           )}
+          {abasPermitidas.includes('gerencial') && (
+            <button
+              onClick={() => setActiveTab('gerencial')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-2.5xl text-xs font-black tracking-widest transition-all ${
+                activeTab === 'gerencial' ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/20' : 'text-gray-500 hover:text-rose-600'
+              }`}
+            >
+              <PresentationChartLineIcon className="w-4 h-4" /> GERENCIAL
+            </button>
+          )}
         </div>
       </div>
 
@@ -119,6 +131,8 @@ export default function Relatorios() {
           <RelatorioGestores />
         ) : activeTab === 'eficiencia' ? (
           <RelatorioEficiencia />
+        ) : activeTab === 'gerencial' ? (
+          <RelatorioGerencial />
         ) : (
           <MapaAbastecimentosRelatorio />
         )}
