@@ -212,8 +212,13 @@ function ChecklistForm() {
   const [fotos, setFotos] = useState<FotoState>({});
   const [expandedObs, setExpandedObs] = useState<number | null>(null);
   const [observacaoGeral, setObservacaoGeral] = useState("");
+  const [veiculosPermitidos, setVeiculosPermitidos] = useState<{placa: string, projeto: string}[]>([]);
 
   useEffect(() => {
+    supabase.from("veiculos_checklist_permitidos")
+      .select("placa, projeto")
+      .ilike("status", "Ativo")
+      .then(({ data }) => setVeiculosPermitidos(data || []));
     if (editId) {
       supabase.from("informe_checklist").select("*").eq("id", editId).single().then(({ data }) => {
         if (data) {
@@ -373,14 +378,44 @@ function ChecklistForm() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Placa *</label>
-                <input
-                  value={dados.placa}
-                  onChange={e => setDados(p => ({ ...p, placa: e.target.value.toUpperCase() }))}
-                  placeholder="ABC1D23"
+                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Projeto *</label>
+                <select
+                  value={dados.projeto}
+                  onChange={e => {
+                    const proj = e.target.value;
+                    setDados(p => ({ ...p, projeto: proj, placa: "" }));
+                  }}
                   className="mt-1 w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-[#0b7336]"
-                />
+                >
+                  <option value="">Selecione o Projeto</option>
+                  {Array.from(new Set(veiculosPermitidos.map(v => v.projeto))).sort().map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                  {editId && dados.projeto && !veiculosPermitidos.find(v => v.projeto === dados.projeto) && (
+                    <option value={dados.projeto}>{dados.projeto} (Anterior)</option>
+                  )}
+                </select>
               </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Placa *</label>
+                <select
+                  value={dados.placa}
+                  onChange={e => setDados(p => ({ ...p, placa: e.target.value }))}
+                  disabled={!dados.projeto}
+                  className="mt-1 w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-[#0b7336] disabled:opacity-50"
+                >
+                  <option value="">Selecione a Placa</option>
+                  {veiculosPermitidos.filter(v => v.projeto === dados.projeto).map(v => v.placa).sort().map(placa => (
+                    <option key={placa} value={placa}>{placa}</option>
+                  ))}
+                  {editId && dados.placa && dados.projeto && !veiculosPermitidos.find(v => v.placa === dados.placa && v.projeto === dados.projeto) && (
+                    <option value={dados.placa}>{dados.placa} (Anterior)</option>
+                  )}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">KM Atual</label>
                 <input
@@ -403,22 +438,13 @@ function ChecklistForm() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <div>
                 <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">CPF</label>
                 <input
                   value={dados.cpf}
                   onChange={e => setDados(p => ({ ...p, cpf: e.target.value }))}
                   placeholder="000.000.000-00"
-                  className="mt-1 w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0b7336]"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Projeto</label>
-                <input
-                  value={dados.projeto}
-                  onChange={e => setDados(p => ({ ...p, projeto: e.target.value }))}
-                  placeholder="Ex: JMM"
                   className="mt-1 w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0b7336]"
                 />
               </div>

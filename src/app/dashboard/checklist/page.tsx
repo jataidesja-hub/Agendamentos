@@ -2,9 +2,10 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { PlusIcon, ClipboardDocumentCheckIcon, EyeIcon, TrashIcon, ArrowDownTrayIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, ClipboardDocumentCheckIcon, EyeIcon, TrashIcon, ArrowDownTrayIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DocumentArrowUpIcon } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 import { gerarChecklistPdf } from "@/lib/checklistPdf";
+import * as XLSX from "xlsx";
 
 interface Checklist {
   id: string;
@@ -27,6 +28,65 @@ export default function ChecklistPage() {
   const [expandedVeiculos, setExpandedVeiculos] = useState<Set<string>>(new Set());
   const [baixandoTodos, setBaixandoTodos] = useState(false);
   const [progressoTodos, setProgressoTodos] = useState<{ atual: number; total: number } | null>(null);
+  const [showAddPermitido, setShowAddPermitido] = useState(false);
+
+  const handleImportarPermitidos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data: any[] = XLSX.utils.sheet_to_json(ws);
+        
+        let count = 0;
+        for (const row of data) {
+          const placa = row.PLACA?.toString().trim().toUpperCase();
+          const projeto = row.PROJETO?.toString().trim().toUpperCase();
+          const status = row.STATUS?.toString().trim();
+          
+          if (placa && projeto && status && status.toUpperCase() === 'ATIVO') {
+            await supabase.from("veiculos_checklist_permitidos").upsert({
+              placa,
+              projeto,
+              status
+            }, { onConflict: "placa" });
+            count++;
+          }
+        }
+        toast.success(`${count} veículos permitidos importados/atualizados com sucesso!`);
+      } catch (err: any) {
+        toast.error("Erro ao importar: " + err.message);
+      }
+      e.target.value = '';
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleManualAddPermitido = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const placa = (fd.get("placa") as string).trim().toUpperCase();
+    const projeto = (fd.get("projeto") as string).trim().toUpperCase();
+    
+    if (!placa || !projeto) return toast.error("Preencha placa e projeto");
+    
+    const { error } = await supabase.from("veiculos_checklist_permitidos").upsert({
+      placa,
+      projeto,
+      status: "Ativo"
+    }, { onConflict: "placa" });
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Veículo/Projeto adicionado!");
+      setShowAddPermitido(false);
+    }
+  };
 
   const handleDownloadPdf = async (id: string) => {
     setGerandoPdfId(id);
@@ -163,6 +223,20 @@ export default function ChecklistPage() {
               </>
             )}
           </button>
+          {isMaster && (
+            <label className="flex items-center gap-2 px-5 py-3 bg-gray-800 hover:bg-black text-white font-bold rounded-2xl shadow-sm cursor-pointer transition-all active:scale-95">
+              <DocumentArrowUpIcon className="w-5 h-5" />
+              Importar Frota
+              <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleImportarPermitidos} />
+            </label>
+          )}
+          <button
+            onClick={() => setShowAddPermitido(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-2xl shadow-sm transition-all active:scale-95"
+          >
+            <PlusIcon className="w-5 h-5" />
+            Vincular Veículo/Projeto
+          </button>
           <button
             onClick={() => router.push("/dashboard/checklist/novo")}
             className="flex items-center gap-2 px-5 py-3 bg-[#0b7336] hover:bg-[#09602c] text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95"
@@ -276,6 +350,29 @@ export default function ChecklistPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal Add Permitido */}
+      {showAddPermitido && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <form onSubmit={handleManualAddPermitido} className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-black text-gray-900 dark:text-white mb-4">Vincular Veículo e Projeto</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Placa (ex: ABC1234)</label>
+                <input name="placa" required className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-900 border-0 rounded-xl uppercase font-black text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0b7336]" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Projeto</label>
+                <input name="projeto" required className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-900 border-0 rounded-xl uppercase font-black text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0b7336]" />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowAddPermitido(false)} className="px-5 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200">Cancelar</button>
+              <button type="submit" className="px-5 py-2.5 rounded-xl font-bold text-white bg-[#0b7336] hover:bg-[#09602c]">Salvar</button>
+            </div>
+          </form>
         </div>
       )}
     </div>
