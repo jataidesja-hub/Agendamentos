@@ -19,7 +19,7 @@ import RelatorioPDFButton from './RelatorioPDFButton';
 const RelatorioProjetos = () => {
     const [abastecimentos, setAbastecimentos] = useState<any[]>([]);
     const [veiculosAtivos, setVeiculosAtivos] = useState<Set<string>>(new Set());
-    const [orcamentos, setOrcamentos] = useState<Record<string, { valor_locacao: number; valor_combustivel: number }>>({});
+    const [orcamentos, setOrcamentos] = useState<Record<string, { valor_locacao: number; valor_combustivel: number; projeto_pai: string | null }>>({});
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState('');
     const [expandedProject, setExpandedProject] = useState<string | null>(null);
@@ -29,6 +29,8 @@ const RelatorioProjetos = () => {
     const [isMaster, setIsMaster] = useState(false);
     // limites cartao por placa
     const [limitesCartao, setLimitesCartao] = useState<Record<string, number>>({});
+    // Modal orcamento
+    const [showEditOrcamento, setShowEditOrcamento] = useState<string | null>(null);
 
     const toggleProject = (proj: string) => {
       setSelectedProjects(prev => {
@@ -87,8 +89,14 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
     const fetchOrcamentos = async () => {
       const { data } = await supabase.from('orcamento_projetos').select('*');
       if (data) {
-        const map: Record<string, { valor_locacao: number; valor_combustivel: number }> = {};
-        data.forEach((r: any) => { map[String(r.projeto).toUpperCase()] = { valor_locacao: Number(r.valor_locacao) || 0, valor_combustivel: Number(r.valor_combustivel) || 0 }; });
+        const map: Record<string, { valor_locacao: number; valor_combustivel: number; projeto_pai: string | null }> = {};
+        data.forEach((r: any) => { 
+          map[String(r.projeto).toUpperCase()] = { 
+            valor_locacao: Number(r.valor_locacao) || 0, 
+            valor_combustivel: Number(r.valor_combustivel) || 0,
+            projeto_pai: r.projeto_pai ? String(r.projeto_pai).toUpperCase() : null
+          }; 
+        });
         setOrcamentos(map);
       }
     };
@@ -514,31 +522,66 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento</p>
                        <p className="font-black text-emerald-600">{groupedData[projName].totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                     </div>
+                    {isMaster && (
+                      <button onClick={(e) => { e.stopPropagation(); setShowEditOrcamento(projName); }} className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-all">
+                        Editar Orçamento
+                      </button>
+                    )}
                     {expandedProject === projName ? <ChevronUpIcon className="w-5 h-5 text-gray-400" /> : <ChevronDownIcon className="w-5 h-5 text-gray-400" />}
                   </div>
                 </div>
 
                 {/* ── Barras de Orçamento do Projeto ── */}
+                {/* ── Barras de Orçamento do Projeto ── */}
                 {(() => {
                   const orc = orcamentos[projName.toUpperCase()];
-                  if (!orc || (orc.valor_combustivel <= 0 && orc.valor_locacao <= 0)) return null;
-                  const gastoMes = groupedData[projName].totalValue;
+                  if (!orc || (orc.valor_combustivel <= 0 && orc.valor_locacao <= 0 && !orc.projeto_pai)) return null;
+
+                  // Se está vinculado a outro, mostra apenas o link
+                  if (orc.projeto_pai && orcamentos[orc.projeto_pai]) {
+                    return (
+                      <div className="px-8 py-3 bg-blue-50/50 border-t border-gray-100 text-center">
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                          🔗 Orçamento vinculado ao projeto {orc.projeto_pai}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  // Se é projeto principal, soma seus gastos + gastos dos filhos
+                  let gastoMes = groupedData[projName]?.totalValue || 0;
+                  const filhos = Object.keys(orcamentos).filter(k => orcamentos[k].projeto_pai === projName.toUpperCase());
+                  filhos.forEach(filho => { gastoMes += groupedData[filho]?.totalValue || 0; });
+
                   const limCombust = orc.valor_combustivel;
                   const limLocacao = orc.valor_locacao;
                   const limTotal = limCombust + limLocacao;
                   const pctCombust = limCombust > 0 ? Math.min((gastoMes / limCombust) * 100, 100) : -1;
-                  const pctTotal = limTotal > 0 ? Math.min((gastoMes / limTotal) * 100, 100) : -1;
-                  const barColor = (pct: number) =>
-                    pct >= 100 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-500';
-                  const txtColor = (pct: number) =>
-                    pct >= 100 ? 'text-red-600' : pct >= 70 ? 'text-amber-600' : 'text-emerald-600';
+                  
+                  // Projeção
+                  const hoje = new Date();
+                  const mesSelecionado = new Date(selectedMonth + "-02");
+                  let projecaoText = "";
+                  
+                  if (hoje.getFullYear() === mesSelecionado.getFullYear() && hoje.getMonth() === mesSelecionado.getMonth()) {
+                    const diasNoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+                    const diasPassados = Math.max(hoje.getDate(), 1);
+                    const projecao = (gastoMes / diasPassados) * diasNoMes;
+                    projecaoText = `Projeção final do mês: ${projecao.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}`;
+                  }
+
+                  const barColor = (pct: number) => pct >= 100 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-500';
+                  const txtColor = (pct: number) => pct >= 100 ? 'text-red-600' : pct >= 70 ? 'text-amber-600' : 'text-emerald-600';
+
                   return (
                     <div className="px-8 pb-5 bg-gray-50/50 border-t border-gray-100">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                         {limCombust > 0 && (
                           <div>
                             <div className="flex justify-between items-center mb-1">
-                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">🔥 Orç. Combustível</span>
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                🔥 Orç. Combustível {filhos.length > 0 && <span className="text-blue-500 ml-1">({filhos.length} vinculados)</span>}
+                              </span>
                               <span className={`text-[10px] font-black ${txtColor(pctCombust)}`}>
                                 {gastoMes.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} / {limCombust.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
                               </span>
@@ -546,9 +589,12 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                             <div className="w-full bg-gray-200 rounded-full h-2">
                               <div className={`${barColor(pctCombust)} h-2 rounded-full transition-all`} style={{width:`${Math.max(pctCombust,0)}%`}} />
                             </div>
-                            <p className={`text-[10px] font-bold mt-0.5 text-right ${txtColor(pctCombust)}`}>
-                              {pctCombust >= 100 ? '🔴 Estourado' : pctCombust >= 70 ? `🟡 ${pctCombust.toFixed(0)}% usado` : `🟢 ${pctCombust.toFixed(0)}% usado`}
-                            </p>
+                            <div className="flex justify-between mt-1">
+                              <span className="text-[9px] font-bold text-gray-400">{projecaoText}</span>
+                              <span className={`text-[10px] font-bold ${txtColor(pctCombust)}`}>
+                                {pctCombust >= 100 ? '🔴 Estourado' : pctCombust >= 70 ? `🟡 ${pctCombust.toFixed(0)}% usado` : `🟢 ${pctCombust.toFixed(0)}% usado`}
+                              </span>
+                            </div>
                           </div>
                         )}
                         {limLocacao > 0 && (
@@ -735,6 +781,68 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
             ))
           )}
         </div>
+        {/* Modal Editar Orçamento */}
+        {showEditOrcamento && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 w-full max-w-md shadow-2xl animate-in zoom-in-95">
+              <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest mb-6">
+                Orçamento: {showEditOrcamento}
+              </h3>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                const lim = Number(fd.get('valor_combustivel')) || 0;
+                const pai = fd.get('projeto_pai') as string || null;
+                
+                const { error } = await supabase.from('orcamento_projetos').upsert({
+                  projeto: showEditOrcamento,
+                  valor_combustivel: lim,
+                  projeto_pai: pai === "" ? null : pai,
+                  updated_at: new Date().toISOString()
+                }, { onConflict: 'projeto' });
+
+                if (!error) {
+                  toast.success('Orçamento salvo!');
+                  fetchOrcamentos();
+                  setShowEditOrcamento(null);
+                } else {
+                  toast.error(error.message);
+                }
+              }} className="space-y-4">
+                <div>
+                  <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1 block">Orçamento Combustível (R$)</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    name="valor_combustivel"
+                    defaultValue={orcamentos[showEditOrcamento]?.valor_combustivel || 0}
+                    className="w-full bg-gray-100 dark:bg-gray-900 border-0 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#0b7336]" 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1 block">Vincular a outro projeto (Pai)</label>
+                  <select 
+                    name="projeto_pai"
+                    defaultValue={orcamentos[showEditOrcamento]?.projeto_pai || ""}
+                    className="w-full bg-gray-100 dark:bg-gray-900 border-0 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#0b7336]"
+                  >
+                    <option value="">Nenhum (Independente)</option>
+                    {Object.keys(groupedData).sort().filter(p => p !== showEditOrcamento).map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
+                    Se você selecionar um projeto pai, este projeto consumirá do orçamento do pai e seu orçamento individual será ignorado.
+                  </p>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={() => setShowEditOrcamento(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-3 font-bold transition-colors">Cancelar</button>
+                  <button type="submit" className="flex-1 bg-[#0b7336] hover:bg-[#09602c] text-white rounded-xl py-3 font-bold transition-colors shadow-lg shadow-green-500/30">Salvar Modificações</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
 };
