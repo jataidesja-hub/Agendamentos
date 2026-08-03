@@ -215,6 +215,7 @@ export default function UsuariosPage() {
                   { id: 'gestores', nome: 'Gestores', cor: 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400' },
                   { id: 'mapa', nome: 'Mapa', cor: 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400' },
                   { id: 'eficiencia', nome: 'Eficiência', cor: 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400' },
+                  { id: 'gerencial', nome: 'Gerencial', cor: 'border-rose-500 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400' },
                 ].map(a => (
                   <label key={a.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
                     abasRelatorio.includes(a.id) ? a.cor : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
