@@ -816,7 +816,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                     step="0.01" 
                     name="valor_combustivel"
                     defaultValue={orcamentos[showEditOrcamento]?.valor_combustivel || 0}
-                    className="w-full bg-gray-100 dark:bg-gray-900 border-0 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#0b7336]" 
+                    className="w-full bg-gray-100 dark:bg-gray-900 border-0 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0b7336]" 
                   />
                 </div>
                 <div>
@@ -824,7 +824,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                   <select 
                     name="projeto_pai"
                     defaultValue={orcamentos[showEditOrcamento]?.projeto_pai || ""}
-                    className="w-full bg-gray-100 dark:bg-gray-900 border-0 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#0b7336]"
+                    className="w-full bg-gray-100 dark:bg-gray-900 border-0 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0b7336]"
                   >
                     <option value="">Nenhum (Independente)</option>
                     {Object.keys(groupedData).sort().filter(p => p !== showEditOrcamento).map(p => (
