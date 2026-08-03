@@ -344,9 +344,8 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
     }, [abastecimentos]);
 
     const economiaData = useMemo(() => {
-      if (!filteredData.length) return { porProjeto: {}, geral: { economizado: 0, totalLitros: 0, precoMedio: 0 } };
+      if (!filteredData.length) return { porProjeto: {}, geral: { economizado: 0, totalLitros: 0, precoMedio: 0 }, mediasTipo: [], mediasRegiao: [] };
 
-      // Calcula preço médio por litro de todos os abastecimentos do mês
       const totalValor = filteredData.reduce((s: number, a: any) => s + (Number(a.valor_emissao) || 0), 0);
       const totalLitros = filteredData.reduce((s: number, a: any) => s + (Number(a.litros) || 0), 0);
       const precoMedio = totalLitros > 0 ? totalValor / totalLitros : 0;
@@ -356,23 +355,58 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
       const placaToProject = dataCache.placaToProject || new Map();
 
       const porProjeto: Record<string, { economizado: number, litros: number }> = {};
+      const precoPorTipo: Record<string, { valor: number, litros: number }> = {};
+      const precoPorRegiao: Record<string, { valor: number, litros: number }> = {};
+
+      const mapUFtoRegiao = (uf: string) => {
+        const SUL = ['PR', 'SC', 'RS'];
+        const SUDESTE = ['SP', 'RJ', 'MG', 'ES'];
+        const CO = ['MS', 'MT', 'GO', 'DF'];
+        const NE = ['BA', 'SE', 'AL', 'PE', 'PB', 'RN', 'CE', 'PI', 'MA'];
+        const NORTE = ['AM', 'RR', 'AP', 'PA', 'TO', 'RO', 'AC'];
+        if (SUL.includes(uf)) return 'Sul';
+        if (SUDESTE.includes(uf)) return 'Sudeste';
+        if (CO.includes(uf)) return 'Centro-Oeste';
+        if (NE.includes(uf)) return 'Nordeste';
+        if (NORTE.includes(uf)) return 'Norte';
+        return 'Outros';
+      };
 
       filteredData.forEach((a: any) => {
         const preco = Number(a.valor_litro) || 0;
         const litros = Number(a.litros) || 0;
+        const valorEmissao = Number(a.valor_emissao) || 0;
+        
         if (!preco || !litros) return;
         const saving = (precoMedio - preco) * litros;
-        if (saving <= 0) return; // só contabiliza abastecimentos abaixo da média
+        if (saving > 0) {
+          const normPlaca = normalize(a.placa);
+          const proj = String(a.projeto || placaToProject.get(normPlaca) || 'SEM PROJETO').toUpperCase();
+          if (!porProjeto[proj]) porProjeto[proj] = { economizado: 0, litros: 0 };
+          porProjeto[proj].economizado += saving;
+          porProjeto[proj].litros += litros;
+        }
 
-        const normPlaca = normalize(a.placa);
-        const proj = String(a.projeto || placaToProject.get(normPlaca) || 'SEM PROJETO').toUpperCase();
-        if (!porProjeto[proj]) porProjeto[proj] = { economizado: 0, litros: 0 };
-        porProjeto[proj].economizado += saving;
-        porProjeto[proj].litros += litros;
+        const tipo = a.tipo_combustivel ? String(a.tipo_combustivel).toUpperCase() : 'OUTROS';
+        if (!precoPorTipo[tipo]) precoPorTipo[tipo] = { valor: 0, litros: 0 };
+        precoPorTipo[tipo].valor += valorEmissao;
+        precoPorTipo[tipo].litros += litros;
+
+        let uf = String(a.uf || a.estado || '').toUpperCase().trim();
+        if (!uf && a.cidade && typeof a.cidade === 'string' && a.cidade.includes('/')) {
+          uf = a.cidade.split('/').pop()?.toUpperCase().trim() || '';
+        }
+        const regiao = mapUFtoRegiao(uf);
+        if (!precoPorRegiao[regiao]) precoPorRegiao[regiao] = { valor: 0, litros: 0 };
+        precoPorRegiao[regiao].valor += valorEmissao;
+        precoPorRegiao[regiao].litros += litros;
       });
 
       const geralEconomizado = Object.values(porProjeto).reduce((s: number, v: any) => s + v.economizado, 0);
-      return { porProjeto, geral: { economizado: geralEconomizado, totalLitros, precoMedio } };
+      const mediasTipo = Object.entries(precoPorTipo).map(([tipo, v]) => ({ tipo, media: v.litros > 0 ? v.valor/v.litros : 0 })).sort((a,b) => b.media - a.media);
+      const mediasRegiao = Object.entries(precoPorRegiao).map(([regiao, v]) => ({ regiao, media: v.litros > 0 ? v.valor/v.litros : 0 })).filter(r => r.regiao !== 'Outros' || mediasRegiao?.length === 1).sort((a,b) => b.media - a.media);
+
+      return { porProjeto, geral: { economizado: geralEconomizado, totalLitros, precoMedio }, mediasTipo, mediasRegiao };
     }, [filteredData]);
 
     if (loading) {
@@ -428,44 +462,73 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
           </div>
         </div>
 
-        {/* Cartões de Economia */}
+        {/* Cartões do Topo */}
         {economiaData.geral.precoMedio > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-[2rem] p-6 text-white shadow-lg shadow-emerald-500/20">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {/* Economia Geral */}
+            <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-[2rem] p-6 text-white shadow-lg shadow-emerald-500/20 flex flex-col justify-center">
               <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">Economia Geral no Mês</p>
-              <p className="text-2xl font-black text-white">
-                +{Object.values(economiaData.porProjeto)
-                  .reduce((s: number, v: any) => s + (v.economizado > 0 ? v.economizado : 0), 0)
-                  .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              <p className="text-3xl font-black text-white">
+                +{economiaData.geral.economizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
-              <p className="text-[10px] opacity-60 mt-1">vs preço médio de {economiaData.geral.precoMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/L</p>
             </div>
-            <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Preço Médio do Período</p>
-              <p className="text-2xl font-black text-gray-900">{economiaData.geral.precoMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/L</p>
-              <p className="text-[10px] text-gray-400 mt-1">{economiaData.geral.totalLitros.toFixed(0)} L abastecidos</p>
+
+            {/* Preço Médio Detalhado */}
+            <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm flex flex-col">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Preço Médio / L</p>
+              <div className="flex-1 flex gap-4 text-xs">
+                <div className="flex-1 space-y-2 border-r border-gray-100 pr-2">
+                  {economiaData.mediasTipo.slice(0, 3).map((mt: any) => (
+                    <div key={mt.tipo} className="flex justify-between items-center">
+                      <span className="font-bold text-gray-500 truncate max-w-[50%]">{mt.tipo}</span>
+                      <span className="font-black text-gray-900">{mt.media.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex-1 space-y-2">
+                  {economiaData.mediasRegiao.slice(0, 3).map((mr: any) => (
+                    <div key={mr.regiao} className="flex justify-between items-center">
+                      <span className="font-bold text-gray-500">{mr.regiao}</span>
+                      <span className="font-black text-[#0b7336]">{mr.media.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Economia por Projeto</p>
-              <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+
+            {/* Economia por Projeto */}
+            <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm flex flex-col">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Economia por Projeto (Top)</p>
+              <div className="space-y-2 flex-1 overflow-y-auto pr-1">
                 {Object.entries(economiaData.porProjeto)
                   .sort(([,a]: any, [,b]: any) => b.economizado - a.economizado)
+                  .slice(0, 4)
                   .map(([proj, val]: any) => (
                     <div key={proj} className="flex justify-between items-center">
                       <span className="text-[10px] font-bold text-gray-600 truncate max-w-[55%]">{proj}</span>
-                      <span className={`text-[11px] font-black ${val.economizado >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {val.economizado >= 0 ? '+' : ''}{val.economizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      <span className="text-[11px] font-black text-emerald-600">
+                        +{val.economizado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                     </div>
                   ))}
               </div>
-              <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
-                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Economizado</span>
-                <span className="text-sm font-black text-emerald-600">
-                  +{Object.values(economiaData.porProjeto)
-                    .reduce((s: number, v: any) => s + (v.economizado > 0 ? v.economizado : 0), 0)
-                    .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </span>
+            </div>
+
+            {/* Top 5 Projetos que mais consomem */}
+            <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm flex flex-col">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Top 5 Maiores Consumos</p>
+              <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+                {Object.entries(groupedData)
+                  .sort(([,a]: any, [,b]: any) => b.totalValue - a.totalValue)
+                  .slice(0, 5)
+                  .map(([proj, data]: any) => (
+                    <div key={proj} className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-gray-600 truncate max-w-[55%]">{proj}</span>
+                      <span className="text-[11px] font-black text-red-600">
+                        {data.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
