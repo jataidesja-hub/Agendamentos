@@ -8,9 +8,11 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   CurrencyDollarIcon,
-  FireIcon
+  FireIcon,
+  DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { dataCache } from '@/lib/cache';
+import { gerarRelatorioGerencialPdf } from '@/lib/gerencialPdf';
 
 export default function RelatorioGerencial() {
   const [abastecimentos, setAbastecimentos] = useState<any[]>([]);
@@ -149,8 +151,16 @@ export default function RelatorioGerencial() {
 
   return (
     <div className="space-y-6">
-      {/* Filtro de Mês */}
-      <div className="flex justify-end">
+      {/* Filtro de Mês e PDF */}
+      <div className="flex justify-end gap-3">
+        <button
+          onClick={() => gerarRelatorioGerencialPdf({ month: selectedMonth, grouped, topKm, topValor })}
+          className="flex items-center gap-2 px-6 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 uppercase tracking-widest"
+        >
+          <DocumentArrowDownIcon className="w-5 h-5" />
+          Baixar PDF
+        </button>
+
         <div className="flex items-center px-6 py-4 bg-[#1a1c23] rounded-2xl border border-white/10 shadow-xl cursor-pointer">
           <FunnelIcon className="w-4 h-4 text-emerald-500 mr-3" />
           <select
