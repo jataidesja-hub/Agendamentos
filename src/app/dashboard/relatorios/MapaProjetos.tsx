@@ -476,17 +476,17 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
             {/* Preço Médio Detalhado */}
             <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm flex flex-col">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Preço Médio / L</p>
-              <div className="flex-1 flex gap-4 text-xs">
-                <div className="flex-1 space-y-2 border-r border-gray-100 pr-2">
-                  {economiaData.mediasTipo.slice(0, 3).map((mt: any) => (
+              <div className="flex-1 flex gap-4 text-xs max-h-24">
+                <div className="flex-1 space-y-2 border-r border-gray-100 pr-2 overflow-y-auto custom-scrollbar">
+                  {economiaData.mediasTipo.map((mt: any) => (
                     <div key={mt.tipo} className="flex justify-between items-center">
                       <span className="font-bold text-gray-500 truncate max-w-[50%]">{mt.tipo}</span>
                       <span className="font-black text-gray-900">{mt.media.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
                     </div>
                   ))}
                 </div>
-                <div className="flex-1 space-y-2">
-                  {economiaData.mediasRegiao.slice(0, 3).map((mr: any) => (
+                <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1">
+                  {economiaData.mediasRegiao.map((mr: any) => (
                     <div key={mr.regiao} className="flex justify-between items-center">
                       <span className="font-bold text-gray-500">{mr.regiao}</span>
                       <span className="font-black text-[#0b7336]">{mr.media.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
