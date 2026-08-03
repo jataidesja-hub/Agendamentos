@@ -397,14 +397,27 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
           uf = a.cidade.split('/').pop()?.toUpperCase().trim() || '';
         }
         const regiao = mapUFtoRegiao(uf);
-        if (!precoPorRegiao[regiao]) precoPorRegiao[regiao] = { valor: 0, litros: 0 };
+        if (!precoPorRegiao[regiao]) precoPorRegiao[regiao] = { valor: 0, litros: 0, tipos: {} };
         precoPorRegiao[regiao].valor += valorEmissao;
         precoPorRegiao[regiao].litros += litros;
+
+        if (!precoPorRegiao[regiao].tipos[tipo]) {
+          precoPorRegiao[regiao].tipos[tipo] = { valor: 0, litros: 0 };
+        }
+        precoPorRegiao[regiao].tipos[tipo].valor += valorEmissao;
+        precoPorRegiao[regiao].tipos[tipo].litros += litros;
       });
 
       const geralEconomizado = Object.values(porProjeto).reduce((s: number, v: any) => s + v.economizado, 0);
       const mediasTipo = Object.entries(precoPorTipo).map(([tipo, v]) => ({ tipo, media: v.litros > 0 ? v.valor/v.litros : 0 })).sort((a,b) => b.media - a.media);
-      const mediasRegiao = Object.entries(precoPorRegiao).map(([regiao, v]) => ({ regiao, media: v.litros > 0 ? v.valor/v.litros : 0 })).filter(r => r.regiao !== 'Outros' || mediasRegiao?.length === 1).sort((a,b) => b.media - a.media);
+      const mediasRegiao = Object.entries(precoPorRegiao).map(([regiao, v]: any) => ({
+        regiao,
+        media: v.litros > 0 ? v.valor/v.litros : 0,
+        tipos: Object.entries(v.tipos).map(([t, tv]: any) => ({
+          tipo: t,
+          media: tv.litros > 0 ? tv.valor/tv.litros : 0
+        })).sort((a: any, b: any) => b.media - a.media)
+      })).filter(r => r.regiao !== 'Outros' || Object.keys(precoPorRegiao).length === 1).sort((a,b) => b.media - a.media);
 
       return { porProjeto, geral: { economizado: geralEconomizado, totalLitros, precoMedio }, mediasTipo, mediasRegiao };
     }, [filteredData]);
@@ -468,11 +481,19 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
             {/* Preço Médio por Região */}
             <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-[2rem] p-6 text-white shadow-lg shadow-emerald-500/20 flex flex-col">
               <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-3">Preço Médio / Região</p>
-              <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1 max-h-24">
+              <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-1 max-h-40">
                 {economiaData.mediasRegiao.map((mr: any) => (
-                  <div key={mr.regiao} className="flex justify-between items-center">
-                    <span className="font-bold opacity-80">{mr.regiao}</span>
-                    <span className="font-black text-white">{mr.media.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
+                  <div key={mr.regiao} className="space-y-1.5">
+                    <div className="flex justify-between items-center border-b border-white/10 pb-1">
+                      <span className="font-black text-white text-xs">{mr.regiao}</span>
+                      <span className="font-bold text-emerald-200 text-xs">{mr.media.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
+                    </div>
+                    {mr.tipos.map((t: any) => (
+                      <div key={t.tipo} className="flex justify-between items-center pl-2">
+                        <span className="font-bold opacity-70 text-[10px] truncate max-w-[60%]">{t.tipo}</span>
+                        <span className="font-black text-white text-[11px]">{t.media.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
@@ -480,12 +501,12 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
 
             {/* Preço Médio por Combustível */}
             <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm flex flex-col">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Preço Médio / Combustível</p>
-              <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1 max-h-24">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Preço Médio / Geral</p>
+              <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1 max-h-40">
                 {economiaData.mediasTipo.map((mt: any) => (
                   <div key={mt.tipo} className="flex justify-between items-center">
-                    <span className="font-bold text-gray-500 truncate max-w-[60%]">{mt.tipo}</span>
-                    <span className="font-black text-gray-900">{mt.media.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
+                    <span className="font-bold text-gray-500 truncate max-w-[60%] text-xs">{mt.tipo}</span>
+                    <span className="font-black text-gray-900 text-xs">{mt.media.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
                   </div>
                 ))}
               </div>
