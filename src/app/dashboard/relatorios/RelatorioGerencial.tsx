@@ -12,7 +12,7 @@ import {
   DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { dataCache } from '@/lib/cache';
-import { gerarRelatorioGerencialPdf } from '@/lib/gerencialPdf';
+import * as XLSX from 'xlsx';
 
 export default function RelatorioGerencial() {
   const [abastecimentos, setAbastecimentos] = useState<any[]>([]);
@@ -138,6 +138,30 @@ export default function RelatorioGerencial() {
     return { grouped: sortedGrouped, topKm, topValor };
   }, [abastecimentos, selectedMonth]);
 
+  const handleDownloadExcel = () => {
+    const rows: any[] = [];
+    
+    // Convertemos os dados agrupados em linhas para o excel
+    for (const proj in grouped) {
+      const projData = grouped[proj];
+      for (const v of projData.vehicles) {
+        rows.push({
+          'Mês': selectedMonth,
+          'Projeto': proj,
+          'Placa': v.placa,
+          'KM Rodado': v.km,
+          'Litros': v.liters,
+          'Custo (R$)': v.valor
+        });
+      }
+    }
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Relatorio");
+    XLSX.writeFile(wb, `Relatorio_Gerencial_${selectedMonth}.xlsx`);
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 animate-pulse bg-white/50 backdrop-blur-xl rounded-[3rem]">
@@ -151,14 +175,14 @@ export default function RelatorioGerencial() {
 
   return (
     <div className="space-y-6">
-      {/* Filtro de Mês e PDF */}
+      {/* Filtro de Mês e Excel */}
       <div className="flex justify-end gap-3">
         <button
-          onClick={() => gerarRelatorioGerencialPdf({ month: selectedMonth, grouped, topKm, topValor })}
-          className="flex items-center gap-2 px-6 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 uppercase tracking-widest"
+          onClick={handleDownloadExcel}
+          className="flex items-center gap-2 px-6 py-4 bg-[#0b7336] hover:bg-[#09602c] text-white font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 uppercase tracking-widest"
         >
           <DocumentArrowDownIcon className="w-5 h-5" />
-          Baixar PDF
+          Baixar Excel
         </button>
 
         <div className="flex items-center px-6 py-4 bg-[#1a1c23] rounded-2xl border border-white/10 shadow-xl cursor-pointer">
