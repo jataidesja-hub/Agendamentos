@@ -278,18 +278,20 @@ export default function FrotasPage() {
     });
   }, [veiculos, projetosPermitidos, busca]);
 
-  // Agrupa por PROPRIETÁRIO (propriedade)
+  // Agrupa: projeto → proprietário → veículos
   const grupos = useMemo(() => {
-    const g: Record<string, any[]> = {};
+    const g: Record<string, Record<string, any[]>> = {};
     veiculosFiltrados.forEach(v => {
-      const key = String(v.propriedade || 'SEM PROPRIETÁRIO').trim().toUpperCase();
-      if (!g[key]) g[key] = [];
-      g[key].push(v);
+      const proj = String(v.projeto || 'SEM PROJETO').trim().toUpperCase();
+      const prop = String(v.propriedade || 'SEM PROPRIETÁRIO').trim().toUpperCase();
+      if (!g[proj]) g[proj] = {};
+      if (!g[proj][prop]) g[proj][prop] = [];
+      g[proj][prop].push(v);
     });
     return g;
   }, [veiculosFiltrados]);
 
-  const proprietariosOrdenados = Object.keys(grupos).sort();
+  const projetosOrdenados = Object.keys(grupos).sort();
 
   // Stats globais
   const totalVeics = veiculosFiltrados.length;
@@ -421,129 +423,173 @@ export default function FrotasPage() {
 
       {/* ── Contador ───────────────────────────────────────────────────────── */}
       <p className="text-sm text-gray-400 font-medium">
-        {totalVeics} veículo(s) · {proprietariosOrdenados.length} proprietário(s)
+        {totalVeics} veículo(s) · {projetosOrdenados.length} projeto(s)
       </p>
 
-      {/* ── Grupos por Proprietário ─────────────────────────────────────────── */}
+      {/* ── Grupos: PROJETO → PROPRIETÁRIO ──────────────────────────────────── */}
       <div className="flex flex-col gap-6 pb-20">
-        {proprietariosOrdenados.length === 0 && (
+        {projetosOrdenados.length === 0 && (
           <div className="py-24 text-center border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-[3rem]">
             <TruckIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 font-bold italic">Nenhum veículo cadastrado.</p>
           </div>
         )}
 
-        {proprietariosOrdenados.map(prop => {
-          const isOpen = gruposExpandidos[prop] !== false;
-          const veicsGrupo = grupos[prop];
+        {projetosOrdenados.map(proj => {
+          const isProjOpen = gruposExpandidos[proj] !== false;
+          const proprietariosNoProjeto = Object.keys(grupos[proj]).sort();
+          const todosVeicsProjeto = proprietariosNoProjeto.flatMap(p => grupos[proj][p]);
 
-          // Stats do grupo
-          const gEstourado = veicsGrupo.filter(v =>
+          const projEstourado = todosVeicsProjeto.filter(v =>
             v.limite_cartao > 0 && (usoPorPlaca[v.placa] || 0) >= v.limite_cartao).length;
-          const gAtencao = veicsGrupo.filter(v => {
+          const projAtencao = todosVeicsProjeto.filter(v => {
             if (!v.limite_cartao) return false;
             const pct = (usoPorPlaca[v.placa] || 0) / v.limite_cartao;
             return pct >= 0.7 && pct < 1;
           }).length;
 
-          const headerColor = gEstourado > 0
-            ? 'from-red-600/15 to-transparent border-b border-red-200/30 dark:border-red-800/30'
-            : gAtencao > 0
-            ? 'from-amber-500/15 to-transparent border-b border-amber-200/30 dark:border-amber-800/30'
-            : 'from-blue-600/10 to-transparent border-b border-blue-200/20 dark:border-blue-800/20';
-
           return (
-            <div key={prop}
-              className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl overflow-hidden shadow-lg">
+            <div key={proj} className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl overflow-hidden shadow-lg">
 
-              {/* Header do proprietário */}
-              <button onClick={() => toggleGrupo(prop)}
-                className={`w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r ${headerColor} hover:brightness-95 transition-all`}>
+              {/* ── Header PROJETO (nível 1) ── */}
+              <button
+                onClick={() => toggleGrupo(proj)}
+                className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-700/20 to-transparent hover:from-blue-700/30 transition-all border-b border-blue-200/20 dark:border-blue-800/30"
+              >
                 <div className="flex items-center gap-3 flex-wrap">
-                  <BuildingOfficeIcon className="w-5 h-5 text-blue-500 shrink-0" />
-                  <span className="text-base font-black text-gray-800 dark:text-white uppercase tracking-wider">{prop}</span>
+                  <TruckIcon className="w-5 h-5 text-blue-500 shrink-0" />
+                  <span className="text-base font-black text-gray-900 dark:text-white uppercase tracking-widest">{proj}</span>
                   <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2.5 py-0.5 rounded-full">
-                    {veicsGrupo.length} veíc.
+                    {todosVeicsProjeto.length} veíc.
                   </span>
-                  {gEstourado > 0 && (
+                  <span className="text-xs font-bold text-gray-500 bg-gray-100 dark:bg-gray-700 px-2.5 py-0.5 rounded-full">
+                    {proprietariosNoProjeto.length} proprietário(s)
+                  </span>
+                  {projEstourado > 0 && (
                     <span className="text-[10px] font-black text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full">
-                      {gEstourado} estourado(s)
+                      🔴 {projEstourado} estourado(s)
                     </span>
                   )}
-                  {gAtencao > 0 && (
+                  {projAtencao > 0 && (
                     <span className="text-[10px] font-black text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
-                      {gAtencao} em atenção
+                      🟡 {projAtencao} em atenção
                     </span>
                   )}
                 </div>
-                {isOpen
+                {isProjOpen
                   ? <ChevronUpIcon className="w-5 h-5 text-gray-400 shrink-0" />
                   : <ChevronDownIcon className="w-5 h-5 text-gray-400 shrink-0" />}
               </button>
 
-              {/* Cards */}
-              {isOpen && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
-                  {veicsGrupo.map(v => {
-                    const usado = usoPorPlaca[String(v.placa || '').toUpperCase()] || 0;
-                    const limite = Number(v.limite_cartao) || 0;
-                    const pct = limite > 0 ? (usado / limite) * 100 : -1;
-                    const cardBorder =
-                      pct >= 100 ? 'border-red-300 dark:border-red-700/50' :
-                      pct >= 70  ? 'border-amber-300 dark:border-amber-700/50' :
-                                   'border-gray-100 dark:border-gray-700/50';
+              {/* ── Sub-grupos por PROPRIETÁRIO (nível 2) ── */}
+              {isProjOpen && (
+                <div className="flex flex-col gap-0">
+                  {proprietariosNoProjeto.map(prop => {
+                    const keyProp = `${proj}__${prop}`;
+                    const isPropOpen = gruposExpandidos[keyProp] !== false;
+                    const veicsProp = grupos[proj][prop];
+
+                    const pEstourado = veicsProp.filter(v =>
+                      v.limite_cartao > 0 && (usoPorPlaca[v.placa] || 0) >= v.limite_cartao).length;
+                    const pAtencao = veicsProp.filter(v => {
+                      if (!v.limite_cartao) return false;
+                      const pct = (usoPorPlaca[v.placa] || 0) / v.limite_cartao;
+                      return pct >= 0.7 && pct < 1;
+                    }).length;
+
+                    const subHeaderBg =
+                      pEstourado > 0 ? 'bg-red-50/60 dark:bg-red-900/10 border-b border-red-100 dark:border-red-800/20' :
+                      pAtencao > 0  ? 'bg-amber-50/60 dark:bg-amber-900/10 border-b border-amber-100 dark:border-amber-800/20' :
+                                      'bg-gray-50/60 dark:bg-gray-900/20 border-b border-gray-100 dark:border-gray-800/30';
 
                     return (
-                      <div key={v.id}
-                        className={`bg-white/80 dark:bg-gray-900/60 border ${cardBorder} rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:shadow-lg`}>
-
-                        {/* Top */}
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-0.5 truncate">
-                              {v.projeto || 'SEM PROJETO'}
-                            </p>
-                            <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-widest leading-none mb-1">
-                              {v.placa}
-                            </h3>
-                            <p className="text-[11px] font-bold text-gray-400 uppercase truncate">
-                              {v.subprojeto || 'SEM BASE'}
-                            </p>
+                      <div key={keyProp}>
+                        {/* Sub-header proprietário */}
+                        <button
+                          onClick={() => toggleGrupo(keyProp)}
+                          className={`w-full flex items-center justify-between px-8 py-3 ${subHeaderBg} hover:brightness-95 transition-all`}
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <BuildingOfficeIcon className="w-4 h-4 text-indigo-400 shrink-0" />
+                            <span className="text-sm font-black text-gray-700 dark:text-gray-200 uppercase tracking-wider">{prop}</span>
+                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
+                              {veicsProp.length} veíc.
+                            </span>
+                            {pEstourado > 0 && (
+                              <span className="text-[9px] font-black text-red-600 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded-full">
+                                🔴 {pEstourado}
+                              </span>
+                            )}
+                            {pAtencao > 0 && (
+                              <span className="text-[9px] font-black text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded-full">
+                                🟡 {pAtencao}
+                              </span>
+                            )}
                           </div>
-                          {/* Arquivar */}
-                          <button
-                            onClick={() => handleArchivar(v.id, v.placa)}
-                            className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all"
-                            title="Arquivar veículo"
-                          >
-                            <ArchiveBoxIcon className="w-4 h-4" />
-                          </button>
-                        </div>
+                          {isPropOpen
+                            ? <ChevronUpIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                            : <ChevronDownIcon className="w-4 h-4 text-gray-400 shrink-0" />}
+                        </button>
 
-                        {/* Status */}
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-tighter ml-1">
-                            Status Operacional
-                          </label>
-                          <select
-                            value={v.status || 'Ativo'}
-                            onChange={e => handleUpdateStatus(v.id, e.target.value)}
-                            className={`w-full px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border-0 focus:ring-2 focus:ring-blue-500 cursor-pointer ${
-                              v.status === 'Ativo' ? 'bg-green-100 text-green-700' :
-                              v.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' :
-                              v.status === 'Desmobilizado' ? 'bg-gray-200 text-gray-500' :
-                              'bg-red-100 text-red-700'
-                            }`}
-                          >
-                            <option value="Ativo" className="bg-white">✅ Ativo / Em Serviço</option>
-                            <option value="Em Manutenção" className="bg-white">🛠 Em Manutenção</option>
-                            <option value="Desmobilizado" className="bg-white">⬛ Desmobilizado</option>
-                            <option value="Fora de Serviço" className="bg-white">🚫 Fora de Serviço</option>
-                          </select>
-                        </div>
+                        {/* Cards dos veículos */}
+                        {isPropOpen && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4 bg-white/20 dark:bg-gray-900/10">
+                            {veicsProp.map(v => {
+                              const usado = usoPorPlaca[String(v.placa || '').toUpperCase()] || 0;
+                              const limite = Number(v.limite_cartao) || 0;
+                              const pct = limite > 0 ? (usado / limite) * 100 : -1;
+                              const cardBorder =
+                                pct >= 100 ? 'border-red-300 dark:border-red-700/50' :
+                                pct >= 70  ? 'border-amber-300 dark:border-amber-700/50' :
+                                             'border-gray-100 dark:border-gray-700/50';
 
-                        {/* Barra de limite */}
-                        <LimitBar limite={limite} usado={usado} />
+                              return (
+                                <div key={v.id}
+                                  className={`bg-white dark:bg-gray-900 border ${cardBorder} rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:shadow-lg`}>
+
+                                  <div className="flex items-start justify-between mb-3">
+                                    <div className="flex-1 min-w-0">
+                                      <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-widest leading-none mb-1">
+                                        {v.placa}
+                                      </h3>
+                                      <p className="text-[11px] font-bold text-gray-400 uppercase truncate">
+                                        {v.subprojeto || 'SEM BASE'}
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => handleArchivar(v.id, v.placa)}
+                                      className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all"
+                                      title="Arquivar veículo"
+                                    >
+                                      <ArchiveBoxIcon className="w-4 h-4" />
+                                    </button>
+                                  </div>
+
+                                  <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-tighter ml-1">Status</label>
+                                    <select
+                                      value={v.status || 'Ativo'}
+                                      onChange={e => handleUpdateStatus(v.id, e.target.value)}
+                                      className={`w-full px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border-0 focus:ring-2 focus:ring-blue-500 cursor-pointer ${
+                                        v.status === 'Ativo' ? 'bg-green-100 text-green-700' :
+                                        v.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' :
+                                        v.status === 'Desmobilizado' ? 'bg-gray-200 text-gray-500' :
+                                        'bg-red-100 text-red-700'
+                                      }`}
+                                    >
+                                      <option value="Ativo" className="bg-white">✅ Ativo / Em Serviço</option>
+                                      <option value="Em Manutenção" className="bg-white">🛠 Em Manutenção</option>
+                                      <option value="Desmobilizado" className="bg-white">⬛ Desmobilizado</option>
+                                      <option value="Fora de Serviço" className="bg-white">🚫 Fora de Serviço</option>
+                                    </select>
+                                  </div>
+
+                                  <LimitBar limite={limite} usado={usado} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
