@@ -148,7 +148,7 @@ export default function VeiculosPage() {
             <TruckIcon className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Frota / Veículos</h1>
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Frota / Gestão de Frotas</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Cadastro de placas, projetos e bases da operação</p>
           </div>
         </div>
