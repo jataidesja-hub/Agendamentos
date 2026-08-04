@@ -641,12 +641,14 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                   const hoje = new Date();
                   const mesSelecionado = new Date(selectedMonth + "-02");
                   let projecaoText = "";
+                  let projecaoEstourada = false;
                   
                   if (hoje.getFullYear() === mesSelecionado.getFullYear() && hoje.getMonth() === mesSelecionado.getMonth()) {
                     const diasNoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
                     const diasPassados = Math.max(hoje.getDate(), 1);
                     const projecao = (gastoMes / diasPassados) * diasNoMes;
                     projecaoText = `Projeção final do mês: ${projecao.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}`;
+                    projecaoEstourada = projecao > limCombust;
                   }
 
                   const barColor = (pct: number) => pct >= 100 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-500';
@@ -669,7 +671,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                               <div className={`${barColor(pctCombust)} h-2 rounded-full transition-all`} style={{width:`${Math.max(pctCombust,0)}%`}} />
                             </div>
                             <div className="flex justify-between mt-1">
-                              <span className="text-[9px] font-bold text-gray-400">{projecaoText}</span>
+                              <span className={`text-[9px] font-bold ${projecaoEstourada ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>{projecaoText}</span>
                               <span className={`text-[10px] font-bold ${txtColor(pctCombust)}`}>
                                 {pctCombust >= 100 ? '🔴 Estourado' : pctCombust >= 70 ? `🟡 ${pctCombust.toFixed(0)}% usado` : `🟢 ${pctCombust.toFixed(0)}% usado`}
                               </span>
