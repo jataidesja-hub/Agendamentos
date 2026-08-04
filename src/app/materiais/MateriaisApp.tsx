@@ -200,9 +200,21 @@ export default function MateriaisApp({ isAdmin }: { isAdmin: boolean }) {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {filtered.map(m => {
-              const baixoEstoque = m.quantidade_atual <= m.estoque_minimo;
+              const zerado = m.quantidade_atual <= 0;
+              const baixoEstoque = m.quantidade_atual > 0 && m.quantidade_atual <= m.estoque_minimo;
+              
+              let borderColor = 'border-gray-100';
+              let bgColor = 'bg-white';
+              if (zerado) {
+                borderColor = 'border-red-400';
+                bgColor = 'bg-red-50/30';
+              } else if (baixoEstoque) {
+                borderColor = 'border-amber-400';
+                bgColor = 'bg-amber-50/30';
+              }
+
               return (
-                <div key={m.id} className={`bg-white rounded-3xl p-5 border-2 shadow-sm transition-all ${baixoEstoque ? 'border-red-400 bg-red-50/30' : 'border-gray-100'}`}>
+                <div key={m.id} className={`rounded-3xl p-5 border-2 shadow-sm transition-all ${borderColor} ${bgColor}`}>
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-lg font-black text-gray-900 leading-tight">{m.nome}</h3>
@@ -220,13 +232,18 @@ export default function MateriaisApp({ isAdmin }: { isAdmin: boolean }) {
                     <div>
                       <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Em Estoque</p>
                       <div className="flex items-baseline gap-2">
-                        <span className={`text-4xl font-black ${baixoEstoque ? 'text-red-600 animate-pulse' : 'text-[#0b7336]'}`}>
+                        <span className={`text-4xl font-black ${zerado ? 'text-red-600 animate-pulse' : baixoEstoque ? 'text-amber-500' : 'text-[#0b7336]'}`}>
                           {m.quantidade_atual}
                         </span>
                         <span className="text-sm font-bold text-gray-500">{m.unidade}</span>
                       </div>
-                      {baixoEstoque && (
+                      {zerado && (
                         <p className="text-xs font-bold text-red-500 flex items-center gap-1 mt-1">
+                          <ExclamationTriangleIcon className="w-4 h-4" /> Estoque Zerado
+                        </p>
+                      )}
+                      {baixoEstoque && (
+                        <p className="text-xs font-bold text-amber-500 flex items-center gap-1 mt-1">
                           <ExclamationTriangleIcon className="w-4 h-4" /> Estoque Baixo
                         </p>
                       )}
@@ -282,19 +299,6 @@ export default function MateriaisApp({ isAdmin }: { isAdmin: boolean }) {
                   className="w-full px-5 py-4 rounded-2xl border-2 border-gray-100 bg-gray-50 focus:border-[#0b7336] focus:bg-white outline-none text-xl font-black text-gray-900 transition-all text-center"
                 />
               </div>
-
-              {showMovimentacao.tipo === 'saida' && (
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Placa / Destino (Opcional)</label>
-                  <input
-                    type="text"
-                    value={placa}
-                    onChange={e => setPlaca(e.target.value.toUpperCase())}
-                    placeholder="Ex: ABC1234"
-                    className="w-full px-5 py-4 rounded-2xl border-2 border-gray-100 bg-gray-50 focus:border-rose-400 focus:bg-white outline-none text-gray-900 font-bold uppercase transition-all"
-                  />
-                </div>
-              )}
 
               <div>
                 <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Observações (Opcional)</label>
