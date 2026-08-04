@@ -15,17 +15,14 @@ export default function MateriaisPage() {
       if (session) {
         // Verifica permissão
         const email = session.user.email || "";
-        if (email === "logistica@cymi.com.br") {
+        const { data } = await supabase
+          .from("perfis_acesso")
+          .select("telas_acesso, master")
+          .eq("email", email)
+          .single();
+          
+        if (data?.master || data?.telas_acesso?.includes("materiais")) {
           setIsAdmin(true);
-        } else {
-          const { data } = await supabase
-            .from("perfis_acesso")
-            .select("telas_acesso")
-            .eq("email", email)
-            .single();
-          if (data?.telas_acesso?.includes("materiais")) {
-            setIsAdmin(true);
-          }
         }
       }
       setLoading(false);
