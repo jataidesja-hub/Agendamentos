@@ -14,15 +14,20 @@ export default function MateriaisPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         // Verifica permissão
-        const email = session.user.email || "";
-        const { data } = await supabase
-          .from("perfis_acesso")
-          .select("telas_acesso, master")
-          .eq("email", email)
-          .single();
-          
-        if (data?.master || data?.telas_acesso?.includes("materiais")) {
+        const email = session.user.email?.toLowerCase() || "";
+        
+        if (email === "logistica@cymi.com.br" || email === "jataidesja@gmail.com") {
           setIsAdmin(true);
+        } else {
+          const { data, error } = await supabase
+            .from("perfis_acesso")
+            .select("telas_acesso, master")
+            .ilike("email", email)
+            .maybeSingle();
+            
+          if (data?.master || data?.telas_acesso?.includes("materiais")) {
+            setIsAdmin(true);
+          }
         }
       }
       setLoading(false);
