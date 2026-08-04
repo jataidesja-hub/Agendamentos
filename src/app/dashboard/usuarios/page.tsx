@@ -42,6 +42,7 @@ export default function UsuariosPage() {
     { id: 'telecom', nome: 'Controle Telecom' },
     { id: 'informacoes', nome: 'Informações (Senhas/Transformadores/Yealink)' },
     { id: 'solicitacoes', nome: 'Solicitações de Manutenção (Admin)' },
+    { id: 'materiais', nome: 'Materiais' },
   ];
 
   useEffect(() => {

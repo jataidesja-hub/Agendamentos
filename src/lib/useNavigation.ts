@@ -27,6 +27,7 @@ const DEFAULT_NAV: NavItem[] = [
   { id: "abastecimentos", name: "Abastecimentos", href: "/dashboard/abastecimentos", iconName: "ChartBarIcon2" },
   { id: "manutencao", name: "Manutenção", href: "/dashboard/manutencao", iconName: "TruckIcon2" },
   { id: "compras", name: "Gestão de Compras", href: "/dashboard/compras", iconName: "ShoppingCartIcon" },
+  { id: "materiais", name: "Controle de Materiais", href: "/dashboard/materiais", iconName: "ArchiveBoxIcon" },
   { id: "checklist", name: "Checklist Veículos", href: "/dashboard/checklist", iconName: "ClipboardDocumentCheckIcon" },
   { id: "km", name: "Relatório de KM", href: "/dashboard/km", iconName: "MapPinIcon" },
   { id: "cot", name: "PORTAL – COT", href: "/dashboard/cot", iconName: "TableCellsIcon" },
@@ -51,6 +52,7 @@ export const MOBILE_NAMES: Record<string, string> = {
   abastecimentos: "Abastec.",
   manutencao: "Manut.",
   compras: "Compras",
+  materiais: "Materiais",
   checklist: "Checklist",
   km: "KM",
   cot: "COT",
@@ -97,7 +99,7 @@ export function useNavigation() {
               setPermissões([
                 "agenda", "alertas", "relatorios", "configuracoes",
                 "chaves", "perfis", "veiculos", "projetos",
-                "abastecimentos", "sustentabilidade", "manutencao", "compras", "checklist", "km",
+                "abastecimentos", "sustentabilidade", "manutencao", "compras", "materiais", "checklist", "km",
               ]);
             }
           });
