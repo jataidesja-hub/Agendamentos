@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
-import { ArchiveBoxIcon, PlusIcon, MinusIcon, ExclamationTriangleIcon, TrashIcon, PencilIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { ArchiveBoxIcon, PlusIcon, MinusIcon, ExclamationTriangleIcon, TrashIcon, PencilIcon, MagnifyingGlassIcon, ChartPieIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface Material {
   id: string;
@@ -21,6 +21,7 @@ export default function MateriaisApp({ isAdmin }: { isAdmin: boolean }) {
   // Modals state
   const [showMovimentacao, setShowMovimentacao] = useState<{ id: string, tipo: 'entrada' | 'saida', material: Material } | null>(null);
   const [showCadastro, setShowCadastro] = useState(false);
+  const [showResumo, setShowResumo] = useState(false);
   const [editMaterial, setEditMaterial] = useState<Material | null>(null);
 
   // Form states
@@ -174,13 +175,22 @@ export default function MateriaisApp({ isAdmin }: { isAdmin: boolean }) {
           </div>
           
           {isAdmin && (
-            <button
-              onClick={() => { setEditMaterial(null); setNome(''); setEstoqueMin(''); setShowCadastro(true); }}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-[#0b7336] text-white font-bold rounded-xl shadow-lg hover:bg-[#09602c] active:scale-95 transition-all"
-            >
-              <PlusIcon className="w-5 h-5" />
-              Novo Material
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowResumo(true)}
+                className="flex items-center justify-center gap-2 px-5 py-3 bg-white text-gray-700 font-bold rounded-xl border border-gray-200 shadow-sm hover:bg-gray-50 active:scale-95 transition-all"
+              >
+                <ChartPieIcon className="w-5 h-5 text-gray-500" />
+                Resumo
+              </button>
+              <button
+                onClick={() => { setEditMaterial(null); setNome(''); setEstoqueMin(''); setShowCadastro(true); }}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-[#0b7336] text-white font-bold rounded-xl shadow-lg hover:bg-[#09602c] active:scale-95 transition-all"
+              >
+                <PlusIcon className="w-5 h-5" />
+                Novo
+              </button>
+            </div>
           )}
         </div>
 
@@ -403,6 +413,82 @@ export default function MateriaisApp({ isAdmin }: { isAdmin: boolean }) {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal Resumo */}
+      {showResumo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-white rounded-[2rem] p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-y-auto scrollbar-thin">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+                <ChartPieIcon className="w-8 h-8 text-[#0b7336]" />
+                Resumo de Estoque
+              </h2>
+              <button onClick={() => setShowResumo(false)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
+                <XMarkIcon className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Zerados */}
+              <div>
+                <h3 className="text-lg font-bold text-red-600 mb-3 flex items-center gap-2">
+                  <ExclamationTriangleIcon className="w-5 h-5" />
+                  Estoque Zerado ({materiais.filter(m => m.quantidade_atual <= 0).length})
+                </h3>
+                <div className="bg-red-50/50 rounded-2xl border border-red-100 p-4 space-y-2">
+                  {materiais.filter(m => m.quantidade_atual <= 0).map(m => (
+                    <div key={m.id} className="flex justify-between items-center py-1 border-b border-red-100/50 last:border-0">
+                      <span className="font-semibold text-gray-800">{m.nome}</span>
+                      <span className="text-red-500 font-bold">{m.quantidade_atual} {m.unidade}</span>
+                    </div>
+                  ))}
+                  {materiais.filter(m => m.quantidade_atual <= 0).length === 0 && (
+                    <p className="text-sm text-gray-500 italic">Nenhum produto zerado.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Abaixo do Mínimo */}
+              <div>
+                <h3 className="text-lg font-bold text-amber-600 mb-3 flex items-center gap-2">
+                  <ExclamationTriangleIcon className="w-5 h-5" />
+                  Abaixo do Mínimo ({materiais.filter(m => m.quantidade_atual > 0 && m.quantidade_atual <= m.estoque_minimo).length})
+                </h3>
+                <div className="bg-amber-50/50 rounded-2xl border border-amber-100 p-4 space-y-2">
+                  {materiais.filter(m => m.quantidade_atual > 0 && m.quantidade_atual <= m.estoque_minimo).map(m => (
+                    <div key={m.id} className="flex justify-between items-center py-1 border-b border-amber-100/50 last:border-0">
+                      <span className="font-semibold text-gray-800">{m.nome} <span className="text-xs text-gray-400 font-normal ml-2">(Mín: {m.estoque_minimo})</span></span>
+                      <span className="text-amber-500 font-bold">{m.quantidade_atual} {m.unidade}</span>
+                    </div>
+                  ))}
+                  {materiais.filter(m => m.quantidade_atual > 0 && m.quantidade_atual <= m.estoque_minimo).length === 0 && (
+                    <p className="text-sm text-gray-500 italic">Nenhum produto abaixo do mínimo.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Estoque Normal */}
+              <div>
+                <h3 className="text-lg font-bold text-emerald-600 mb-3 flex items-center gap-2">
+                  <ArchiveBoxIcon className="w-5 h-5" />
+                  Estoque Normal ({materiais.filter(m => m.quantidade_atual > m.estoque_minimo).length})
+                </h3>
+                <div className="bg-emerald-50/50 rounded-2xl border border-emerald-100 p-4 space-y-2">
+                  {materiais.filter(m => m.quantidade_atual > m.estoque_minimo).map(m => (
+                    <div key={m.id} className="flex justify-between items-center py-1 border-b border-emerald-100/50 last:border-0">
+                      <span className="font-semibold text-gray-800">{m.nome}</span>
+                      <span className="text-emerald-600 font-bold">{m.quantidade_atual} {m.unidade}</span>
+                    </div>
+                  ))}
+                  {materiais.filter(m => m.quantidade_atual > m.estoque_minimo).length === 0 && (
+                    <p className="text-sm text-gray-500 italic">Nenhum produto em estoque normal.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
