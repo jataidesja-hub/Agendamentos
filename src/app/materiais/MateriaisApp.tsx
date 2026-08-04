@@ -153,12 +153,19 @@ export default function MateriaisApp({ isAdmin }: { isAdmin: boolean }) {
   const filtered = materiais.filter(m => m.nome.toLowerCase().includes(busca.toLowerCase()));
 
   return (
-    <div className={`min-h-screen bg-gray-50 ${isAdmin ? '' : 'p-4 sm:p-6'}`}>
-      <div className={`max-w-4xl mx-auto ${isAdmin ? 'pb-24' : ''}`}>
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+      <div className="max-w-4xl mx-auto pb-24">
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
+            {isAdmin && (
+              <div className="flex items-center gap-3 mb-2">
+                <a href="/dashboard" className="text-gray-400 hover:text-[#0b7336] text-sm font-bold flex items-center gap-1 transition-colors">
+                  ← Voltar ao Dashboard
+                </a>
+              </div>
+            )}
             <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
               <ArchiveBoxIcon className="w-8 h-8 text-[#0b7336]" />
               {isAdmin ? 'Gerenciamento de Materiais' : 'Controle de Materiais'}

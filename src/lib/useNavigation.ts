@@ -27,7 +27,7 @@ const DEFAULT_NAV: NavItem[] = [
   { id: "abastecimentos", name: "Abastecimentos", href: "/dashboard/abastecimentos", iconName: "ChartBarIcon2" },
   { id: "manutencao", name: "Manutenção", href: "/dashboard/manutencao", iconName: "TruckIcon2" },
   { id: "compras", name: "Gestão de Compras", href: "/dashboard/compras", iconName: "ShoppingCartIcon" },
-  { id: "materiais", name: "Controle de Materiais", href: "/dashboard/materiais", iconName: "ArchiveBoxIcon" },
+  { id: "materiais", name: "Controle de Materiais", href: "/materiais", iconName: "ArchiveBoxIcon" },
   { id: "checklist", name: "Checklist Veículos", href: "/dashboard/checklist", iconName: "ClipboardDocumentCheckIcon" },
   { id: "km", name: "Relatório de KM", href: "/dashboard/km", iconName: "MapPinIcon" },
   { id: "cot", name: "PORTAL – COT", href: "/dashboard/cot", iconName: "TableCellsIcon" },
