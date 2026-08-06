@@ -111,6 +111,14 @@ export default function ManutencaoPage() {
   const [obsEditText, setObsEditText] = useState("");
   const [contestacaoEditId, setContestacaoEditId] = useState<string | null>(null);
   const [contestacaoEditText, setContestacaoEditText] = useState("");
+
+  // ── Aprovação estruturada ──
+  const [aprovacaoModalId, setAprovacaoModalId] = useState<string | null>(null);
+  const [aprovacaoGerente, setAprovacaoGerente] = useState("");
+  const [aprovacaoData, setAprovacaoData] = useState(new Date().toISOString().split("T")[0]);
+  const [gerentes, setGerentes] = useState<string[]>([]);
+  const [showCadastroGerente, setShowCadastroGerente] = useState(false);
+  const [novoGerente, setNovoGerente] = useState("");
   
   // Função para tocar o som de alerta
   const playNotificationSound = () => {
@@ -125,6 +133,7 @@ export default function ManutencaoPage() {
 
   useEffect(() => {
     loadData();
+    loadGerentes();
 
     // Inscrever para atualizações em tempo real (Supabase Realtime)
     const channel = supabase
@@ -169,6 +178,50 @@ export default function ManutencaoPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadGerentes = async () => {
+    const { data } = await supabase
+      .from('manutencao_gerentes_aprovadores')
+      .select('nome')
+      .order('nome');
+    if (data) setGerentes(data.map((g: any) => g.nome));
+  };
+
+  const handleSalvarGerente = async () => {
+    const nome = novoGerente.trim();
+    if (!nome) return;
+    const { error } = await supabase.from('manutencao_gerentes_aprovadores').insert({ nome });
+    if (error) { toast.error("Erro ao salvar."); return; }
+    setGerentes(prev => [...prev, nome].sort());
+    setNovoGerente("");
+    toast.success("Gerente cadastrado!");
+  };
+
+  const handleRemoverGerente = async (nome: string) => {
+    await supabase.from('manutencao_gerentes_aprovadores').delete().eq('nome', nome);
+    setGerentes(prev => prev.filter(g => g !== nome));
+  };
+
+  const formatarDataAprovacao = (data: string) => {
+    const [y, m, d] = data.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const handleConfirmarAprovacao = async (itemId: string) => {
+    if (!aprovacaoGerente) { toast.error("Selecione o gerente."); return; }
+    const texto = `APROVADO POR ${aprovacaoGerente.toUpperCase()} ${formatarDataAprovacao(aprovacaoData)}`;
+    try {
+      const { error } = await supabase
+        .from('manutencao_veiculos')
+        .update({ obs_aprovacao: texto, updated_at: new Date().toISOString() })
+        .eq('id', itemId);
+      if (error) throw error;
+      setData(prev => prev.map(d => d.id === itemId ? { ...d, obs_aprovacao: texto } : d));
+      setAprovacaoModalId(null);
+      setAprovacaoGerente("");
+      toast.success("Aprovação registrada!");
+    } catch { toast.error("Erro ao salvar."); }
   };
 
   // Upload da base (vincula placa -> admins/gerentes) — sem mudar o status
@@ -838,55 +891,24 @@ Serviços: ${item.servicos || "N/A"}`;
                           )
                         )}
 
-                        {/* Observação da Aprovação (se existir ou se estiver na etapa) */}
+                        {/* Observação da Aprovação */}
                         {(item.status === 'aguardando_aprovacao' || item.obs_aprovacao) && (
                           <div className="mb-3">
-                            {obsEditId === item.id ? (
-                              <div className="space-y-2">
-                                <label className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">Descrição da Aprovação</label>
-                                <textarea
-                                  value={obsEditText}
-                                  onChange={(e) => setObsEditText(e.target.value)}
-                                  placeholder="Detalhes da aprovação..."
-                                  rows={2}
-                                  className="w-full px-3 py-2 bg-purple-50/50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-800 rounded-lg text-[11px] font-medium focus:ring-2 focus:ring-purple-500 transition-all resize-none"
-                                  autoFocus
-                                />
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      const { error } = await supabase
-                                        .from('manutencao_veiculos')
-                                        .update({ obs_aprovacao: obsEditText, updated_at: new Date().toISOString() })
-                                        .eq('id', item.id);
-                                      if (error) throw error;
-                                      setData(prev => prev.map(d => d.id === item.id ? { ...d, obs_aprovacao: obsEditText } : d));
-                                      setObsEditId(null);
-                                      toast.success("Aprovação atualizada!");
-                                    } catch {
-                                      toast.error("Erro ao salvar.");
-                                    }
-                                  }}
-                                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-[10px] font-bold hover:bg-purple-700 transition-all"
-                                >
-                                  <CheckIcon className="w-3.5 h-3.5" />
-                                  Confirmar
-                                </button>
+                            {item.obs_aprovacao ? (
+                              <div
+                                onClick={() => { setAprovacaoModalId(item.id); setAprovacaoGerente(""); setAprovacaoData(new Date().toISOString().split("T")[0]); }}
+                                className="p-2.5 bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100/50 dark:border-purple-800/50 rounded-lg cursor-pointer hover:bg-purple-100/50 transition-all"
+                              >
+                                <p className="text-[9px] font-black text-purple-400 uppercase mb-1 tracking-tighter">Aprovação por email</p>
+                                <p className="text-[11px] text-purple-700 dark:text-purple-300 font-bold">{item.obs_aprovacao}</p>
                               </div>
                             ) : (
-                              <div 
-                                onClick={() => { setObsEditId(item.id); setObsEditText(item.obs_aprovacao || ""); }}
-                                className="p-2.5 bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100/50 dark:border-purple-800/50 rounded-lg cursor-pointer hover:bg-purple-100/50 dark:hover:bg-purple-900/30 transition-all"
+                              <button
+                                onClick={() => { setAprovacaoModalId(item.id); setAprovacaoGerente(""); setAprovacaoData(new Date().toISOString().split("T")[0]); }}
+                                className="w-full p-2.5 bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100/50 dark:border-purple-800/50 rounded-lg cursor-pointer hover:bg-purple-100/50 transition-all text-left"
                               >
-                                <p className="text-[9px] font-black text-purple-400 dark:text-purple-500 uppercase mb-1 tracking-tighter">Aprovação por email</p>
-                                {item.obs_aprovacao ? (
-                                  <p className="text-[11px] text-purple-700 dark:text-purple-300 font-medium line-clamp-2 hover:line-clamp-none transition-all cursor-default">
-                                    {item.obs_aprovacao}
-                                  </p>
-                                ) : (
-                                  <p className="text-[10px] text-purple-400 font-bold italic">+ Adicionar descrição da aprovação</p>
-                                )}
-                              </div>
+                                <p className="text-[10px] text-purple-400 font-bold italic">+ Registrar aprovação</p>
+                              </button>
                             )}
                           </div>
                         )}
@@ -1040,6 +1062,122 @@ Serviços: ${item.servicos || "N/A"}`;
           );
         })}
       </div>
+
+      {/* ===== MODAL APROVAÇÃO ===== */}
+      {aprovacaoModalId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-black text-gray-900 dark:text-white">Registrar Aprovação</h2>
+              <button onClick={() => setAprovacaoModalId(null)} className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 rounded-full transition-colors">
+                <XMarkIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Preview do texto gerado */}
+              {aprovacaoGerente && (
+                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
+                  <p className="text-xs font-black text-purple-400 uppercase tracking-widest mb-1">Texto gerado automaticamente</p>
+                  <p className="text-sm font-bold text-purple-700 dark:text-purple-300">
+                    APROVADO POR {aprovacaoGerente.toUpperCase()} {formatarDataAprovacao(aprovacaoData)}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Aprovado por</label>
+                <div className="flex gap-2">
+                  <select
+                    value={aprovacaoGerente}
+                    onChange={e => setAprovacaoGerente(e.target.value)}
+                    className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl font-bold text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                  >
+                    <option value="">Selecione o gerente...</option>
+                    {gerentes.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                  <button
+                    onClick={() => setShowCadastroGerente(true)}
+                    title="Cadastrar novo gerente"
+                    className="px-3 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 font-black transition-colors"
+                  >
+                    <PlusIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Data da Aprovação</label>
+                <input
+                  type="date"
+                  value={aprovacaoData}
+                  onChange={e => setAprovacaoData(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl font-bold text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setAprovacaoModalId(null)}
+                className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleConfirmarAprovacao(aprovacaoModalId)}
+                className="flex-1 py-3 bg-purple-600 text-white font-black rounded-2xl hover:bg-purple-700 active:scale-95 transition-all shadow-lg"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL CADASTRO DE GERENTES ===== */}
+      {showCadastroGerente && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-[2rem] p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-lg font-black text-gray-900 dark:text-white">Gerentes / Aprovadores</h2>
+              <button onClick={() => setShowCadastroGerente(false)} className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 rounded-full">
+                <XMarkIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={novoGerente}
+                onChange={e => setNovoGerente(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSalvarGerente()}
+                placeholder="Nome do gerente..."
+                className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+              />
+              <button
+                onClick={handleSalvarGerente}
+                className="px-4 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors"
+              >
+                <PlusIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {gerentes.length === 0 ? (
+                <p className="text-sm text-gray-400 italic text-center py-4">Nenhum gerente cadastrado.</p>
+              ) : gerentes.map(g => (
+                <div key={g} className="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                  <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{g}</span>
+                  <button onClick={() => handleRemoverGerente(g)} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
