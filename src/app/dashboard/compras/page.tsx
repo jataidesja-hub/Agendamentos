@@ -46,7 +46,7 @@ export default function ComprasPage() {
   const [busca, setBusca] = useState("");
 
   const now = new Date();
-  const [mesSel, setMesSel] = useState(now.getMonth());
+  const [mesSel, setMesSel] = useState<number>(-1); // -1 = todos os meses
   const [anoSel, setAnoSel] = useState(now.getFullYear());
 
   const anos = useMemo(() => {
@@ -149,9 +149,17 @@ export default function ComprasPage() {
   }
 
   // ── Filtros ──
-  const pedidosMes = useMemo(() => pedidos.filter(p => { if(!p.data_pedido) return false; const d=new Date(p.data_pedido+"T12:00:00"); return d.getMonth()===mesSel&&d.getFullYear()===anoSel; }), [pedidos,mesSel,anoSel]);
+  const pedidosMes = useMemo(() => pedidos.filter(p => {
+    if(!p.data_pedido) return false;
+    const d=new Date(p.data_pedido+"T12:00:00");
+    if(d.getFullYear()!==anoSel) return false;
+    if(mesSel===-1) return true; // todos os meses
+    return d.getMonth()===mesSel;
+  }), [pedidos,mesSel,anoSel]);
   const pedidosAno = useMemo(() => pedidos.filter(p => { if(!p.data_pedido) return false; return new Date(p.data_pedido+"T12:00:00").getFullYear()===anoSel; }), [pedidos,anoSel]);
   const pedidosFiltrados = useMemo(() => pedidosMes.filter(p => !busca || [p.num_pedido,p.comprador,p.fornecedor].some(v => v?.toLowerCase().includes(busca.toLowerCase()))), [pedidosMes, busca]);
+
+  const periodoLabel = mesSel===-1 ? `Ano ${anoSel}` : `${MESES[mesSel]}/${anoSel}`;
 
   // ── KPIs ──
   const kpis = useMemo(() => {
@@ -181,7 +189,7 @@ export default function ComprasPage() {
   function handleExport() {
     const ws=XLSX.utils.json_to_sheet(pedidosMes.map(p=>({ "Nº Pedido":p.num_pedido,"Data":p.data_pedido,"Comprador":p.comprador,"Fornecedor":p.fornecedor,"Valor Inicial":p.valor_inicial,"Valor 2ª Rodada":p.valor_2_rodada??"","Saving R$":p.saving_rs??"","Saving %":p.saving_pct??"" })));
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Pedidos");
-    XLSX.writeFile(wb,`compras_${MESES[mesSel]}_${anoSel}.xlsx`);
+    XLSX.writeFile(wb,`compras_${periodoLabel.replace("/","_")}.xlsx`);
   }
 
   const pctAcima=kpis.totalMes?((kpis.acimaMes/kpis.totalMes)*100).toFixed(2):"0.00";
@@ -197,17 +205,22 @@ export default function ComprasPage() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Visão geral de performance de compras e economia</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
-            <CalendarIcon className="w-4 h-4 text-gray-400" />
-            <select value={mesSel} onChange={e=>setMesSel(Number(e.target.value))} className="text-sm font-semibold text-gray-700 dark:text-gray-200 bg-transparent outline-none cursor-pointer">
+          <div className="flex items-center gap-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 shadow-sm">
+            <CalendarIcon className="w-4 h-4 text-gray-500 dark:text-gray-300" />
+            <select
+              value={mesSel}
+              onChange={e=>setMesSel(Number(e.target.value))}
+              className="text-sm font-semibold text-gray-800 dark:text-white bg-transparent outline-none cursor-pointer"
+            >
+              <option value={-1}>Todos os meses</option>
               {MESES.map((m,i)=><option key={i} value={i}>{m}</option>)}
             </select>
           </div>
-          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 shadow-sm">
-            <select value={anoSel} onChange={e=>setAnoSel(Number(e.target.value))} className="text-sm font-semibold text-gray-700 dark:text-gray-200 bg-transparent outline-none cursor-pointer">
+          <div className="flex items-center gap-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 shadow-sm">
+            <select value={anoSel} onChange={e=>setAnoSel(Number(e.target.value))} className="text-sm font-semibold text-gray-800 dark:text-white bg-transparent outline-none cursor-pointer">
               {anos.map(a=><option key={a} value={a}>{a}</option>)}
             </select>
-            <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+            <ChevronDownIcon className="w-4 h-4 text-gray-500 dark:text-gray-300" />
           </div>
           <label className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm cursor-pointer transition-all shadow-sm border ${uploading?"bg-gray-100 text-gray-400 border-gray-200 dark:bg-gray-800 dark:border-gray-700":"bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50"}`}>
             <ArrowUpTrayIcon className="w-4 h-4" />
@@ -283,7 +296,7 @@ export default function ComprasPage() {
           <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <h3 className="font-black text-gray-900 dark:text-white">
-                Pedidos — {MESES[mesSel]}/{anoSel}
+                Pedidos — {periodoLabel}
                 <span className="ml-2 text-sm font-normal text-gray-400">({pedidosFiltrados.length} registros)</span>
               </h3>
             </div>
