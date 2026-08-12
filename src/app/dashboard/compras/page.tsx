@@ -176,9 +176,29 @@ export default function ComprasPage() {
 
       if (!confirm(`Importar ${formatted.length} pedidos? (Dados existentes serão mesclados por Nº Pedido)`)) return;
 
-      // Upsert em lotes de 200
-      for (let i = 0; i < formatted.length; i += 200) {
-        const chunk = formatted.slice(i, i + 200);
+      // Deduplicar por num_pedido (mantém o último de cada chave)
+      const comNumero: Pedido[] = [];
+      const semNumero: Pedido[] = [];
+      const seen = new Map<string, number>();
+
+      formatted.forEach(r => {
+        if (!r.num_pedido) {
+          semNumero.push({ ...r, num_pedido: `AUTO-${Date.now()}-${Math.random().toString(36).slice(2,7)}` });
+        } else {
+          if (seen.has(r.num_pedido)) {
+            comNumero[seen.get(r.num_pedido)!] = r; // substitui pelo mais recente
+          } else {
+            seen.set(r.num_pedido, comNumero.length);
+            comNumero.push(r);
+          }
+        }
+      });
+
+      const tudo = [...comNumero, ...semNumero];
+
+      // Upsert em lotes de 100
+      for (let i = 0; i < tudo.length; i += 100) {
+        const chunk = tudo.slice(i, i + 100);
         const { error } = await supabase
           .from("compras_pedidos")
           .upsert(chunk, { onConflict: "num_pedido", ignoreDuplicates: false });
