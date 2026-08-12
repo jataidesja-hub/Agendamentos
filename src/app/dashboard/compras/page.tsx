@@ -166,14 +166,16 @@ export default function ComprasPage() {
   }, [pedidosMes, pedidosAno]);
 
   const donutData = useMemo(() => [
-    { name:`Acima de R$ 5.000 (${kpis.acimaMes})`, value:kpis.acimaMes, color:"#0b7336" },
-    { name:`Abaixo de R$ 5.000 (${kpis.abaixoMes})`, value:kpis.abaixoMes, color:"#22c55e" },
+    { name:`Acima de R$ 5.000 (${kpis.acimaMes})`, value:kpis.acimaMes, color:"#6366f1" },
+    { name:`Abaixo de R$ 5.000 (${kpis.abaixoMes})`, value:kpis.abaixoMes, color:"#f97316" },
   ], [kpis]);
+
+  const COMPRADOR_COLORS = ["#6366f1","#f97316","#0ea5e9","#ec4899","#14b8a6","#f59e0b","#8b5cf6","#ef4444"];
 
   const economiaComprador = useMemo(() => {
     const map: Record<string,number>={};
     pedidosMes.forEach(p=>{ if(p.comprador) map[p.comprador]=(map[p.comprador]||0)+(p.saving_rs??0); });
-    return Object.entries(map).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value).slice(0,6);
+    return Object.entries(map).map(([name,value],i)=>({name,value,color:COMPRADOR_COLORS[i%COMPRADOR_COLORS.length]})).sort((a,b)=>b.value-a.value).slice(0,6);
   }, [pedidosMes]);
 
   function handleExport() {
@@ -268,7 +270,7 @@ export default function ComprasPage() {
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-sm">
               <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Economia por Comprador (Mês)</h3>
               {economiaComprador.length===0 ? <div className="flex items-center justify-center h-48 text-sm text-gray-400">Sem savings registrados</div> : (
-                <ResponsiveContainer width="100%" height={220}><BarChart data={economiaComprador} layout="vertical" margin={{left:0,right:20,top:0,bottom:0}}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb"/><XAxis type="number" tick={{fontSize:10}} tickFormatter={v=>`R$ ${(v/1000).toFixed(0)}k`}/><YAxis type="category" dataKey="name" tick={{fontSize:10}} width={80}/><Tooltip formatter={(v:any)=>[fmtBRL(v),"Saving"]}/><Bar dataKey="value" fill="#0b7336" radius={[0,6,6,0]}/></BarChart></ResponsiveContainer>
+                <ResponsiveContainer width="100%" height={220}><BarChart data={economiaComprador} layout="vertical" margin={{left:0,right:20,top:0,bottom:0}}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb"/><XAxis type="number" tick={{fontSize:10}} tickFormatter={v=>`R$ ${(v/1000).toFixed(0)}k`}/><YAxis type="category" dataKey="name" tick={{fontSize:10}} width={80}/><Tooltip formatter={(v:any)=>[fmtBRL(v),"Saving"]}/><Bar dataKey="value" radius={[0,6,6,0]}>{economiaComprador.map((entry,i)=><Cell key={i} fill={entry.color}/>)}</Bar></BarChart></ResponsiveContainer>
               )}
             </div>
           </div>
