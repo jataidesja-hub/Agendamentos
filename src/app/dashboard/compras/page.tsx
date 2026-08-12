@@ -98,16 +98,56 @@ export default function ComprasPage() {
         return isNaN(n) ? null : n;
       };
 
-      const parseDate = (v: any) => {
+      const parseDate = (v: any): string | null => {
         if (!v) return null;
-        if (v instanceof Date) return v.toISOString().split("T")[0];
-        const s = String(v);
-        // dd/mm/yyyy
-        if (s.includes("/")) {
-          const [d, m, y] = s.split("/");
-          return `${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+
+        // XLSX com cellDates:true entrega Date objects
+        if (v instanceof Date) {
+          if (isNaN(v.getTime())) return null;
+          const y = v.getFullYear();
+          const m = String(v.getMonth() + 1).padStart(2, "0");
+          const d = String(v.getDate()).padStart(2, "0");
+          if (y < 1900 || y > 2100) return null;
+          return `${y}-${m}-${d}`;
         }
-        return s;
+
+        // Serial numérico do Excel (dias desde 1/1/1900)
+        if (typeof v === "number") {
+          const date = new Date((v - 25569) * 86400 * 1000);
+          if (isNaN(date.getTime())) return null;
+          const y = date.getUTCFullYear();
+          const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+          const d = String(date.getUTCDate()).padStart(2, "0");
+          if (y < 1900 || y > 2100) return null;
+          return `${y}-${m}-${d}`;
+        }
+
+        const s = String(v).trim();
+
+        // dd/mm/yyyy ou dd/mm/yy
+        if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)) {
+          const parts = s.split("/");
+          const di = parseInt(parts[0], 10);
+          const mi = parseInt(parts[1], 10);
+          let yi = parseInt(parts[2], 10);
+          if (parts[2].length === 2) yi += 2000;
+          if (mi < 1 || mi > 12 || di < 1 || di > 31) return null;
+          return `${yi}-${String(mi).padStart(2,"0")}-${String(di).padStart(2,"0")}`;
+        }
+
+        // yyyy-mm-dd
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+        // Fallback
+        const parsed = new Date(s);
+        if (!isNaN(parsed.getTime())) {
+          const y = parsed.getFullYear();
+          const m = String(parsed.getMonth() + 1).padStart(2, "0");
+          const d = String(parsed.getDate()).padStart(2, "0");
+          return `${y}-${m}-${d}`;
+        }
+
+        return null;
       };
 
       const colMap = (row: any, aliases: string[]) => {
