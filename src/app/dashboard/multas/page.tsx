@@ -828,6 +828,10 @@ export default function MultasPage() {
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Observações</label>
                     <textarea value={obs} onChange={e => setObs(e.target.value)} rows={2} className={inputCls + " resize-none"} placeholder="Observações..." />
                   </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Locadora</label>
+                    <input type="text" value={locadora} onChange={e => setLocadora(e.target.value)} className={inputCls} placeholder="Ex: Unidas, Localiza, Movida..." />
+                  </div>
                   {/* Anexos Iniciais */}
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexos Iniciais</label>
