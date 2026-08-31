@@ -37,6 +37,7 @@ interface Multa {
   prazo_indicacao_condutor: string | null;
   valor_multa: number | null;
   condutor_identificado: string | null;
+  locadora: string | null;
   created_at: string;
 }
 
@@ -68,6 +69,7 @@ export default function MultasPage() {
   const [filesToAdd, setFilesToAdd] = useState<File[]>([]);
   const [existingIniciais, setExistingIniciais] = useState<string[]>([]);
   const [existingRetorno, setExistingRetorno] = useState<string[]>([]);
+  const [locadora, setLocadora] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -160,7 +162,7 @@ export default function MultasPage() {
 
   function resetForm() {
     setPlaca(""); setAutoInfracao(""); setGestor(""); setObs("");
-    setPrazoIndicacao(""); setValorMulta(""); setCondutorIdentificado("");
+    setPrazoIndicacao(""); setValorMulta(""); setCondutorIdentificado(""); setLocadora("");
     setFilesToAdd([]); setFilesToAddRetorno([]);
     setExistingIniciais([]); setExistingRetorno([]);
   }
@@ -176,6 +178,7 @@ export default function MultasPage() {
     setPrazoIndicacao(m.prazo_indicacao_condutor || "");
     setValorMulta(m.valor_multa != null ? String(m.valor_multa) : "");
     setCondutorIdentificado(m.condutor_identificado || "");
+    setLocadora(m.locadora || "");
     setFilesToAdd([]); setFilesToAddRetorno([]);
     setExistingIniciais(m.arquivos_iniciais || []);
     setExistingRetorno(m.arquivos_retorno || []);
@@ -189,6 +192,7 @@ export default function MultasPage() {
     setPrazoIndicacao(m.prazo_indicacao_condutor || "");
     setValorMulta(m.valor_multa != null ? String(m.valor_multa) : "");
     setCondutorIdentificado(m.condutor_identificado || "");
+    setLocadora(m.locadora || "");
     setFilesToAdd([]); setFilesToAddRetorno([]);
     setExistingIniciais(m.arquivos_iniciais || []);
     setExistingRetorno(m.arquivos_retorno || []);
@@ -251,6 +255,7 @@ export default function MultasPage() {
           arquivos_iniciais: novasUrlsIniciais, arquivos_retorno: novasUrlsRetorno,
           valor_multa: valorNum,
           condutor_identificado: condutorIdentificado || null,
+          locadora: locadora || null,
           updated_at: new Date().toISOString()
         }).eq("id", editingId);
         if (error) throw error;
@@ -266,6 +271,7 @@ export default function MultasPage() {
           arquivos_iniciais: novasUrlsIniciais,
           valor_multa: valorNum,
           condutor_identificado: condutorIdentificado || null,
+          locadora: locadora || null,
         });
         if (error) throw error;
         toast.success("Multa registrada!");
@@ -546,6 +552,7 @@ export default function MultasPage() {
                     )}
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Placa</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Projeto</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Locadora</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Auto da Infração</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Condutor</th>
@@ -576,6 +583,13 @@ export default function MultasPage() {
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
                           {getProjeto(m.placa)}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
+                        {m.locadora ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                            {m.locadora}
+                          </span>
+                        ) : <span className="text-gray-400">—</span>}
                       </td>
                       <td className="px-6 py-4 font-mono text-sm text-gray-600 dark:text-gray-300">{m.auto_infracao}</td>
                       <td className="px-6 py-4 text-sm font-black text-rose-600 dark:text-rose-400 whitespace-nowrap">
@@ -705,6 +719,10 @@ export default function MultasPage() {
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Gestor Responsável</label>
                       <input type="text" value={gestor} onChange={e => setGestor(e.target.value)} className={inputCls} placeholder="Nome do Gestor" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Locadora</label>
+                    <input type="text" value={locadora} onChange={e => setLocadora(e.target.value)} className={inputCls} placeholder="Ex: Unidas, Localiza, Movida..." />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Anexar Multa (PDF/Imagem)</label>
