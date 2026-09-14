@@ -18,6 +18,9 @@ import {
   TrashIcon,
   PencilSquareIcon,
   ExclamationTriangleIcon,
+  UserGroupIcon,
+  BuildingOffice2Icon,
+  LinkIcon,
 } from "@heroicons/react/24/outline";
 import { CheckIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-hot-toast";
@@ -48,6 +51,30 @@ interface ManutencaoVeiculo {
   obs_aprovacao: string | null;
   obs_contestacao: string | null;
   updated_at: string;
+}
+
+interface FrotaBase {
+  placa: string;
+  admins: string;
+  emails_admin: string;
+  gerentes: string;
+  emails_gerente: string;
+  projeto_id: string | null;
+  updated_at: string;
+}
+
+interface Projeto {
+  id: string;
+  nome: string;
+}
+
+interface Contato {
+  id: string;
+  nome: string;
+  email: string;
+  papel: "adm" | "gerente";
+  created_at: string;
+  projetos?: Projeto[];
 }
 
 const etapaColors: Record<string, { bg: string; border: string; text: string; badge: string; dot: string; headerBg: string }> = {
@@ -94,6 +121,7 @@ const etapaColors: Record<string, { bg: string; border: string; text: string; ba
 };
 
 export default function ManutencaoPage() {
+  // ── Kanban ──
   const [data, setData] = useState<ManutencaoVeiculo[]>([]);
   const [loading, setLoading] = useState(false);
   const [plateSearch, setPlateSearch] = useState("");
@@ -119,7 +147,25 @@ export default function ManutencaoPage() {
   const [gerentes, setGerentes] = useState<string[]>([]);
   const [showCadastroGerente, setShowCadastroGerente] = useState(false);
   const [novoGerente, setNovoGerente] = useState("");
-  
+
+  // ── Abas ──
+  const [activeTab, setActiveTab] = useState<"kanban" | "contatos">("kanban");
+
+  // ── Contatos ──
+  const [contatos, setContatos] = useState<Contato[]>([]);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [loadingContatos, setLoadingContatos] = useState(false);
+  const [showContatoModal, setShowContatoModal] = useState(false);
+  const [editingContato, setEditingContato] = useState<Contato | null>(null);
+  const [contatoForm, setContatoForm] = useState({ nome: "", email: "", papel: "adm" as "adm" | "gerente" });
+  const [contatoProjetosSelected, setContatoProjetosSelected] = useState<string[]>([]);
+  const [savingContato, setSavingContato] = useState(false);
+
+  // ── Vínculo placa → projeto ──
+  const [frotaBase, setFrotaBase] = useState<FrotaBase[]>([]);
+  const [loadingFrota, setLoadingFrota] = useState(false);
+  const [savingPlacaId, setSavingPlacaId] = useState<string | null>(null);
+
   // Função para tocar o som de alerta
   const playNotificationSound = () => {
     try {
@@ -135,24 +181,19 @@ export default function ManutencaoPage() {
     loadData();
     loadGerentes();
 
-    // Inscrever para atualizações em tempo real (Supabase Realtime)
     const channel = supabase
       .channel('realtime_manutencao')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'manutencao_veiculos' 
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'manutencao_veiculos'
       }, (payload: any) => {
-        // Tocar som se o novo status for "aguardando_aprovacao"
-        // E for uma inserção ou se o status antigo for diferente
         if (payload.new && payload.new.status === 'aguardando_aprovacao') {
-           // Só toca se for um novo registro ou se mudou de outra etapa para esta
-           if (payload.eventType === 'INSERT' || (payload.old && payload.old.status !== 'aguardando_aprovacao')) {
-              playNotificationSound();
-           }
+          if (payload.eventType === 'INSERT' || (payload.old && payload.old.status !== 'aguardando_aprovacao')) {
+            playNotificationSound();
+          }
         }
-        
-        loadData(true); // Silent reload
+        loadData(true);
       })
       .subscribe();
 
@@ -161,13 +202,22 @@ export default function ManutencaoPage() {
     };
   }, []);
 
+  // Carrega dados da aba Contatos ao trocar para ela
+  useEffect(() => {
+    if (activeTab === "contatos") {
+      loadContatos();
+      loadProjetos();
+      loadFrotaBase();
+    }
+  }, [activeTab]);
+
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const { data: result, error } = await supabase
         .from('manutencao_veiculos')
         .select('*')
-        .not('status', 'is', null) // Apenas processos ativos
+        .not('status', 'is', null)
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
@@ -186,6 +236,66 @@ export default function ManutencaoPage() {
       .select('nome')
       .order('nome');
     if (data) setGerentes(data.map((g: any) => g.nome));
+  };
+
+  const loadProjetos = async () => {
+    const { data } = await supabase
+      .from('projetos')
+      .select('id, nome')
+      .order('nome');
+    if (data) setProjetos(data as Projeto[]);
+  };
+
+  const loadContatos = async () => {
+    setLoadingContatos(true);
+    try {
+      const { data: contatosData, error } = await supabase
+        .from('manutencao_contatos')
+        .select('*')
+        .order('nome');
+      if (error) throw error;
+
+      // Buscar projetos vinculados a cada contato
+      const ids = (contatosData || []).map((c: any) => c.id);
+      let vinculosMap: Record<string, Projeto[]> = {};
+      if (ids.length > 0) {
+        const { data: vinculos } = await supabase
+          .from('manutencao_contato_projetos')
+          .select('contato_id, projetos(id, nome)')
+          .in('contato_id', ids);
+
+        (vinculos || []).forEach((v: any) => {
+          if (!vinculosMap[v.contato_id]) vinculosMap[v.contato_id] = [];
+          if (v.projetos) vinculosMap[v.contato_id].push(v.projetos);
+        });
+      }
+
+      const enriched = (contatosData || []).map((c: any) => ({
+        ...c,
+        projetos: vinculosMap[c.id] || [],
+      }));
+      setContatos(enriched as Contato[]);
+    } catch (err) {
+      toast.error("Erro ao carregar contatos.");
+    } finally {
+      setLoadingContatos(false);
+    }
+  };
+
+  const loadFrotaBase = async () => {
+    setLoadingFrota(true);
+    try {
+      const { data, error } = await supabase
+        .from('manutencao_frota_base')
+        .select('*')
+        .order('placa');
+      if (error) throw error;
+      setFrotaBase((data || []) as FrotaBase[]);
+    } catch {
+      toast.error("Erro ao carregar base da frota.");
+    } finally {
+      setLoadingFrota(false);
+    }
   };
 
   const handleSalvarGerente = async () => {
@@ -224,7 +334,7 @@ export default function ManutencaoPage() {
     } catch { toast.error("Erro ao salvar."); }
   };
 
-  // Upload da base (vincula placa -> admins/gerentes) — sem mudar o status
+  // Upload da base via planilha
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -234,7 +344,7 @@ export default function ManutencaoPage() {
       try {
         const wb = XLSX.read(evt.target.result, { type: 'array' });
         const rawData: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        
+
         const getV = (row: any, names: string[]) => {
           const keys = Object.keys(row);
           for (const name of names) {
@@ -242,12 +352,12 @@ export default function ManutencaoPage() {
             if (found) return row[found];
           }
           if (names.includes("EMAIL_GERENTE")) {
-             const found = keys.find(k => k.toUpperCase().includes("EMAIL") && k.toUpperCase().includes("GERENTE"));
-             if (found) return row[found];
+            const found = keys.find(k => k.toUpperCase().includes("EMAIL") && k.toUpperCase().includes("GERENTE"));
+            if (found) return row[found];
           }
           if (names.includes("EMAIL_ADM")) {
-             const found = keys.find(k => k.toUpperCase().includes("EMAIL") && (k.toUpperCase().includes("ADM") || k.toUpperCase().includes("ADMIN")));
-             if (found) return row[found];
+            const found = keys.find(k => k.toUpperCase().includes("EMAIL") && (k.toUpperCase().includes("ADM") || k.toUpperCase().includes("ADMIN")));
+            if (found) return row[found];
           }
           return "";
         };
@@ -255,7 +365,7 @@ export default function ManutencaoPage() {
         const formatted = rawData.map((row: any) => {
           const rawEmailsAdmin = String(getV(row, ["EMAIL_ADM", "EMAIL ADM"]) || "").trim();
           const rawEmailsGerente = String(getV(row, ["EMAIL_GERENTE", "EMAIL_GERENTE e SERVICOs"]) || "").trim();
-          
+
           const normalizeEmails = (str: string) => {
             if (!str || str === "#N/D") return "";
             return str.replace(/[\/;]/g, ',').replace(/\s/g, '').replace(/,$/, '').replace(/^,/, '');
@@ -267,36 +377,121 @@ export default function ManutencaoPage() {
             emails_admin: normalizeEmails(rawEmailsAdmin),
             gerentes: String(getV(row, ["GERENTE", "GESTOR"]) || "").trim(),
             emails_gerente: normalizeEmails(rawEmailsGerente),
-            servicos: String(getV(row, ["SERVICOS", "SERVIÇOS", "DESCRICAO"]) || "").trim(),
             updated_at: new Date().toISOString()
           };
         }).filter(item => item.placa !== "" && item.placa !== "#N/D");
 
         if (formatted.length === 0) {
-           toast.error("Nenhum dado válido encontrado na planilha.");
-           return;
+          toast.error("Nenhum dado válido encontrado na planilha.");
+          return;
         }
 
         const confirm = window.confirm(`Deseja importar ${formatted.length} registros para a base de manutenção?`);
         if (!confirm) return;
 
         for (const item of formatted) {
-          // Remover campo servicos do item da base
-          const { servicos, ...baseItem } = item;
           const { error } = await supabase
             .from('manutencao_frota_base')
-            .upsert(baseItem, { onConflict: 'placa' });
+            .upsert(item, { onConflict: 'placa' });
           if (error) throw error;
         }
 
         toast.success(`${formatted.length} registros importados com sucesso!`);
         loadData();
-      } catch (err) { 
+      } catch (err) {
         console.error("Erro no processamento do arquivo:", err);
-        toast.error("Erro ao processar planilha."); 
+        toast.error("Erro ao processar planilha.");
       } finally { setLoading(false); }
     };
     reader.readAsArrayBuffer(file);
+  };
+
+  // ── CRUD Contatos ──
+  const openContatoModal = (contato?: Contato) => {
+    if (contato) {
+      setEditingContato(contato);
+      setContatoForm({ nome: contato.nome, email: contato.email, papel: contato.papel });
+      setContatoProjetosSelected(contato.projetos?.map(p => p.id) || []);
+    } else {
+      setEditingContato(null);
+      setContatoForm({ nome: "", email: "", papel: "adm" });
+      setContatoProjetosSelected([]);
+    }
+    setShowContatoModal(true);
+  };
+
+  const handleSalvarContato = async () => {
+    const { nome, email, papel } = contatoForm;
+    if (!nome.trim() || !email.trim()) { toast.error("Nome e email são obrigatórios."); return; }
+    setSavingContato(true);
+    try {
+      let contatoId: string;
+
+      if (editingContato) {
+        const { error } = await supabase
+          .from('manutencao_contatos')
+          .update({ nome: nome.trim(), email: email.trim(), papel })
+          .eq('id', editingContato.id);
+        if (error) throw error;
+        contatoId = editingContato.id;
+      } else {
+        const { data, error } = await supabase
+          .from('manutencao_contatos')
+          .insert({ nome: nome.trim(), email: email.trim(), papel })
+          .select('id')
+          .single();
+        if (error) throw error;
+        contatoId = data.id;
+      }
+
+      // Atualizar vínculos de projetos: deletar todos e reinserir
+      await supabase.from('manutencao_contato_projetos').delete().eq('contato_id', contatoId);
+      if (contatoProjetosSelected.length > 0) {
+        const inserts = contatoProjetosSelected.map(projeto_id => ({ contato_id: contatoId, projeto_id }));
+        const { error } = await supabase.from('manutencao_contato_projetos').insert(inserts);
+        if (error) throw error;
+      }
+
+      toast.success(editingContato ? "Contato atualizado!" : "Contato cadastrado!");
+      setShowContatoModal(false);
+      loadContatos();
+    } catch (err: any) {
+      toast.error("Erro ao salvar contato.");
+    } finally {
+      setSavingContato(false);
+    }
+  };
+
+  const handleExcluirContato = async (id: string) => {
+    if (!window.confirm("Excluir este contato?")) return;
+    const { error } = await supabase.from('manutencao_contatos').delete().eq('id', id);
+    if (error) { toast.error("Erro ao excluir."); return; }
+    setContatos(prev => prev.filter(c => c.id !== id));
+    toast.success("Contato excluído.");
+  };
+
+  const toggleProjetoContato = (projetoId: string) => {
+    setContatoProjetosSelected(prev =>
+      prev.includes(projetoId) ? prev.filter(id => id !== projetoId) : [...prev, projetoId]
+    );
+  };
+
+  // Vínculo placa → projeto
+  const handleVincularProjeto = async (placa: string, projeto_id: string | null) => {
+    setSavingPlacaId(placa);
+    try {
+      const { error } = await supabase
+        .from('manutencao_frota_base')
+        .update({ projeto_id: projeto_id || null })
+        .eq('placa', placa);
+      if (error) throw error;
+      setFrotaBase(prev => prev.map(f => f.placa === placa ? { ...f, projeto_id } : f));
+      toast.success(`${placa} vinculada!`);
+    } catch {
+      toast.error("Erro ao vincular placa.");
+    } finally {
+      setSavingPlacaId(null);
+    }
   };
 
   // ==========================================
@@ -308,19 +503,17 @@ export default function ManutencaoPage() {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+    if (file.size > 10 * 1024 * 1024) {
       toast.error("O arquivo PDF deve ter no máximo 10MB.");
       return;
     }
 
     setUploadingPdfId(vehicleId);
     try {
-      // Nome do arquivo: placa_timestamp.pdf
       const timestamp = Date.now();
       const fileName = `${placa.replace(/\s/g, '_')}_${timestamp}.pdf`;
       const filePath = `orcamentos/${fileName}`;
 
-      // Upload para o Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('manutencao-pdfs')
         .upload(filePath, file, {
@@ -330,14 +523,12 @@ export default function ManutencaoPage() {
 
       if (uploadError) throw uploadError;
 
-      // Pegar a URL pública
       const { data: urlData } = supabase.storage
         .from('manutencao-pdfs')
         .getPublicUrl(filePath);
 
       const publicUrl = urlData.publicUrl;
 
-      // Atualizar a tabela com a URL do PDF
       const { error: updateError } = await supabase
         .from('manutencao_veiculos')
         .update({ pdf_url: publicUrl, updated_at: new Date().toISOString() })
@@ -345,8 +536,7 @@ export default function ManutencaoPage() {
 
       if (updateError) throw updateError;
 
-      // Atualizar estado local
-      setData(prev => prev.map(item => 
+      setData(prev => prev.map(item =>
         item.id === vehicleId ? { ...item, pdf_url: publicUrl } : item
       ));
 
@@ -360,19 +550,15 @@ export default function ManutencaoPage() {
     }
   }, []);
 
-  // Remover PDF
   const removePdf = async (vehicleId: string, pdfUrl: string) => {
     if (!window.confirm("Deseja remover o PDF anexado?")) return;
-    
     try {
-      // Extrair o path do arquivo da URL
       const urlParts = pdfUrl.split('/manutencao-pdfs/');
       if (urlParts.length > 1) {
         const filePath = decodeURIComponent(urlParts[1]);
         await supabase.storage.from('manutencao-pdfs').remove([filePath]);
       }
 
-      // Limpar a coluna pdf_url
       const { error } = await supabase
         .from('manutencao_veiculos')
         .update({ pdf_url: null, updated_at: new Date().toISOString() })
@@ -380,18 +566,16 @@ export default function ManutencaoPage() {
 
       if (error) throw error;
 
-      setData(prev => prev.map(item => 
+      setData(prev => prev.map(item =>
         item.id === vehicleId ? { ...item, pdf_url: null } : item
       ));
 
       toast.success("PDF removido!");
     } catch (err) {
-      console.error("Erro ao remover PDF:", err);
       toast.error("Erro ao remover PDF.");
     }
   };
 
-  // Drag & Drop handlers
   const handleDragOver = useCallback((e: React.DragEvent, vehicleId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -407,14 +591,12 @@ export default function ManutencaoPage() {
   const handleDrop = useCallback((e: React.DragEvent, vehicleId: string, placa: string) => {
     e.preventDefault();
     e.stopPropagation();
-    
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       uploadPdf(vehicleId, placa, files[0]);
     }
   }, [uploadPdf]);
 
-  // Click para selecionar PDF
   const handlePdfClick = (vehicleId: string, placa: string) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -426,14 +608,12 @@ export default function ManutencaoPage() {
     input.click();
   };
 
-  // Busca sugestões ao digitar placa
   const handlePlateInput = (value: string) => {
     const upper = value.toUpperCase();
     setPlateSearch(upper);
     setSearchResult(null);
-    
+
     if (upper.length >= 2) {
-      // Busca na tabela base para sugerir placas conhecidas
       supabase
         .from('manutencao_frota_base')
         .select('*')
@@ -451,7 +631,6 @@ export default function ManutencaoPage() {
     }
   };
 
-  // Seleciona uma placa da lista de sugestões ou busca 
   const selectPlate = (item: ManutencaoVeiculo) => {
     setSearchResult(item);
     setPlateSearch(item.placa);
@@ -470,7 +649,7 @@ export default function ManutencaoPage() {
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
-      
+
       if (!result) {
         toast.error("Placa não encontrada na base de manutenção.");
         setSearchResult(null);
@@ -485,26 +664,65 @@ export default function ManutencaoPage() {
     }
   };
 
-  // Inicia o processo de manutenção: coloca o veículo na etapa selecionada
   const startMaintenance = async () => {
     if (!searchResult) return;
+
+    // Tentar buscar emails via projeto vinculado
+    let emails_admin = searchResult.emails_admin;
+    let emails_gerente = searchResult.emails_gerente;
+    let admins = searchResult.admins;
+    let gerentes_str = searchResult.gerentes;
+
     try {
-      // Cria um NOVO registro de processo (INSERT)
+      // Busca projeto vinculado à placa
+      const { data: frotaItem } = await supabase
+        .from('manutencao_frota_base')
+        .select('projeto_id')
+        .eq('placa', searchResult.placa)
+        .single();
+
+      if (frotaItem?.projeto_id) {
+        const { data: vinculos } = await supabase
+          .from('manutencao_contato_projetos')
+          .select('contato_id, manutencao_contatos(nome, email, papel)')
+          .eq('projeto_id', frotaItem.projeto_id);
+
+        if (vinculos && vinculos.length > 0) {
+          const adms = vinculos
+            .filter((v: any) => v.manutencao_contatos?.papel === 'adm')
+            .map((v: any) => v.manutencao_contatos);
+          const gers = vinculos
+            .filter((v: any) => v.manutencao_contatos?.papel === 'gerente')
+            .map((v: any) => v.manutencao_contatos);
+
+          if (adms.length > 0) {
+            emails_admin = adms.map((a: any) => a.email).join(',');
+            admins = adms.map((a: any) => a.nome).join(', ');
+          }
+          if (gers.length > 0) {
+            emails_gerente = gers.map((g: any) => g.email).join(',');
+            gerentes_str = gers.map((g: any) => g.nome).join(', ');
+          }
+        }
+      }
+    } catch { /* usa fallback dos campos da base */ }
+
+    try {
       const { error } = await supabase
         .from('manutencao_veiculos')
-        .insert({ 
+        .insert({
           placa: searchResult.placa,
-          admins: searchResult.admins,
-          emails_admin: searchResult.emails_admin,
-          gerentes: searchResult.gerentes,
-          emails_gerente: searchResult.emails_gerente,
-          status: selectedEtapa, 
+          admins,
+          emails_admin,
+          gerentes: gerentes_str,
+          emails_gerente,
+          status: selectedEtapa,
           servicos: servicoText,
-          updated_at: new Date().toISOString() 
+          updated_at: new Date().toISOString()
         });
 
       if (error) throw error;
-      
+
       const etapaLabel = ETAPAS.find(e => e.id === selectedEtapa)?.label || selectedEtapa;
       toast.success(`${searchResult.placa} movido para "${etapaLabel}"`);
       setSearchResult(null);
@@ -517,7 +735,6 @@ export default function ManutencaoPage() {
     }
   };
 
-  // Mover veículo para outra etapa
   const moveToEtapa = async (id: string, newEtapa: EtapaId) => {
     try {
       const { error } = await supabase
@@ -526,7 +743,7 @@ export default function ManutencaoPage() {
         .eq('id', id);
 
       if (error) throw error;
-      
+
       setData(prev => prev.map(item => item.id === id ? { ...item, status: newEtapa } : item));
       const etapaLabel = ETAPAS.find(e => e.id === newEtapa)?.label || newEtapa;
       toast.success(`Veículo movido para "${etapaLabel}"`);
@@ -535,19 +752,16 @@ export default function ManutencaoPage() {
     }
   };
 
-  // Finalizar (remover do kanban - status volta a null)
   const finalizeMaintenance = async (id: string) => {
     if (!window.confirm("Deseja finalizar e remover este processo do painel?")) return;
     try {
-      // Como agora cada processo é um registro único, vamos deletar ao finalizar
-      // ou se preferir poderia manter histórico mudando o status para 'arquivado'
       const { error } = await supabase
         .from('manutencao_veiculos')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
-      
+
       toast.success("Manutenção finalizada!");
       loadData();
     } catch (err) {
@@ -555,22 +769,46 @@ export default function ManutencaoPage() {
     }
   };
 
-  // Enviar email
-  // Enviar email
-  const handleSendEmail = (item: ManutencaoVeiculo) => {
-    const to = item.emails_admin;
-    const cc = item.emails_gerente;
-    const subject = `Orçamento - ${item.placa}`;
+  // Enviar email — resolve via projeto se disponível
+  const handleSendEmail = async (item: ManutencaoVeiculo) => {
+    let to = item.emails_admin;
+    let cc = item.emails_gerente;
 
+    try {
+      const { data: frotaItem } = await supabase
+        .from('manutencao_frota_base')
+        .select('projeto_id')
+        .eq('placa', item.placa)
+        .single();
+
+      if (frotaItem?.projeto_id) {
+        const { data: vinculos } = await supabase
+          .from('manutencao_contato_projetos')
+          .select('contato_id, manutencao_contatos(email, papel)')
+          .eq('projeto_id', frotaItem.projeto_id);
+
+        if (vinculos && vinculos.length > 0) {
+          const admEmails = vinculos
+            .filter((v: any) => v.manutencao_contatos?.papel === 'adm')
+            .map((v: any) => v.manutencao_contatos.email)
+            .join(',');
+          const gerEmails = vinculos
+            .filter((v: any) => v.manutencao_contatos?.papel === 'gerente')
+            .map((v: any) => v.manutencao_contatos.email)
+            .join(',');
+
+          if (admEmails) to = admEmails;
+          if (gerEmails) cc = gerEmails;
+        }
+      }
+    } catch { /* fallback nos campos do item */ }
+
+    const subject = `Orçamento - ${item.placa}`;
     const now = new Date();
     const hour = now.getHours();
     const saudacao = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
 
-    const body = `${saudacao},
-
-Por favor, solicita-se a assinatura do gestor do projeto no orçamento para que possamos agilizar o reparo do veículo de placa "${item.placa}".
-
-Serviços: ${item.servicos || "N/A"}`;
+    const body = `${saudacao},\n\nPor favor, solicita-se a assinatura do gestor do projeto no orçamento para que possamos agilizar o reparo do veículo de placa "${item.placa}".\n\nServiços: ${item.servicos || "N/A"}`;
 
     let mailtoUrl = `mailto:${to}`;
     const params = [];
@@ -584,13 +822,11 @@ Serviços: ${item.servicos || "N/A"}`;
 
     window.location.href = mailtoUrl;
 
-    // Mover para "enviado" automaticamente
     if (item.status === 'aguardando_envio') {
       moveToEtapa(item.id, 'enviado');
     }
   };
 
-  // Veículos agrupados por etapa (kanban)
   const vehiclesByEtapa = useMemo(() => {
     const grouped: Record<EtapaId, ManutencaoVeiculo[]> = {
       aguardando_envio: [],
@@ -613,12 +849,10 @@ Serviços: ${item.servicos || "N/A"}`;
     return data.filter(item => item.status && ETAPAS.some(e => e.id === item.status)).length;
   }, [data]);
 
-  // Extrair nome do arquivo da URL do PDF
   const getPdfFileName = (url: string) => {
     try {
       const parts = url.split('/');
       const fileName = decodeURIComponent(parts[parts.length - 1]);
-      // Encurtar se for muito longo
       if (fileName.length > 25) {
         return fileName.substring(0, 22) + '...pdf';
       }
@@ -627,6 +861,10 @@ Serviços: ${item.servicos || "N/A"}`;
       return 'documento.pdf';
     }
   };
+
+  // Placas sem projeto vinculado
+  const placasSemProjeto = useMemo(() => frotaBase.filter(f => !f.projeto_id), [frotaBase]);
+  const placasComProjeto = useMemo(() => frotaBase.filter(f => f.projeto_id), [frotaBase]);
 
   return (
     <div className="h-full flex flex-col pb-10 px-4 md:px-8">
@@ -639,7 +877,7 @@ Serviços: ${item.servicos || "N/A"}`;
           </p>
         </div>
         <div className="flex gap-3 flex-wrap">
-          <button 
+          <button
             onClick={() => loadData()}
             className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 transition-all shadow-sm"
             title="Atualizar"
@@ -651,7 +889,7 @@ Serviços: ${item.servicos || "N/A"}`;
             Subir Base
             <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} />
           </label>
-          <button 
+          <button
             onClick={() => setShowSearchPanel(!showSearchPanel)}
             className="flex items-center px-6 py-3 bg-[#0b7336] text-white rounded-2xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-xl gap-2"
           >
@@ -661,270 +899,225 @@ Serviços: ${item.servicos || "N/A"}`;
         </div>
       </div>
 
-      {/* Painel de Nova Manutenção (buscar placa) */}
-      {showSearchPanel && (
-        <div className="mb-6 bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-xl animate-in slide-in-from-top-4 duration-300">
-          <div className="flex justify-between items-center mb-5">
-            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Iniciar Nova Manutenção</label>
-            <button onClick={() => { setShowSearchPanel(false); setSearchResult(null); setPlateSearch(""); }} className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-              <XMarkIcon className="w-5 h-5" />
-            </button>
-          </div>
-          
-          <div className="flex gap-4 relative">
-            <div className="flex-1 relative">
-              <input 
-                type="text" 
-                placeholder="Digite a placa do veículo..." 
-                value={plateSearch}
-                onChange={(e) => handlePlateInput(e.target.value)}
-                className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border-0 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-[#0b7336] transition-all"
-                onKeyDown={(e) => e.key === 'Enter' && searchPlate()}
-                onFocus={() => plateSearch.length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
-              />
-              {/* Dropdown de sugestões */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl z-50 max-h-60 overflow-auto">
-                  {suggestions.map(s => (
-                    <button 
-                      key={s.id}
-                      onClick={() => selectPlate(s)}
-                      className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left first:rounded-t-2xl last:rounded-b-2xl"
-                    >
-                      <div className="w-8 h-8 bg-[#0b7336]/10 rounded-lg flex items-center justify-center">
-                        <TruckIcon className="w-4 h-4 text-[#0b7336]" />
+      {/* Abas */}
+      <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-800/60 p-1 rounded-2xl w-fit">
+        <button
+          onClick={() => setActiveTab("kanban")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+            activeTab === "kanban"
+              ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+              : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          }`}
+        >
+          <WrenchScrewdriverIcon className="w-4 h-4" />
+          Kanban
+        </button>
+        <button
+          onClick={() => setActiveTab("contatos")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+            activeTab === "contatos"
+              ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+              : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          }`}
+        >
+          <UserGroupIcon className="w-4 h-4" />
+          Contatos
+          {contatos.length > 0 && (
+            <span className="bg-[#0b7336] text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
+              {contatos.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ===== ABA KANBAN ===== */}
+      {activeTab === "kanban" && (
+        <>
+          {/* Painel de Nova Manutenção */}
+          {showSearchPanel && (
+            <div className="mb-6 bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-xl animate-in slide-in-from-top-4 duration-300">
+              <div className="flex justify-between items-center mb-5">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Iniciar Nova Manutenção</label>
+                <button onClick={() => { setShowSearchPanel(false); setSearchResult(null); setPlateSearch(""); }} className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex gap-4 relative">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    placeholder="Digite a placa do veículo..."
+                    value={plateSearch}
+                    onChange={(e) => handlePlateInput(e.target.value)}
+                    className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800 border-0 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-[#0b7336] transition-all"
+                    onKeyDown={(e) => e.key === 'Enter' && searchPlate()}
+                    onFocus={() => plateSearch.length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
+                  />
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl z-50 max-h-60 overflow-auto">
+                      {suggestions.map(s => (
+                        <button
+                          key={s.id}
+                          onClick={() => selectPlate(s)}
+                          className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left first:rounded-t-2xl last:rounded-b-2xl"
+                        >
+                          <div className="w-8 h-8 bg-[#0b7336]/10 rounded-lg flex items-center justify-center">
+                            <TruckIcon className="w-4 h-4 text-[#0b7336]" />
+                          </div>
+                          <span className="font-black text-sm text-gray-800 dark:text-white">{s.placa}</span>
+                          {s.status && (
+                            <span className="ml-auto text-[9px] font-bold uppercase text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">Em processo</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={searchPlate}
+                  className="px-8 py-4 bg-[#0b7336] text-white rounded-2xl font-bold text-sm hover:scale-105 transition-all shadow-lg active:scale-95 flex items-center gap-2 shrink-0"
+                >
+                  <MagnifyingGlassIcon className="w-5 h-5" />
+                  Buscar
+                </button>
+              </div>
+
+              {searchResult && (
+                <div className="mt-6 p-6 bg-green-50/50 dark:bg-green-500/10 border border-green-100 dark:border-green-500/20 rounded-2xl">
+                  <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-14 h-14 bg-[#0b7336] rounded-xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-green-500/20">
+                        {searchResult.placa.substring(0, 3)}
                       </div>
-                      <span className="font-black text-sm text-gray-800 dark:text-white">{s.placa}</span>
-                      {s.status && (
-                        <span className="ml-auto text-[9px] font-bold uppercase text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">Em processo</span>
-                      )}
+                      <div>
+                        <h3 className="text-2xl font-black text-gray-900 dark:text-white">{searchResult.placa}</h3>
+                        <p className="text-sm text-gray-500 font-medium">Veículo encontrado na base</p>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 w-full">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Serviço / Descrição</label>
+                      <input
+                        type="text"
+                        value={servicoText}
+                        onChange={(e) => setServicoText(e.target.value)}
+                        placeholder="Descreva o serviço..."
+                        className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0b7336] transition-all"
+                      />
+                    </div>
+
+                    <div className="shrink-0">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Etapa</label>
+                      <select
+                        value={selectedEtapa}
+                        onChange={(e) => setSelectedEtapa(e.target.value as EtapaId)}
+                        className="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#0b7336] transition-all cursor-pointer"
+                      >
+                        {ETAPAS.map(etapa => (
+                          <option key={etapa.id} value={etapa.id}>{etapa.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={startMaintenance}
+                      className="px-6 py-3 bg-[#0b7336] text-white rounded-xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-lg shrink-0"
+                    >
+                      Adicionar
                     </button>
-                  ))}
+                  </div>
                 </div>
               )}
             </div>
-            <button 
-              onClick={searchPlate}
-              className="px-8 py-4 bg-[#0b7336] text-white rounded-2xl font-bold text-sm hover:scale-105 transition-all shadow-lg active:scale-95 flex items-center gap-2 shrink-0"
-            >
-              <MagnifyingGlassIcon className="w-5 h-5" />
-              Buscar
-            </button>
-          </div>
-
-          {/* Resultado da busca */}
-          {searchResult && (
-            <div className="mt-6 p-6 bg-green-50/50 dark:bg-green-500/10 border border-green-100 dark:border-green-500/20 rounded-2xl">
-              <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="w-14 h-14 bg-[#0b7336] rounded-xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-green-500/20">
-                    {searchResult.placa.substring(0, 3)}
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black text-gray-900 dark:text-white">{searchResult.placa}</h3>
-                    <p className="text-sm text-gray-500 font-medium">Veículo encontrado na base</p>
-                  </div>
-                </div>
-
-                {/* Serviço */}
-                <div className="flex-1 w-full">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Serviço / Descrição</label>
-                  <input 
-                    type="text"
-                    value={servicoText}
-                    onChange={(e) => setServicoText(e.target.value)}
-                    placeholder="Descreva o serviço..."
-                    className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#0b7336] transition-all"
-                  />
-                </div>
-
-                {/* Seletor de Etapa */}
-                <div className="shrink-0">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Etapa</label>
-                  <select 
-                    value={selectedEtapa}
-                    onChange={(e) => setSelectedEtapa(e.target.value as EtapaId)}
-                    className="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#0b7336] transition-all cursor-pointer"
-                  >
-                    {ETAPAS.map(etapa => (
-                      <option key={etapa.id} value={etapa.id}>{etapa.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <button 
-                  onClick={startMaintenance}
-                  className="px-6 py-3 bg-[#0b7336] text-white rounded-xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-lg shrink-0"
-                >
-                  Adicionar
-                </button>
-              </div>
-            </div>
           )}
-        </div>
-      )}
 
-      {/* KANBAN - Colunas por Etapa */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 min-h-[400px] overflow-hidden">
-        {ETAPAS.map(etapa => {
-          const items = vehiclesByEtapa[etapa.id];
-          const colors = etapaColors[etapa.id];
-          const EtapaIcon = etapa.icon;
+          {/* KANBAN */}
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 min-h-[400px] overflow-hidden">
+            {ETAPAS.map(etapa => {
+              const items = vehiclesByEtapa[etapa.id];
+              const colors = etapaColors[etapa.id];
+              const EtapaIcon = etapa.icon;
 
-          return (
-            <div key={etapa.id} className={`flex flex-col rounded-[1.5rem] border ${colors.border} ${colors.bg} shadow-sm`}>
-              {/* Cabeçalho da coluna */}
-              <div className={`px-5 py-4 ${colors.headerBg} border-b ${colors.border} rounded-t-[1.5rem]`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-2.5 h-2.5 rounded-full ${colors.dot} animate-pulse`} />
-                    <span className={`text-xs font-black uppercase tracking-wider ${colors.text}`}>{etapa.label}</span>
-                  </div>
-                  <span className={`text-xs font-black px-2.5 py-1 rounded-full border ${colors.badge}`}>
-                    {items.length}
-                  </span>
-                </div>
-              </div>
-
-              {/* Cards dos veículos */}
-              <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
-                {items.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                    <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-full mb-3">
-                      <EtapaIcon className="w-6 h-6 text-gray-300 dark:text-gray-600" />
+              return (
+                <div key={etapa.id} className={`flex flex-col rounded-[1.5rem] border ${colors.border} ${colors.bg} shadow-sm`}>
+                  <div className={`px-5 py-4 ${colors.headerBg} border-b ${colors.border} rounded-t-[1.5rem]`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-2.5 h-2.5 rounded-full ${colors.dot} animate-pulse`} />
+                        <span className={`text-xs font-black uppercase tracking-wider ${colors.text}`}>{etapa.label}</span>
+                      </div>
+                      <span className={`text-xs font-black px-2.5 py-1 rounded-full border ${colors.badge}`}>
+                        {items.length}
+                      </span>
                     </div>
-                    <p className="text-xs text-gray-400 font-bold">Nenhum veículo</p>
                   </div>
-                ) : (
-                  items.map(item => {
-                    const isDragOver = dragOverId === item.id;
-                    const isUploading = uploadingPdfId === item.id;
-                    
-                    return (
-                      <div 
-                        key={item.id} 
-                        className={`bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm hover:shadow-md transition-all duration-200 group ${
-                          isDragOver 
-                            ? 'border-[#0b7336] border-2 bg-green-50/50 dark:bg-green-500/5 ring-2 ring-[#0b7336]/20 scale-[1.02]' 
-                            : 'border-gray-100 dark:border-gray-700'
-                        }`}
-                        onDragOver={(e) => handleDragOver(e, item.id)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, item.id, item.placa)}
-                      >
-                        {/* Placa + ações do card */}
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400 px-3 py-1.5 rounded-lg font-black text-sm border border-[#0b7336]/20">
-                            {item.placa}
-                          </span>
-                          <div className="flex items-center gap-0.5">
-                            <button 
-                              onClick={() => {
-                                if (editingId === item.id) {
-                                  setEditingId(null);
-                                } else {
-                                  setEditingId(item.id);
-                                  setEditServicoText(item.servicos || "");
-                                }
-                              }}
-                              className={`p-1.5 transition-colors rounded-md ${
-                                editingId === item.id 
-                                  ? 'text-[#0b7336] bg-green-50 dark:bg-green-500/10' 
-                                  : 'text-gray-300 hover:text-[#0b7336] opacity-0 group-hover:opacity-100'
-                              }`}
-                              title="Editar"
-                            >
-                              <PencilSquareIcon className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => finalizeMaintenance(item.id)}
-                              className="p-1.5 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 rounded-md"
-                              title="Finalizar"
-                            >
-                              <XMarkIcon className="w-4 h-4" />
-                            </button>
-                          </div>
+
+                  <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+                    {items.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                        <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-full mb-3">
+                          <EtapaIcon className="w-6 h-6 text-gray-300 dark:text-gray-600" />
                         </div>
+                        <p className="text-xs text-gray-400 font-bold">Nenhum veículo</p>
+                      </div>
+                    ) : (
+                      items.map(item => {
+                        const isDragOver = dragOverId === item.id;
+                        const isUploading = uploadingPdfId === item.id;
 
-                        {/* Serviço - modo edição ou visualização */}
-                        {editingId === item.id ? (
-                          <div className="mb-3 space-y-2">
-                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Serviço / Descrição</label>
-                            <textarea
-                              value={editServicoText}
-                              onChange={(e) => setEditServicoText(e.target.value)}
-                              placeholder="Descreva o serviço..."
-                              rows={2}
-                              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] font-medium focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all resize-none"
-                              autoFocus
-                            />
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const { error } = await supabase
-                                    .from('manutencao_veiculos')
-                                    .update({ servicos: editServicoText, updated_at: new Date().toISOString() })
-                                    .eq('id', item.id);
-                                  if (error) throw error;
-                                  setData(prev => prev.map(d => d.id === item.id ? { ...d, servicos: editServicoText } : d));
-                                  setEditingId(null);
-                                  toast.success("Serviço atualizado!");
-                                } catch {
-                                  toast.error("Erro ao salvar.");
-                                }
-                              }}
-                              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#0b7336] text-white rounded-lg text-[10px] font-bold hover:bg-[#075a2a] transition-all"
-                            >
-                              <CheckIcon className="w-3.5 h-3.5" />
-                              Salvar
-                            </button>
-                          </div>
-                        ) : (
-                          item.servicos && (
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 line-clamp-2 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 transition-colors" 
-                              title={`${item.servicos} (clique no lápis para editar)`}
-                              onClick={() => { setEditingId(item.id); setEditServicoText(item.servicos || ""); }}
-                            >
-                              <WrenchScrewdriverIcon className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
-                              {item.servicos}
-                            </p>
-                          )
-                        )}
-
-                        {/* Observação da Aprovação */}
-                        {(item.status === 'aguardando_aprovacao' || item.obs_aprovacao) && (
-                          <div className="mb-3">
-                            {item.obs_aprovacao ? (
-                              <div
-                                onClick={() => { setAprovacaoModalId(item.id); setAprovacaoGerente(""); setAprovacaoData(new Date().toISOString().split("T")[0]); }}
-                                className="p-2.5 bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100/50 dark:border-purple-800/50 rounded-lg cursor-pointer hover:bg-purple-100/50 transition-all"
-                              >
-                                <p className="text-[9px] font-black text-purple-400 uppercase mb-1 tracking-tighter">Aprovação por email</p>
-                                <p className="text-[11px] text-purple-700 dark:text-purple-300 font-bold">{item.obs_aprovacao}</p>
+                        return (
+                          <div
+                            key={item.id}
+                            className={`bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm hover:shadow-md transition-all duration-200 group ${isDragOver
+                                ? 'border-[#0b7336] border-2 bg-green-50/50 dark:bg-green-500/5 ring-2 ring-[#0b7336]/20 scale-[1.02]'
+                                : 'border-gray-100 dark:border-gray-700'
+                              }`}
+                            onDragOver={(e) => handleDragOver(e, item.id)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, item.id, item.placa)}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400 px-3 py-1.5 rounded-lg font-black text-sm border border-[#0b7336]/20">
+                                {item.placa}
+                              </span>
+                              <div className="flex items-center gap-0.5">
+                                <button
+                                  onClick={() => {
+                                    if (editingId === item.id) {
+                                      setEditingId(null);
+                                    } else {
+                                      setEditingId(item.id);
+                                      setEditServicoText(item.servicos || "");
+                                    }
+                                  }}
+                                  className={`p-1.5 transition-colors rounded-md ${editingId === item.id
+                                      ? 'text-[#0b7336] bg-green-50 dark:bg-green-500/10'
+                                      : 'text-gray-300 hover:text-[#0b7336] opacity-0 group-hover:opacity-100'
+                                    }`}
+                                  title="Editar"
+                                >
+                                  <PencilSquareIcon className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => finalizeMaintenance(item.id)}
+                                  className="p-1.5 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 rounded-md"
+                                  title="Finalizar"
+                                >
+                                  <XMarkIcon className="w-4 h-4" />
+                                </button>
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => { setAprovacaoModalId(item.id); setAprovacaoGerente(""); setAprovacaoData(new Date().toISOString().split("T")[0]); }}
-                                className="w-full p-2.5 bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100/50 dark:border-purple-800/50 rounded-lg cursor-pointer hover:bg-purple-100/50 transition-all text-left"
-                              >
-                                <p className="text-[10px] text-purple-400 font-bold italic">+ Registrar aprovação</p>
-                              </button>
-                            )}
-                          </div>
-                        )}
+                            </div>
 
-                        {/* Contestação (se status for contestado ou já tiver obs) */}
-                        {(item.status === 'contestado' || item.obs_contestacao) && (
-                          <div className="mb-3">
-                            {contestacaoEditId === item.id ? (
-                              <div className="space-y-2">
-                                <label className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Motivo da Contestação</label>
+                            {editingId === item.id ? (
+                              <div className="mb-3 space-y-2">
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Serviço / Descrição</label>
                                 <textarea
-                                  value={contestacaoEditText}
-                                  onChange={(e) => setContestacaoEditText(e.target.value)}
-                                  placeholder="Descreva o motivo da contestação..."
+                                  value={editServicoText}
+                                  onChange={(e) => setEditServicoText(e.target.value)}
+                                  placeholder="Descreva o serviço..."
                                   rows={2}
-                                  className="w-full px-3 py-2 bg-rose-50/50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-800 rounded-lg text-[11px] font-medium focus:ring-2 focus:ring-rose-500 transition-all resize-none"
+                                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] font-medium focus:ring-2 focus:ring-[#0b7336] focus:border-transparent transition-all resize-none"
                                   autoFocus
                                 />
                                 <button
@@ -932,136 +1125,390 @@ Serviços: ${item.servicos || "N/A"}`;
                                     try {
                                       const { error } = await supabase
                                         .from('manutencao_veiculos')
-                                        .update({ obs_contestacao: contestacaoEditText, updated_at: new Date().toISOString() })
+                                        .update({ servicos: editServicoText, updated_at: new Date().toISOString() })
                                         .eq('id', item.id);
                                       if (error) throw error;
-                                      setData(prev => prev.map(d => d.id === item.id ? { ...d, obs_contestacao: contestacaoEditText } : d));
-                                      setContestacaoEditId(null);
-                                      toast.success("Contestação salva!");
+                                      setData(prev => prev.map(d => d.id === item.id ? { ...d, servicos: editServicoText } : d));
+                                      setEditingId(null);
+                                      toast.success("Serviço atualizado!");
                                     } catch {
                                       toast.error("Erro ao salvar.");
                                     }
                                   }}
-                                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold hover:bg-rose-700 transition-all"
+                                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#0b7336] text-white rounded-lg text-[10px] font-bold hover:bg-[#075a2a] transition-all"
                                 >
                                   <CheckIcon className="w-3.5 h-3.5" />
-                                  Confirmar
+                                  Salvar
                                 </button>
                               </div>
                             ) : (
-                              <div
-                                onClick={() => { setContestacaoEditId(item.id); setContestacaoEditText(item.obs_contestacao || ""); }}
-                                className="p-2.5 bg-rose-50/50 dark:bg-rose-900/20 border border-rose-100/50 dark:border-rose-800/50 rounded-lg cursor-pointer hover:bg-rose-100/50 dark:hover:bg-rose-900/30 transition-all"
-                              >
-                                <p className="text-[9px] font-black text-rose-400 dark:text-rose-500 uppercase mb-1 tracking-tighter">Contestação</p>
-                                {item.obs_contestacao ? (
-                                  <p className="text-[11px] text-rose-700 dark:text-rose-300 font-medium line-clamp-2 hover:line-clamp-none transition-all cursor-default">
-                                    {item.obs_contestacao}
-                                  </p>
+                              item.servicos && (
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 line-clamp-2 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                                  title={`${item.servicos} (clique no lápis para editar)`}
+                                  onClick={() => { setEditingId(item.id); setEditServicoText(item.servicos || ""); }}
+                                >
+                                  <WrenchScrewdriverIcon className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
+                                  {item.servicos}
+                                </p>
+                              )
+                            )}
+
+                            {(item.status === 'aguardando_aprovacao' || item.obs_aprovacao) && (
+                              <div className="mb-3">
+                                {item.obs_aprovacao ? (
+                                  <div
+                                    onClick={() => { setAprovacaoModalId(item.id); setAprovacaoGerente(""); setAprovacaoData(new Date().toISOString().split("T")[0]); }}
+                                    className="p-2.5 bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100/50 dark:border-purple-800/50 rounded-lg cursor-pointer hover:bg-purple-100/50 transition-all"
+                                  >
+                                    <p className="text-[9px] font-black text-purple-400 uppercase mb-1 tracking-tighter">Aprovação por email</p>
+                                    <p className="text-[11px] text-purple-700 dark:text-purple-300 font-bold">{item.obs_aprovacao}</p>
+                                  </div>
                                 ) : (
-                                  <p className="text-[10px] text-rose-400 font-bold italic">+ Adicionar motivo da contestação</p>
+                                  <button
+                                    onClick={() => { setAprovacaoModalId(item.id); setAprovacaoGerente(""); setAprovacaoData(new Date().toISOString().split("T")[0]); }}
+                                    className="w-full p-2.5 bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100/50 dark:border-purple-800/50 rounded-lg cursor-pointer hover:bg-purple-100/50 transition-all text-left"
+                                  >
+                                    <p className="text-[10px] text-purple-400 font-bold italic">+ Registrar aprovação</p>
+                                  </button>
                                 )}
                               </div>
                             )}
-                          </div>
-                        )}
 
-                        {/* ========== ÁREA DO PDF ========== */}
-                        {item.pdf_url ? (
-                          // PDF anexado - mostrar info
-                          <div className="mb-3 bg-red-50 dark:bg-red-500/10 border border-red-200/60 dark:border-red-500/20 rounded-lg p-2.5">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center shrink-0">
-                                <DocumentIcon className="w-4 h-4 text-white" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-bold text-red-700 dark:text-red-400 truncate">
-                                  {getPdfFileName(item.pdf_url)}
-                                </p>
-                                <p className="text-[9px] text-red-500/70">PDF anexado</p>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <a
-                                  href={item.pdf_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-md transition-colors"
-                                  title="Abrir PDF"
-                                >
-                                  <ArrowDownTrayIcon className="w-3.5 h-3.5" />
-                                </a>
-                                <button
-                                  onClick={() => removePdf(item.id, item.pdf_url!)}
-                                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-md transition-colors"
-                                  title="Remover PDF"
-                                >
-                                  <TrashIcon className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          // Zona de drop para PDF
-                          <div 
-                            className={`mb-3 border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-all duration-200 ${
-                              isDragOver
-                                ? 'border-[#0b7336] bg-green-50 dark:bg-green-500/10'
-                                : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50/50 dark:hover:bg-gray-700/30'
-                            } ${isUploading ? 'opacity-60 pointer-events-none' : ''}`}
-                            onClick={() => !isUploading && handlePdfClick(item.id, item.placa)}
-                          >
-                            {isUploading ? (
-                              <div className="flex flex-col items-center gap-1.5 py-1">
-                                <ArrowPathIcon className="w-5 h-5 text-[#0b7336] animate-spin" />
-                                <span className="text-[10px] font-bold text-[#0b7336]">Enviando...</span>
-                              </div>
-                            ) : isDragOver ? (
-                              <div className="flex flex-col items-center gap-1.5 py-1">
-                                <DocumentArrowUpIcon className="w-5 h-5 text-[#0b7336]" />
-                                <span className="text-[10px] font-bold text-[#0b7336]">Solte o PDF aqui</span>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center gap-1 py-0.5">
-                                <DocumentArrowUpIcon className="w-4 h-4 text-gray-300 dark:text-gray-500" />
-                                <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">Arraste um PDF ou clique</span>
+                            {(item.status === 'contestado' || item.obs_contestacao) && (
+                              <div className="mb-3">
+                                {contestacaoEditId === item.id ? (
+                                  <div className="space-y-2">
+                                    <label className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Motivo da Contestação</label>
+                                    <textarea
+                                      value={contestacaoEditText}
+                                      onChange={(e) => setContestacaoEditText(e.target.value)}
+                                      placeholder="Descreva o motivo da contestação..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 bg-rose-50/50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-800 rounded-lg text-[11px] font-medium focus:ring-2 focus:ring-rose-500 transition-all resize-none"
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          const { error } = await supabase
+                                            .from('manutencao_veiculos')
+                                            .update({ obs_contestacao: contestacaoEditText, updated_at: new Date().toISOString() })
+                                            .eq('id', item.id);
+                                          if (error) throw error;
+                                          setData(prev => prev.map(d => d.id === item.id ? { ...d, obs_contestacao: contestacaoEditText } : d));
+                                          setContestacaoEditId(null);
+                                          toast.success("Contestação salva!");
+                                        } catch {
+                                          toast.error("Erro ao salvar.");
+                                        }
+                                      }}
+                                      className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold hover:bg-rose-700 transition-all"
+                                    >
+                                      <CheckIcon className="w-3.5 h-3.5" />
+                                      Confirmar
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div
+                                    onClick={() => { setContestacaoEditId(item.id); setContestacaoEditText(item.obs_contestacao || ""); }}
+                                    className="p-2.5 bg-rose-50/50 dark:bg-rose-900/20 border border-rose-100/50 dark:border-rose-800/50 rounded-lg cursor-pointer hover:bg-rose-100/50 dark:hover:bg-rose-900/30 transition-all"
+                                  >
+                                    <p className="text-[9px] font-black text-rose-400 dark:text-rose-500 uppercase mb-1 tracking-tighter">Contestação</p>
+                                    {item.obs_contestacao ? (
+                                      <p className="text-[11px] text-rose-700 dark:text-rose-300 font-medium line-clamp-2 hover:line-clamp-none transition-all cursor-default">
+                                        {item.obs_contestacao}
+                                      </p>
+                                    ) : (
+                                      <p className="text-[10px] text-rose-400 font-bold italic">+ Adicionar motivo da contestação</p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             )}
+
+                            {/* Área do PDF */}
+                            {item.pdf_url ? (
+                              <div className="mb-3 bg-red-50 dark:bg-red-500/10 border border-red-200/60 dark:border-red-500/20 rounded-lg p-2.5">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center shrink-0">
+                                    <DocumentIcon className="w-4 h-4 text-white" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] font-bold text-red-700 dark:text-red-400 truncate">
+                                      {getPdfFileName(item.pdf_url)}
+                                    </p>
+                                    <p className="text-[9px] text-red-500/70">PDF anexado</p>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <a
+                                      href={item.pdf_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-md transition-colors"
+                                      title="Abrir PDF"
+                                    >
+                                      <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                                    </a>
+                                    <button
+                                      onClick={() => removePdf(item.id, item.pdf_url!)}
+                                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-md transition-colors"
+                                      title="Remover PDF"
+                                    >
+                                      <TrashIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                className={`mb-3 border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-all duration-200 ${isDragOver
+                                    ? 'border-[#0b7336] bg-green-50 dark:bg-green-500/10'
+                                    : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50/50 dark:hover:bg-gray-700/30'
+                                  } ${isUploading ? 'opacity-60 pointer-events-none' : ''}`}
+                                onClick={() => !isUploading && handlePdfClick(item.id, item.placa)}
+                              >
+                                {isUploading ? (
+                                  <div className="flex flex-col items-center gap-1.5 py-1">
+                                    <ArrowPathIcon className="w-5 h-5 text-[#0b7336] animate-spin" />
+                                    <span className="text-[10px] font-bold text-[#0b7336]">Enviando...</span>
+                                  </div>
+                                ) : isDragOver ? (
+                                  <div className="flex flex-col items-center gap-1.5 py-1">
+                                    <DocumentArrowUpIcon className="w-5 h-5 text-[#0b7336]" />
+                                    <span className="text-[10px] font-bold text-[#0b7336]">Solte o PDF aqui</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center gap-1 py-0.5">
+                                    <DocumentArrowUpIcon className="w-4 h-4 text-gray-300 dark:text-gray-500" />
+                                    <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">Arraste um PDF ou clique</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Ações */}
+                            <div className="flex flex-col gap-2">
+                              <select
+                                value={item.status || ""}
+                                onChange={(e) => moveToEtapa(item.id, e.target.value as EtapaId)}
+                                className="w-full text-[10px] font-bold uppercase px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-pointer focus:ring-2 focus:ring-[#0b7336] transition-all"
+                              >
+                                {ETAPAS.map(e => (
+                                  <option key={e.id} value={e.id}>{e.label}</option>
+                                ))}
+                              </select>
+
+                              {item.status === 'aguardando_envio' && (
+                                <button
+                                  onClick={() => handleSendEmail(item)}
+                                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#0b7336] text-white rounded-lg text-[10px] font-bold uppercase hover:bg-[#075a2a] transition-all"
+                                >
+                                  <EnvelopeIcon className="w-3.5 h-3.5" />
+                                  Enviar Email
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        )}
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
-                        {/* Ações */}
-                        <div className="flex flex-col gap-2">
-                          {/* Mover para outra etapa */}
-                          <select
-                            value={item.status || ""}
-                            onChange={(e) => moveToEtapa(item.id, e.target.value as EtapaId)}
-                            className="w-full text-[10px] font-bold uppercase px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-pointer focus:ring-2 focus:ring-[#0b7336] transition-all"
-                          >
-                            {ETAPAS.map(e => (
-                              <option key={e.id} value={e.id}>{e.label}</option>
-                            ))}
-                          </select>
+      {/* ===== ABA CONTATOS ===== */}
+      {activeTab === "contatos" && (
+        <div className="flex flex-col gap-8">
 
-                          {/* Botão Enviar Email (apenas na etapa aguardando_envio) */}
-                          {item.status === 'aguardando_envio' && (
-                            <button
-                              onClick={() => handleSendEmail(item)}
-                              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-[#0b7336] text-white rounded-lg text-[10px] font-bold uppercase hover:bg-[#075a2a] transition-all"
-                            >
-                              <EnvelopeIcon className="w-3.5 h-3.5" />
-                              Enviar Email
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+          {/* ── Seção: Contatos ── */}
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-[#0b7336]/10 rounded-xl flex items-center justify-center">
+                  <UserGroupIcon className="w-5 h-5 text-[#0b7336]" />
+                </div>
+                <div>
+                  <h2 className="font-black text-gray-900 dark:text-white text-base">Contatos de Email</h2>
+                  <p className="text-xs text-gray-400 font-medium">ADM = destinatário principal • Gerente = cópia (CC)</p>
+                </div>
+              </div>
+              <button
+                onClick={() => openContatoModal()}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#0b7336] text-white rounded-xl font-bold text-sm hover:bg-[#075a2a] transition-all shadow-lg"
+              >
+                <PlusIcon className="w-4 h-4" />
+                Adicionar
+              </button>
+            </div>
+
+            {loadingContatos ? (
+              <div className="flex items-center justify-center py-16">
+                <ArrowPathIcon className="w-6 h-6 animate-spin text-gray-300" />
+              </div>
+            ) : contatos.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mb-4">
+                  <EnvelopeIcon className="w-7 h-7 text-gray-300" />
+                </div>
+                <p className="text-gray-400 font-bold text-sm">Nenhum contato cadastrado</p>
+                <p className="text-gray-300 text-xs mt-1">Adicione ADMs e Gerentes vinculando-os a projetos</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                {contatos.map(contato => (
+                  <div key={contato.id} className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors group">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${contato.papel === 'adm'
+                        ? 'bg-[#0b7336]/10'
+                        : 'bg-blue-500/10'
+                      }`}>
+                      <span className={`text-xs font-black uppercase ${contato.papel === 'adm' ? 'text-[#0b7336]' : 'text-blue-600 dark:text-blue-400'}`}>
+                        {contato.papel === 'adm' ? 'ADM' : 'GER'}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-gray-900 dark:text-white truncate">{contato.nome}</p>
+                      <p className="text-xs text-gray-400 truncate">{contato.email}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+                      {contato.projetos && contato.projetos.length > 0 ? (
+                        contato.projetos.map(p => (
+                          <span key={p.id} className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-[10px] font-bold">
+                            <BuildingOffice2Icon className="w-3 h-3" />
+                            {p.nome}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-gray-300 italic">Sem projeto vinculado</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <button
+                        onClick={() => openContatoModal(contato)}
+                        className="p-2 text-gray-400 hover:text-[#0b7336] hover:bg-green-50 dark:hover:bg-green-500/10 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <PencilSquareIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleExcluirContato(contato.id)}
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="Excluir"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Seção: Vínculo Placa → Projeto ── */}
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 dark:border-gray-800">
+              <div className="w-9 h-9 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                <LinkIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h2 className="font-black text-gray-900 dark:text-white text-base">Vínculo Placa → Projeto</h2>
+                <p className="text-xs text-gray-400 font-medium">
+                  {placasSemProjeto.length > 0
+                    ? `${placasSemProjeto.length} placa(s) sem projeto vinculado`
+                    : "Todas as placas estão vinculadas"}
+                </p>
               </div>
             </div>
-          );
-        })}
-      </div>
+
+            {loadingFrota ? (
+              <div className="flex items-center justify-center py-16">
+                <ArrowPathIcon className="w-6 h-6 animate-spin text-gray-300" />
+              </div>
+            ) : frotaBase.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <TruckIcon className="w-10 h-10 text-gray-200 mb-3" />
+                <p className="text-gray-400 font-bold text-sm">Nenhuma placa na base</p>
+                <p className="text-gray-300 text-xs mt-1">Suba uma planilha para importar as placas</p>
+              </div>
+            ) : (
+              <>
+                {/* Sem projeto */}
+                {placasSemProjeto.length > 0 && (
+                  <div>
+                    <div className="px-6 py-3 bg-amber-50/50 dark:bg-amber-500/5 border-b border-amber-100 dark:border-amber-500/10">
+                      <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Sem projeto vinculado</p>
+                    </div>
+                    <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                      {placasSemProjeto.map(f => (
+                        <div key={f.placa} className="flex items-center gap-4 px-6 py-3">
+                          <span className="bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400 px-3 py-1 rounded-lg font-black text-sm border border-[#0b7336]/20 shrink-0 w-28 text-center">
+                            {f.placa}
+                          </span>
+                          <select
+                            value=""
+                            onChange={(e) => handleVincularProjeto(f.placa, e.target.value || null)}
+                            disabled={savingPlacaId === f.placa}
+                            className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-500 focus:ring-2 focus:ring-[#0b7336] transition-all cursor-pointer"
+                          >
+                            <option value="">Selecionar projeto...</option>
+                            {projetos.map(p => (
+                              <option key={p.id} value={p.id}>{p.nome}</option>
+                            ))}
+                          </select>
+                          {savingPlacaId === f.placa && (
+                            <ArrowPathIcon className="w-4 h-4 animate-spin text-[#0b7336] shrink-0" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Com projeto */}
+                {placasComProjeto.length > 0 && (
+                  <div>
+                    <div className="px-6 py-3 bg-emerald-50/50 dark:bg-emerald-500/5 border-b border-emerald-100 dark:border-emerald-500/10">
+                      <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Vinculadas</p>
+                    </div>
+                    <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                      {placasComProjeto.map(f => {
+                        const projeto = projetos.find(p => p.id === f.projeto_id);
+                        return (
+                          <div key={f.placa} className="flex items-center gap-4 px-6 py-3">
+                            <span className="bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400 px-3 py-1 rounded-lg font-black text-sm border border-[#0b7336]/20 shrink-0 w-28 text-center">
+                              {f.placa}
+                            </span>
+                            <select
+                              value={f.projeto_id || ""}
+                              onChange={(e) => handleVincularProjeto(f.placa, e.target.value || null)}
+                              disabled={savingPlacaId === f.placa}
+                              className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#0b7336] transition-all cursor-pointer"
+                            >
+                              <option value="">Sem projeto</option>
+                              {projetos.map(p => (
+                                <option key={p.id} value={p.id}>{p.nome}</option>
+                              ))}
+                            </select>
+                            {savingPlacaId === f.placa && (
+                              <ArrowPathIcon className="w-4 h-4 animate-spin text-[#0b7336] shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ===== MODAL APROVAÇÃO ===== */}
       {aprovacaoModalId && (
@@ -1075,7 +1522,6 @@ Serviços: ${item.servicos || "N/A"}`;
             </div>
 
             <div className="space-y-4">
-              {/* Preview do texto gerado */}
               {aprovacaoGerente && (
                 <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
                   <p className="text-xs font-black text-purple-400 uppercase tracking-widest mb-1">Texto gerado automaticamente</p>
@@ -1178,7 +1624,127 @@ Serviços: ${item.servicos || "N/A"}`;
           </div>
         </div>
       )}
+
+      {/* ===== MODAL CONTATO ===== */}
+      {showContatoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-black text-gray-900 dark:text-white">
+                {editingContato ? "Editar Contato" : "Novo Contato"}
+              </h2>
+              <button
+                onClick={() => setShowContatoModal(false)}
+                className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 rounded-full transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Nome */}
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Nome</label>
+                <input
+                  type="text"
+                  value={contatoForm.nome}
+                  onChange={e => setContatoForm(prev => ({ ...prev, nome: e.target.value }))}
+                  placeholder="Nome completo..."
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0b7336] outline-none"
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Email</label>
+                <input
+                  type="email"
+                  value={contatoForm.email}
+                  onChange={e => setContatoForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="email@empresa.com"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0b7336] outline-none"
+                />
+              </div>
+
+              {/* Papel */}
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Papel</label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setContatoForm(prev => ({ ...prev, papel: "adm" }))}
+                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${contatoForm.papel === "adm"
+                        ? "bg-[#0b7336] text-white border-[#0b7336] shadow-lg shadow-green-500/20"
+                        : "bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:border-[#0b7336]/40"
+                      }`}
+                  >
+                    ADM
+                    <span className="block text-[10px] font-medium opacity-70">Destinatário principal</span>
+                  </button>
+                  <button
+                    onClick={() => setContatoForm(prev => ({ ...prev, papel: "gerente" }))}
+                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${contatoForm.papel === "gerente"
+                        ? "bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20"
+                        : "bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:border-blue-400/40"
+                      }`}
+                  >
+                    Gerente
+                    <span className="block text-[10px] font-medium opacity-70">Em cópia (CC)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Projetos */}
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                  Projetos vinculados
+                  <span className="ml-2 normal-case font-medium text-gray-300">({contatoProjetosSelected.length} selecionado{contatoProjetosSelected.length !== 1 ? 's' : ''})</span>
+                </label>
+                {projetos.length === 0 ? (
+                  <p className="text-sm text-gray-300 italic">Nenhum projeto cadastrado no sistema.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
+                    {projetos.map(p => {
+                      const selected = contatoProjetosSelected.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => toggleProjetoContato(p.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${selected
+                              ? "bg-[#0b7336] text-white border-[#0b7336]"
+                              : "bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:border-[#0b7336]/40"
+                            }`}
+                        >
+                          {selected && <CheckIcon className="w-3 h-3" />}
+                          <BuildingOffice2Icon className="w-3 h-3" />
+                          {p.nome}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowContatoModal(false)}
+                className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 dark:hover:bg-gray-800 rounded-2xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSalvarContato}
+                disabled={savingContato}
+                className="flex-1 py-3 bg-[#0b7336] text-white font-black rounded-2xl hover:bg-[#075a2a] active:scale-95 transition-all shadow-lg disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {savingContato && <ArrowPathIcon className="w-4 h-4 animate-spin" />}
+                {editingContato ? "Salvar" : "Cadastrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-// Build force update 2026-04-13
+// Build force update 2026-09-14
