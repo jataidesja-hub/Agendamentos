@@ -442,24 +442,6 @@ export default function ManutencaoPage() {
     );
   };
 
-  // Vínculo placa → projeto
-  const handleVincularProjeto = async (placa: string, projeto_id: string | null) => {
-    setSavingPlacaId(placa);
-    try {
-      const { error } = await supabase
-        .from('manutencao_frota_base')
-        .update({ projeto_id: projeto_id || null })
-        .eq('placa', placa);
-      if (error) throw error;
-      setFrotaBase(prev => prev.map(f => f.placa === placa ? { ...f, projeto_id } : f));
-      toast.success(`${placa} vinculada!`);
-    } catch {
-      toast.error("Erro ao vincular placa.");
-    } finally {
-      setSavingPlacaId(null);
-    }
-  };
-
   // ==========================================
   // PDF Upload para Supabase Storage
   // ==========================================
@@ -825,10 +807,6 @@ export default function ManutencaoPage() {
       return 'documento.pdf';
     }
   };
-
-  // Placas sem projeto vinculado
-  const placasSemProjeto = useMemo(() => frotaBase.filter(f => !f.projeto_id), [frotaBase]);
-  const placasComProjeto = useMemo(() => frotaBase.filter(f => f.projeto_id), [frotaBase]);
 
   return (
     <div className="h-full flex flex-col pb-10 px-4 md:px-8">
@@ -1374,103 +1352,6 @@ export default function ManutencaoPage() {
             )}
           </div>
 
-          {/* ── Seção: Vínculo Placa → Projeto ── */}
-          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100 dark:border-gray-800">
-              <div className="w-9 h-9 bg-blue-500/10 rounded-xl flex items-center justify-center">
-                <LinkIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h2 className="font-black text-gray-900 dark:text-white text-base">Vínculo Placa → Projeto</h2>
-                <p className="text-xs text-gray-400 font-medium">
-                  {placasSemProjeto.length > 0
-                    ? `${placasSemProjeto.length} placa(s) sem projeto vinculado`
-                    : "Todas as placas estão vinculadas"}
-                </p>
-              </div>
-            </div>
-
-            {loadingFrota ? (
-              <div className="flex items-center justify-center py-16">
-                <ArrowPathIcon className="w-6 h-6 animate-spin text-gray-300" />
-              </div>
-            ) : frotaBase.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <TruckIcon className="w-10 h-10 text-gray-200 mb-3" />
-                <p className="text-gray-400 font-bold text-sm">Nenhuma placa na base</p>
-                <p className="text-gray-300 text-xs mt-1">Suba uma planilha para importar as placas</p>
-              </div>
-            ) : (
-              <>
-                {/* Sem projeto */}
-                {placasSemProjeto.length > 0 && (
-                  <div>
-                    <div className="px-6 py-3 bg-amber-50/50 dark:bg-amber-500/5 border-b border-amber-100 dark:border-amber-500/10">
-                      <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Sem projeto vinculado</p>
-                    </div>
-                    <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                      {placasSemProjeto.map(f => (
-                        <div key={f.placa} className="flex items-center gap-4 px-6 py-3">
-                          <span className="bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400 px-3 py-1 rounded-lg font-black text-sm border border-[#0b7336]/20 shrink-0 w-28 text-center">
-                            {f.placa}
-                          </span>
-                          <select
-                            value=""
-                            onChange={(e) => handleVincularProjeto(f.placa, e.target.value || null)}
-                            disabled={savingPlacaId === f.placa}
-                            className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-500 focus:ring-2 focus:ring-[#0b7336] transition-all cursor-pointer"
-                          >
-                            <option value="">Selecionar projeto...</option>
-                            {projetos.map(p => (
-                              <option key={p.id} value={p.id}>{p.nome}</option>
-                            ))}
-                          </select>
-                          {savingPlacaId === f.placa && (
-                            <ArrowPathIcon className="w-4 h-4 animate-spin text-[#0b7336] shrink-0" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Com projeto */}
-                {placasComProjeto.length > 0 && (
-                  <div>
-                    <div className="px-6 py-3 bg-emerald-50/50 dark:bg-emerald-500/5 border-b border-emerald-100 dark:border-emerald-500/10">
-                      <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Vinculadas</p>
-                    </div>
-                    <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                      {placasComProjeto.map(f => {
-                        const projeto = projetos.find(p => p.id === f.projeto_id);
-                        return (
-                          <div key={f.placa} className="flex items-center gap-4 px-6 py-3">
-                            <span className="bg-[#0b7336]/10 text-[#0b7336] dark:text-green-400 px-3 py-1 rounded-lg font-black text-sm border border-[#0b7336]/20 shrink-0 w-28 text-center">
-                              {f.placa}
-                            </span>
-                            <select
-                              value={f.projeto_id || ""}
-                              onChange={(e) => handleVincularProjeto(f.placa, e.target.value || null)}
-                              disabled={savingPlacaId === f.placa}
-                              className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-[#0b7336] transition-all cursor-pointer"
-                            >
-                              <option value="">Sem projeto</option>
-                              {projetos.map(p => (
-                                <option key={p.id} value={p.id}>{p.nome}</option>
-                              ))}
-                            </select>
-                            {savingPlacaId === f.placa && (
-                              <ArrowPathIcon className="w-4 h-4 animate-spin text-[#0b7336] shrink-0" />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
         </div>
       )}
 
