@@ -217,6 +217,19 @@ export default function MultasPage() {
     if (!placa || !autoInfracao) return toast.error("Preencha placa e auto");
     setIsSaving(true);
     try {
+      if (modalMode === "new" || modalMode === "edit") {
+        const { data: existing } = await supabase
+          .from("multas")
+          .select("id")
+          .eq("auto_infracao", autoInfracao.trim());
+        
+        if (existing && existing.some(m => m.id !== editingId)) {
+          toast.error("Auto de infração já cadastrado!");
+          setIsSaving(false);
+          return;
+        }
+      }
+
       const valorNum = valorMulta ? parseFloat(valorMulta.replace(",", ".")) : null;
 
       if (modalMode === "identify" && editingId) {
