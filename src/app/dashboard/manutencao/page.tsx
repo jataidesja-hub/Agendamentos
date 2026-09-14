@@ -20,7 +20,6 @@ import {
   ExclamationTriangleIcon,
   UserGroupIcon,
   BuildingOffice2Icon,
-  LinkIcon,
 } from "@heroicons/react/24/outline";
 import { CheckIcon } from "@heroicons/react/24/solid";
 import { toast } from "react-hot-toast";
@@ -50,16 +49,6 @@ interface ManutencaoVeiculo {
   pdf_url: string | null;
   obs_aprovacao: string | null;
   obs_contestacao: string | null;
-  updated_at: string;
-}
-
-interface FrotaBase {
-  placa: string;
-  admins: string;
-  emails_admin: string;
-  gerentes: string;
-  emails_gerente: string;
-  projeto_id: string | null;
   updated_at: string;
 }
 
@@ -135,8 +124,6 @@ export default function ManutencaoPage() {
   const [uploadingPdfId, setUploadingPdfId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editServicoText, setEditServicoText] = useState("");
-  const [obsEditId, setObsEditId] = useState<string | null>(null);
-  const [obsEditText, setObsEditText] = useState("");
   const [contestacaoEditId, setContestacaoEditId] = useState<string | null>(null);
   const [contestacaoEditText, setContestacaoEditText] = useState("");
 
@@ -160,11 +147,6 @@ export default function ManutencaoPage() {
   const [contatoForm, setContatoForm] = useState({ nome: "", email: "", papel: "adm" as "adm" | "gerente" });
   const [contatoProjetosSelected, setContatoProjetosSelected] = useState<string[]>([]);
   const [savingContato, setSavingContato] = useState(false);
-
-  // ── Vínculo placa → projeto ──
-  const [frotaBase, setFrotaBase] = useState<FrotaBase[]>([]);
-  const [loadingFrota, setLoadingFrota] = useState(false);
-  const [savingPlacaId, setSavingPlacaId] = useState<string | null>(null);
 
   // Função para tocar o som de alerta
   const playNotificationSound = () => {
@@ -207,7 +189,6 @@ export default function ManutencaoPage() {
     if (activeTab === "contatos") {
       loadContatos();
       loadProjetos();
-      loadFrotaBase();
     }
   }, [activeTab]);
 
@@ -282,21 +263,6 @@ export default function ManutencaoPage() {
     }
   };
 
-  const loadFrotaBase = async () => {
-    setLoadingFrota(true);
-    try {
-      const { data, error } = await supabase
-        .from('manutencao_frota_base')
-        .select('*')
-        .order('placa');
-      if (error) throw error;
-      setFrotaBase((data || []) as FrotaBase[]);
-    } catch {
-      toast.error("Erro ao carregar base da frota.");
-    } finally {
-      setLoadingFrota(false);
-    }
-  };
 
   const handleSalvarGerente = async () => {
     const nome = novoGerente.trim();
@@ -667,45 +633,42 @@ export default function ManutencaoPage() {
   const startMaintenance = async () => {
     if (!searchResult) return;
 
-    // Tentar buscar emails via projeto vinculado
     let emails_admin = searchResult.emails_admin;
     let emails_gerente = searchResult.emails_gerente;
     let admins = searchResult.admins;
     let gerentes_str = searchResult.gerentes;
 
     try {
-      // Busca projeto vinculado à placa
+      // frota_veiculos já tem placa→projeto (texto) importado pela tela de Frotas
       const { data: frotaItem } = await supabase
-        .from('manutencao_frota_base')
-        .select('projeto_id')
+        .from('frota_veiculos')
+        .select('projeto')
         .eq('placa', searchResult.placa)
         .single();
 
-      if (frotaItem?.projeto_id) {
-        const { data: vinculos } = await supabase
-          .from('manutencao_contato_projetos')
-          .select('contato_id, manutencao_contatos(nome, email, papel)')
-          .eq('projeto_id', frotaItem.projeto_id);
+      if (frotaItem?.projeto) {
+        // Busca o projeto_id pelo nome
+        const { data: projetoRow } = await supabase
+          .from('projetos')
+          .select('id')
+          .ilike('nome', frotaItem.projeto)
+          .single();
 
-        if (vinculos && vinculos.length > 0) {
-          const adms = vinculos
-            .filter((v: any) => v.manutencao_contatos?.papel === 'adm')
-            .map((v: any) => v.manutencao_contatos);
-          const gers = vinculos
-            .filter((v: any) => v.manutencao_contatos?.papel === 'gerente')
-            .map((v: any) => v.manutencao_contatos);
+        if (projetoRow?.id) {
+          const { data: vinculos } = await supabase
+            .from('manutencao_contato_projetos')
+            .select('contato_id, manutencao_contatos(nome, email, papel)')
+            .eq('projeto_id', projetoRow.id);
 
-          if (adms.length > 0) {
-            emails_admin = adms.map((a: any) => a.email).join(',');
-            admins = adms.map((a: any) => a.nome).join(', ');
-          }
-          if (gers.length > 0) {
-            emails_gerente = gers.map((g: any) => g.email).join(',');
-            gerentes_str = gers.map((g: any) => g.nome).join(', ');
+          if (vinculos && vinculos.length > 0) {
+            const adms = vinculos.filter((v: any) => v.manutencao_contatos?.papel === 'adm').map((v: any) => v.manutencao_contatos);
+            const gers = vinculos.filter((v: any) => v.manutencao_contatos?.papel === 'gerente').map((v: any) => v.manutencao_contatos);
+            if (adms.length > 0) { emails_admin = adms.map((a: any) => a.email).join(','); admins = adms.map((a: any) => a.nome).join(', '); }
+            if (gers.length > 0) { emails_gerente = gers.map((g: any) => g.email).join(','); gerentes_str = gers.map((g: any) => g.nome).join(', '); }
           }
         }
       }
-    } catch { /* usa fallback dos campos da base */ }
+    } catch { /* fallback */ }
 
     try {
       const { error } = await supabase
@@ -776,32 +739,33 @@ export default function ManutencaoPage() {
 
     try {
       const { data: frotaItem } = await supabase
-        .from('manutencao_frota_base')
-        .select('projeto_id')
+        .from('frota_veiculos')
+        .select('projeto')
         .eq('placa', item.placa)
         .single();
 
-      if (frotaItem?.projeto_id) {
-        const { data: vinculos } = await supabase
-          .from('manutencao_contato_projetos')
-          .select('contato_id, manutencao_contatos(email, papel)')
-          .eq('projeto_id', frotaItem.projeto_id);
+      if (frotaItem?.projeto) {
+        const { data: projetoRow } = await supabase
+          .from('projetos')
+          .select('id')
+          .ilike('nome', frotaItem.projeto)
+          .single();
 
-        if (vinculos && vinculos.length > 0) {
-          const admEmails = vinculos
-            .filter((v: any) => v.manutencao_contatos?.papel === 'adm')
-            .map((v: any) => v.manutencao_contatos.email)
-            .join(',');
-          const gerEmails = vinculos
-            .filter((v: any) => v.manutencao_contatos?.papel === 'gerente')
-            .map((v: any) => v.manutencao_contatos.email)
-            .join(',');
+        if (projetoRow?.id) {
+          const { data: vinculos } = await supabase
+            .from('manutencao_contato_projetos')
+            .select('contato_id, manutencao_contatos(email, papel)')
+            .eq('projeto_id', projetoRow.id);
 
-          if (admEmails) to = admEmails;
-          if (gerEmails) cc = gerEmails;
+          if (vinculos && vinculos.length > 0) {
+            const admEmails = vinculos.filter((v: any) => v.manutencao_contatos?.papel === 'adm').map((v: any) => v.manutencao_contatos.email).join(',');
+            const gerEmails = vinculos.filter((v: any) => v.manutencao_contatos?.papel === 'gerente').map((v: any) => v.manutencao_contatos.email).join(',');
+            if (admEmails) to = admEmails;
+            if (gerEmails) cc = gerEmails;
+          }
         }
       }
-    } catch { /* fallback nos campos do item */ }
+    } catch { /* fallback */ }
 
     const subject = `Orçamento - ${item.placa}`;
     const now = new Date();
