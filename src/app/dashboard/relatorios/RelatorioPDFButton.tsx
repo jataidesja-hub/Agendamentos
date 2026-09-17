@@ -268,6 +268,8 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
       const precoPorRegiao: Record<string, { valor: number, litros: number }> = {};
       const precoPorRegiaoCombustivel: Record<string, Record<string, { valor: number, litros: number }>> = {};
       const consumoPorProjeto: Record<string, number> = {};
+      // proj -> mes -> { valor, litros }
+      const consumoPorProjetoMes: Record<string, Record<string, { valor: number, litros: number }>> = {};
 
       allSelectedItems.forEach(a => {
         const valorEmissao = Number(a.valor_emissao) || 0;
@@ -292,6 +294,12 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
         const proj = String(a.projeto || placaToProject.get(normalize(String(a.placa || ''))) || 'SEM PROJETO').toUpperCase();
         if (proj !== 'SEM PROJETO') {
           consumoPorProjeto[proj] = (consumoPorProjeto[proj] || 0) + valorEmissao;
+
+          const mes = String(a.data_transacao).slice(0, 7);
+          if (!consumoPorProjetoMes[proj]) consumoPorProjetoMes[proj] = {};
+          if (!consumoPorProjetoMes[proj][mes]) consumoPorProjetoMes[proj][mes] = { valor: 0, litros: 0 };
+          consumoPorProjetoMes[proj][mes].valor += valorEmissao;
+          consumoPorProjetoMes[proj][mes].litros += litros;
         }
       });
 
@@ -459,7 +467,101 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
       }
       cy += 14;
 
-      // Quebra de página se necessário
+      // --- CONSUMO POR PROJETO / MÊS ---
+      // Nova página para esta seção
+      addFooter();
+      doc.addPage();
+      page++;
+      addHeader('Consumo por Projeto / Mês');
+      cy = 80;
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(11, 115, 54);
+      doc.text('CONSUMO POR PROJETO / MÊS', M, cy);
+      cy += 12;
+      doc.setDrawColor(11, 115, 54);
+      doc.setLineWidth(1);
+      doc.line(M, cy, PW - M, cy);
+      cy += 14;
+
+      // Cabeçalho da tabela: Projeto | Mês1 | Mês2 | ... | Total
+      const projsSorted = Object.keys(consumoPorProjetoMes).sort((a, b) =>
+        (consumoPorProjeto[b] || 0) - (consumoPorProjeto[a] || 0)
+      );
+      const mesesSorted = [...sortedSelected].sort();
+      const colProjW = 130;
+      const colMesW = mesesSorted.length > 0 ? Math.min(70, (PW - 2 * M - colProjW - 60) / mesesSorted.length) : 70;
+      const colTotalW = 65;
+
+      // Header row
+      doc.setFillColor(17, 24, 39);
+      doc.rect(M, cy, PW - 2 * M, 20, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.text('PROJETO', M + 4, cy + 13);
+      mesesSorted.forEach((mes, i) => {
+        const label = new Date(mes + '-02').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase();
+        doc.text(label, M + colProjW + i * colMesW + colMesW / 2, cy + 13, { align: 'center' });
+      });
+      doc.text('TOTAL', M + colProjW + mesesSorted.length * colMesW + colTotalW / 2, cy + 13, { align: 'center' });
+      cy += 20;
+
+      projsSorted.forEach((proj, idx) => {
+        if (cy > PH - 50) {
+          addFooter();
+          doc.addPage();
+          page++;
+          addHeader('Consumo por Projeto / Mês (continuação)');
+          cy = 80;
+          // Reimprime cabeçalho
+          doc.setFillColor(17, 24, 39);
+          doc.rect(M, cy, PW - 2 * M, 20, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'bold');
+          doc.text('PROJETO', M + 4, cy + 13);
+          mesesSorted.forEach((mes, i) => {
+            const label = new Date(mes + '-02').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase();
+            doc.text(label, M + colProjW + i * colMesW + colMesW / 2, cy + 13, { align: 'center' });
+          });
+          doc.text('TOTAL', M + colProjW + mesesSorted.length * colMesW + colTotalW / 2, cy + 13, { align: 'center' });
+          cy += 20;
+        }
+
+        const rowH = 16;
+        doc.setFillColor(idx % 2 === 0 ? 249 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 251 : 255);
+        doc.rect(M, cy, PW - 2 * M, rowH, 'F');
+
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(31, 41, 55);
+        const projLabel = proj.length > 22 ? proj.substring(0, 22) + '…' : proj;
+        doc.text(projLabel, M + 4, cy + 11);
+
+        let totalProjVal = 0;
+        mesesSorted.forEach((mes, i) => {
+          const v = consumoPorProjetoMes[proj]?.[mes]?.valor || 0;
+          totalProjVal += v;
+          const xCenter = M + colProjW + i * colMesW + colMesW / 2;
+          doc.setFont('helvetica', v > 0 ? 'bold' : 'normal');
+          doc.setTextColor(v > 0 ? 31 : 156, v > 0 ? 41 : 163, v > 0 ? 55 : 175);
+          doc.text(v > 0 ? fmt(v) : '—', xCenter, cy + 11, { align: 'center' });
+        });
+
+        // Total
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(11, 115, 54);
+        const xTotal = M + colProjW + mesesSorted.length * colMesW + colTotalW / 2;
+        doc.text(fmt(totalProjVal), xTotal, cy + 11, { align: 'center' });
+
+        cy += rowH;
+      });
+
+      cy += 14;
+
+      // Quebra de página antes das regiões
       if (cy > PH - 200) {
         addFooter();
         doc.addPage();
