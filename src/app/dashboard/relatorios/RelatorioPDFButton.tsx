@@ -485,11 +485,11 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
       doc.line(M, cy, PW - M, cy);
       cy += 14;
 
-      // Cabeçalho da tabela: Projeto | Mês1 | Mês2 | ... | Total
+      // Cabeçalho da tabela: Projeto | Mês1 | Mês2 | Mês3 | Total (últimos 3 meses)
       const projsSorted = Object.keys(consumoPorProjetoMes).sort((a, b) =>
         (consumoPorProjeto[b] || 0) - (consumoPorProjeto[a] || 0)
       );
-      const mesesSorted = [...sortedSelected].sort();
+      const mesesSorted = [...sortedSelected].sort().slice(-3);
       const colProjW = 130;
       const colMesW = mesesSorted.length > 0 ? Math.min(70, (PW - 2 * M - colProjW - 60) / mesesSorted.length) : 70;
       const colTotalW = 65;
@@ -561,14 +561,12 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
 
       cy += 14;
 
-      // Quebra de página antes das regiões
-      if (cy > PH - 200) {
-        addFooter();
-        doc.addPage();
-        page++;
-        addHeader('Análise Complementar');
-        cy = 80;
-      }
+      // Preço Médio/Região sempre em página nova
+      addFooter();
+      doc.addPage();
+      page++;
+      addHeader('Preço Médio / Região');
+      cy = 80;
 
       // --- PREÇO MÉDIO / REGIÃO (largura total) ---
       doc.setFontSize(11);
