@@ -15,6 +15,7 @@ import {
 import { dataCache } from '@/lib/cache';
 import toast from 'react-hot-toast';
 import RelatorioPDFButton from './RelatorioPDFButton';
+import DashboardAnalitico from './DashboardAnalitico';
 
 const RelatorioProjetos = () => {
     const [abastecimentos, setAbastecimentos] = useState<any[]>([]);
@@ -471,6 +472,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                 GERAR E-MAIL {selectedProjects.size > 0 && `(${selectedProjects.size})`}
               </button>
             )}
+            <DashboardAnalitico abastecimentos={abastecimentos} availableMonths={availableMonths} />
             <RelatorioPDFButton abastecimentos={abastecimentos} availableMonths={availableMonths} />
           </div>
         </div>
