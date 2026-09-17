@@ -485,27 +485,28 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
       doc.line(M, cy, PW - M, cy);
       cy += 14;
 
-      // Cabeçalho da tabela: Projeto | Mês1 | Mês2 | Mês3 | Total (últimos 3 meses)
+      // Cabeçalho da tabela: Projeto | Mês1..Mês5 (últimos 5 meses, sem total)
       const projsSorted = Object.keys(consumoPorProjetoMes).sort((a, b) =>
         (consumoPorProjeto[b] || 0) - (consumoPorProjeto[a] || 0)
       );
-      const mesesSorted = [...sortedSelected].sort().slice(-3);
+      const mesesSorted = [...sortedSelected].sort().slice(-5);
       const colProjW = 130;
-      const colMesW = mesesSorted.length > 0 ? Math.min(70, (PW - 2 * M - colProjW - 60) / mesesSorted.length) : 70;
-      const colTotalW = 65;
+      const colMesW = mesesSorted.length > 0 ? Math.min(80, (PW - 2 * M - colProjW) / mesesSorted.length) : 80;
 
-      // Header row
-      doc.setFillColor(17, 24, 39);
-      doc.rect(M, cy, PW - 2 * M, 20, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'bold');
-      doc.text('PROJETO', M + 4, cy + 13);
-      mesesSorted.forEach((mes, i) => {
-        const label = new Date(mes + '-02').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase();
-        doc.text(label, M + colProjW + i * colMesW + colMesW / 2, cy + 13, { align: 'center' });
-      });
-      doc.text('TOTAL', M + colProjW + mesesSorted.length * colMesW + colTotalW / 2, cy + 13, { align: 'center' });
+      const drawTableHeader = () => {
+        doc.setFillColor(17, 24, 39);
+        doc.rect(M, cy, PW - 2 * M, 20, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PROJETO', M + 4, cy + 13);
+        mesesSorted.forEach((mes, i) => {
+          const label = new Date(mes + '-02').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase();
+          doc.text(label, M + colProjW + i * colMesW + colMesW / 2, cy + 13, { align: 'center' });
+        });
+      };
+
+      drawTableHeader();
       cy += 20;
 
       projsSorted.forEach((proj, idx) => {
@@ -515,18 +516,7 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
           page++;
           addHeader('Consumo por Projeto / Mês (continuação)');
           cy = 80;
-          // Reimprime cabeçalho
-          doc.setFillColor(17, 24, 39);
-          doc.rect(M, cy, PW - 2 * M, 20, 'F');
-          doc.setTextColor(255, 255, 255);
-          doc.setFontSize(7);
-          doc.setFont('helvetica', 'bold');
-          doc.text('PROJETO', M + 4, cy + 13);
-          mesesSorted.forEach((mes, i) => {
-            const label = new Date(mes + '-02').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase();
-            doc.text(label, M + colProjW + i * colMesW + colMesW / 2, cy + 13, { align: 'center' });
-          });
-          doc.text('TOTAL', M + colProjW + mesesSorted.length * colMesW + colTotalW / 2, cy + 13, { align: 'center' });
+          drawTableHeader();
           cy += 20;
         }
 
@@ -540,21 +530,13 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
         const projLabel = proj.length > 22 ? proj.substring(0, 22) + '…' : proj;
         doc.text(projLabel, M + 4, cy + 11);
 
-        let totalProjVal = 0;
         mesesSorted.forEach((mes, i) => {
           const v = consumoPorProjetoMes[proj]?.[mes]?.valor || 0;
-          totalProjVal += v;
           const xCenter = M + colProjW + i * colMesW + colMesW / 2;
           doc.setFont('helvetica', v > 0 ? 'bold' : 'normal');
           doc.setTextColor(v > 0 ? 31 : 156, v > 0 ? 41 : 163, v > 0 ? 55 : 175);
           doc.text(v > 0 ? fmt(v) : '—', xCenter, cy + 11, { align: 'center' });
         });
-
-        // Total
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(11, 115, 54);
-        const xTotal = M + colProjW + mesesSorted.length * colMesW + colTotalW / 2;
-        doc.text(fmt(totalProjVal), xTotal, cy + 11, { align: 'center' });
 
         cy += rowH;
       });
