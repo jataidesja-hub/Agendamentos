@@ -242,6 +242,51 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
       const totalGeralEcon = monthData.reduce((s, m) => s + m.totalEconomizado, 0);
       const precoMedioGeral = totalGeralLitros > 0 ? totalGeralValor / totalGeralLitros : 0;
 
+      const mapUFtoRegiao = (uf: string) => {
+        const SUL = ['PR', 'SC', 'RS'];
+        const SUDESTE = ['SP', 'RJ', 'MG', 'ES'];
+        const CO = ['MS', 'MT', 'GO', 'DF'];
+        const NE = ['BA', 'SE', 'AL', 'PE', 'PB', 'RN', 'CE', 'PI', 'MA'];
+        const NORTE = ['AM', 'RR', 'AP', 'PA', 'TO', 'RO', 'AC'];
+        if (SUL.includes(uf)) return 'Sul';
+        if (SUDESTE.includes(uf)) return 'Sudeste';
+        if (CO.includes(uf)) return 'Centro-Oeste';
+        if (NE.includes(uf)) return 'Nordeste';
+        if (NORTE.includes(uf)) return 'Norte';
+        return 'Outros';
+      };
+
+      const allSelectedItems = abastecimentos.filter(a => sortedSelected.includes(String(a.data_transacao).slice(0, 7)));
+      const precoPorRegiao: Record<string, { valor: number, litros: number }> = {};
+      const consumoPorProjeto: Record<string, number> = {};
+
+      allSelectedItems.forEach(a => {
+        const valorEmissao = Number(a.valor_emissao) || 0;
+        const litros = Number(a.litros) || 0;
+        
+        let uf = String(a.uf || a.estado || '').toUpperCase().trim();
+        if (!uf && a.cidade && typeof a.cidade === 'string' && a.cidade.includes('/')) {
+          uf = a.cidade.split('/').pop()?.toUpperCase().trim() || '';
+        }
+        const regiao = mapUFtoRegiao(uf);
+        if (!precoPorRegiao[regiao]) precoPorRegiao[regiao] = { valor: 0, litros: 0 };
+        precoPorRegiao[regiao].valor += valorEmissao;
+        precoPorRegiao[regiao].litros += litros;
+
+        const proj = String(a.projeto || 'SEM PROJETO').toUpperCase();
+        if (proj !== 'SEM PROJETO') {
+          consumoPorProjeto[proj] = (consumoPorProjeto[proj] || 0) + valorEmissao;
+        }
+      });
+
+      const mediasRegiao = Object.entries(precoPorRegiao)
+        .map(([regiao, v]) => ({ regiao, media: v.litros > 0 ? v.valor / v.litros : 0 }))
+        .sort((a, b) => b.media - a.media);
+
+      const top5Consumidores = Object.entries(consumoPorProjeto)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5);
+
       const cards = [
         { label: 'Total Abastecido', value: fmt(totalGeralValor), sub: `${totalGeralLitros.toFixed(0)} L`, color: [11, 115, 54] },
         { label: 'Total Economizado', value: fmt(totalGeralEcon), sub: 'vs preço médio', color: [16, 185, 129] },
@@ -356,9 +401,55 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
       });
       cy += 10;
 
+      if (cy > PH - 150) {
+        addFooter();
+        doc.addPage();
+        page++;
+        addHeader('Análise Complementar');
+        cy = 80;
+      } else {
+        cy += 10;
+      }
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(11, 115, 54);
+      doc.text('PREÇO MÉDIO / REGIÃO', M, cy);
+      doc.text('TOP 5 MAIORES CONSUMOS', (PW / 2) + 10, cy);
+      cy += 12;
+      doc.setDrawColor(11, 115, 54);
+      doc.setLineWidth(1);
+      doc.line(M, cy, PW - M, cy);
+      cy += 16;
+
+      let cyRegiao = cy;
+      mediasRegiao.forEach((mr) => {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(31, 41, 55);
+        doc.text(mr.regiao, M, cyRegiao);
+        doc.setTextColor(11, 115, 54);
+        doc.text(mr.media.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), (PW / 2) - 10, cyRegiao, { align: 'right' });
+        cyRegiao += 16;
+      });
+
+      let cyConsumo = cy;
+      top5Consumidores.forEach(([proj, val]) => {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(31, 41, 55);
+        const projName = proj.length > 30 ? proj.substring(0, 30) + '...' : proj;
+        doc.text(projName, (PW / 2) + 10, cyConsumo);
+        doc.setTextColor(220, 38, 38);
+        doc.text(val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), PW - M, cyConsumo, { align: 'right' });
+        cyConsumo += 16;
+      });
+
+      cy = Math.max(cyRegiao, cyConsumo) + 20;
+
       addFooter();
 
-      // --- PÁGINA 2: Gráficos ---
+      // --- PÁGINA: Gráficos ---
       doc.addPage();
       page++;
       addHeader('Análise Visual — Gráficos');
