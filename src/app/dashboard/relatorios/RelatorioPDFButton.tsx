@@ -282,7 +282,9 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
         precoPorRegiaoCombustivel[regiao][combustivel].litros += litros;
 
         const proj = String(a.projeto || 'SEM PROJETO').toUpperCase();
-        consumoPorProjeto[proj] = (consumoPorProjeto[proj] || 0) + valorEmissao;
+        if (proj !== 'SEM PROJETO') {
+          consumoPorProjeto[proj] = (consumoPorProjeto[proj] || 0) + valorEmissao;
+        }
       });
 
       const mediasRegiao = Object.entries(precoPorRegiao)
