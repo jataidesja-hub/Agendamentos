@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { DocumentArrowDownIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
 
 interface Props {
   abastecimentos: any[];
@@ -154,6 +155,13 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
       // --- Processamento de dados ---
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || '';
 
+      // Busca projeto por placa na frota
+      const { data: frotaData } = await supabase.from('frota_veiculos').select('placa, projeto').eq('status', 'Ativo');
+      const placaToProject = new Map<string, string>();
+      (frotaData || []).forEach((v: any) => {
+        if (v.projeto) placaToProject.set(normalize(v.placa), String(v.projeto).toUpperCase().trim());
+      });
+
       const monthData = sortedSelected.map(month => {
         const items = abastecimentos.filter(a => String(a.data_transacao).slice(0, 7) === month);
         const totalLitros = items.reduce((s, a) => s + (Number(a.litros) || 0), 0);
@@ -281,7 +289,7 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
         precoPorRegiaoCombustivel[regiao][combustivel].valor += valorEmissao;
         precoPorRegiaoCombustivel[regiao][combustivel].litros += litros;
 
-        const proj = String(a.projeto || 'SEM PROJETO').toUpperCase();
+        const proj = String(a.projeto || placaToProject.get(normalize(String(a.placa || ''))) || 'SEM PROJETO').toUpperCase();
         if (proj !== 'SEM PROJETO') {
           consumoPorProjeto[proj] = (consumoPorProjeto[proj] || 0) + valorEmissao;
         }
@@ -422,24 +430,75 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(11, 115, 54);
-      doc.text('PREÇO MÉDIO / REGIÃO', M, cy);
-      doc.text('TOP 5 MAIORES CONSUMOS', (PW / 2) + 10, cy);
+      doc.text('TOP 5 MAIORES CONSUMOS', M, cy);
       cy += 12;
       doc.setDrawColor(11, 115, 54);
       doc.setLineWidth(1);
       doc.line(M, cy, PW - M, cy);
       cy += 16;
 
-      let cyRegiao = cy;
+      if (top5Consumidores.length === 0) {
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(107, 114, 128);
+        doc.text('Nenhum projeto identificado no período selecionado.', M, cy);
+        cy += 16;
+      } else {
+        top5Consumidores.forEach(([proj, val], idx) => {
+          doc.setFillColor(idx % 2 === 0 ? 249 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 251 : 255);
+          doc.rect(M, cy - 10, PW - 2 * M, 16, 'F');
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(31, 41, 55);
+          const projName = proj.length > 50 ? proj.substring(0, 50) + '...' : proj;
+          doc.text(projName, M + 6, cy);
+          doc.setTextColor(220, 38, 38);
+          doc.text(val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), PW - M - 6, cy, { align: 'right' });
+          cy += 18;
+        });
+      }
+      cy += 14;
+
+      // Quebra de página se necessário
+      if (cy > PH - 200) {
+        addFooter();
+        doc.addPage();
+        page++;
+        addHeader('Análise Complementar');
+        cy = 80;
+      }
+
+      // --- PREÇO MÉDIO / REGIÃO (largura total) ---
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(11, 115, 54);
+      doc.text('PREÇO MÉDIO / REGIÃO', M, cy);
+      cy += 12;
+      doc.setDrawColor(11, 115, 54);
+      doc.setLineWidth(1);
+      doc.line(M, cy, PW - M, cy);
+      cy += 16;
+
       mediasRegiao.forEach((mr) => {
-        // Região: nome + média geral
+        // Quebra de página automática
+        if (cy > PH - 60) {
+          addFooter();
+          doc.addPage();
+          page++;
+          addHeader('Preço Médio / Região (continuação)');
+          cy = 80;
+        }
+
+        // Cabeçalho da região
+        doc.setFillColor(243, 244, 246);
+        doc.rect(M, cy - 10, PW - 2 * M, 16, 'F');
         doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(31, 41, 55);
-        doc.text(mr.regiao, M, cyRegiao);
+        doc.text(mr.regiao, M + 6, cy);
         doc.setTextColor(11, 115, 54);
-        doc.text(mr.media.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), (PW / 2) - 10, cyRegiao, { align: 'right' });
-        cyRegiao += 13;
+        doc.text(mr.media.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), PW - M - 6, cy, { align: 'right' });
+        cy += 14;
 
         // Sub-linhas por tipo de combustível
         const combsNaRegiao = precoPorRegiaoCombustivel[mr.regiao] || {};
@@ -447,32 +506,27 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
           .map(([comb, v]) => ({ comb, media: v.litros > 0 ? v.valor / v.litros : 0 }))
           .sort((a, b) => b.media - a.media);
         combsSorted.forEach(({ comb, media }) => {
+          if (cy > PH - 40) {
+            addFooter();
+            doc.addPage();
+            page++;
+            addHeader('Preço Médio / Região (continuação)');
+            cy = 80;
+          }
           doc.setFontSize(7.5);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(100, 116, 139);
-          const combLabel = '   ' + (comb.length > 28 ? comb.substring(0, 28) + '…' : comb);
-          doc.text(combLabel, M, cyRegiao);
+          const combLabel = '      ' + (comb.length > 50 ? comb.substring(0, 50) + '…' : comb);
+          doc.text(combLabel, M, cy);
           doc.setTextColor(11, 115, 54);
           doc.setFont('helvetica', 'bold');
-          doc.text(media.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), (PW / 2) - 10, cyRegiao, { align: 'right' });
-          cyRegiao += 11;
+          doc.text(media.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), PW - M - 6, cy, { align: 'right' });
+          cy += 11;
         });
-        cyRegiao += 4; // espaço entre regiões
+        cy += 6;
       });
 
-      let cyConsumo = cy;
-      top5Consumidores.forEach(([proj, val]) => {
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(31, 41, 55);
-        const projName = proj.length > 30 ? proj.substring(0, 30) + '...' : proj;
-        doc.text(projName, (PW / 2) + 10, cyConsumo);
-        doc.setTextColor(220, 38, 38);
-        doc.text(val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), PW - M, cyConsumo, { align: 'right' });
-        cyConsumo += 16;
-      });
-
-      cy = Math.max(cyRegiao, cyConsumo) + 20;
+      cy += 10;
 
       addFooter();
 
