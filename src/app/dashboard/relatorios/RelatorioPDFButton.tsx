@@ -258,6 +258,7 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
 
       const allSelectedItems = abastecimentos.filter(a => sortedSelected.includes(String(a.data_transacao).slice(0, 7)));
       const precoPorRegiao: Record<string, { valor: number, litros: number }> = {};
+      const precoPorRegiaoCombustivel: Record<string, Record<string, { valor: number, litros: number }>> = {};
       const consumoPorProjeto: Record<string, number> = {};
 
       allSelectedItems.forEach(a => {
@@ -273,10 +274,15 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
         precoPorRegiao[regiao].valor += valorEmissao;
         precoPorRegiao[regiao].litros += litros;
 
+        // Por tipo de combustível dentro de cada região
+        const combustivel = String(a.tipo_combustivel || 'NÃO INFORMADO').toUpperCase().trim();
+        if (!precoPorRegiaoCombustivel[regiao]) precoPorRegiaoCombustivel[regiao] = {};
+        if (!precoPorRegiaoCombustivel[regiao][combustivel]) precoPorRegiaoCombustivel[regiao][combustivel] = { valor: 0, litros: 0 };
+        precoPorRegiaoCombustivel[regiao][combustivel].valor += valorEmissao;
+        precoPorRegiaoCombustivel[regiao][combustivel].litros += litros;
+
         const proj = String(a.projeto || 'SEM PROJETO').toUpperCase();
-        if (proj !== 'SEM PROJETO') {
-          consumoPorProjeto[proj] = (consumoPorProjeto[proj] || 0) + valorEmissao;
-        }
+        consumoPorProjeto[proj] = (consumoPorProjeto[proj] || 0) + valorEmissao;
       });
 
       const mediasRegiao = Object.entries(precoPorRegiao)
@@ -424,13 +430,32 @@ export default function RelatorioPDFButton({ abastecimentos, availableMonths }: 
 
       let cyRegiao = cy;
       mediasRegiao.forEach((mr) => {
+        // Região: nome + média geral
         doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(31, 41, 55);
         doc.text(mr.regiao, M, cyRegiao);
         doc.setTextColor(11, 115, 54);
         doc.text(mr.media.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), (PW / 2) - 10, cyRegiao, { align: 'right' });
-        cyRegiao += 16;
+        cyRegiao += 13;
+
+        // Sub-linhas por tipo de combustível
+        const combsNaRegiao = precoPorRegiaoCombustivel[mr.regiao] || {};
+        const combsSorted = Object.entries(combsNaRegiao)
+          .map(([comb, v]) => ({ comb, media: v.litros > 0 ? v.valor / v.litros : 0 }))
+          .sort((a, b) => b.media - a.media);
+        combsSorted.forEach(({ comb, media }) => {
+          doc.setFontSize(7.5);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(100, 116, 139);
+          const combLabel = '   ' + (comb.length > 28 ? comb.substring(0, 28) + '…' : comb);
+          doc.text(combLabel, M, cyRegiao);
+          doc.setTextColor(11, 115, 54);
+          doc.setFont('helvetica', 'bold');
+          doc.text(media.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), (PW / 2) - 10, cyRegiao, { align: 'right' });
+          cyRegiao += 11;
+        });
+        cyRegiao += 4; // espaço entre regiões
       });
 
       let cyConsumo = cy;
