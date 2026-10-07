@@ -134,6 +134,14 @@ export default function UsuariosPage() {
     setShowForm(true);
   };
 
+  const toggleAtivo = async (id: string, ativoAtual: boolean) => {
+    const novoStatus = !ativoAtual;
+    const { error } = await supabase.from('perfis_acesso').update({ ativo: novoStatus }).eq('id', id);
+    if (error) { toast.error('Erro ao atualizar status: ' + error.message); return; }
+    toast.success(novoStatus ? 'Perfil ativado!' : 'Perfil desativado!');
+    fetchUsuarios();
+  };
+
   const handleDelete = async (id: string, email: string) => {
     if (!confirm(`Excluir perfil de ${email}?`)) return;
     const { error } = await supabase.from('perfis_acesso').delete().eq('id', id);
@@ -273,15 +281,22 @@ export default function UsuariosPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {usuarios.map(u => (
-          <div key={u.id} className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+          <div key={u.id} className={`bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl p-6 shadow-xl relative overflow-hidden ${u.ativo === false ? 'opacity-60 grayscale-[50%]' : ''}`}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#0b7336]/10 to-transparent rounded-bl-full -z-10" />
             <div className="flex items-start justify-between mb-2">
-              <h3 className="text-xl font-black text-gray-800 dark:text-white truncate flex-1">{u.email}</h3>
-              {u.master && (
-                <span className="ml-2 shrink-0 flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-black uppercase px-2 py-1 rounded-full">
-                  <ShieldCheckIcon className="w-3 h-3" /> Master
-                </span>
-              )}
+              <h3 className={`text-xl font-black text-gray-800 dark:text-white truncate flex-1 ${u.ativo === false ? 'line-through text-gray-400' : ''}`}>{u.email}</h3>
+              <div className="flex items-center gap-2">
+                {u.ativo === false && (
+                  <span className="shrink-0 flex items-center gap-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-[9px] font-black uppercase px-2 py-1 rounded-full">
+                    Inativo
+                  </span>
+                )}
+                {u.master && (
+                  <span className="shrink-0 flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-black uppercase px-2 py-1 rounded-full">
+                    <ShieldCheckIcon className="w-3 h-3" /> Master
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
               <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-900 px-3 py-1 rounded-full uppercase tracking-wider">
@@ -294,6 +309,12 @@ export default function UsuariosPage() {
             <div className="flex gap-2">
               <button onClick={() => handleEdit(u)} className="flex-1 flex items-center justify-center gap-2 bg-gray-100/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 py-2 rounded-xl text-sm font-bold transition-all shadow-sm">
                 <PencilIcon className="w-4 h-4" /> Editar
+              </button>
+              <button 
+                onClick={() => toggleAtivo(u.id, u.ativo !== false)} 
+                className={`flex-1 flex items-center justify-center py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${u.ativo !== false ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100' : 'bg-[#0b7336]/10 text-[#0b7336] hover:bg-[#0b7336]/20'}`}
+              >
+                {u.ativo !== false ? 'Desativar' : 'Ativar'}
               </button>
               <button onClick={() => handleDelete(u.id, u.email)} className="flex items-center justify-center gap-1 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-500 dark:text-red-400 py-2 px-3 rounded-xl text-sm font-bold transition-all">
                 <TrashIcon className="w-4 h-4" />
