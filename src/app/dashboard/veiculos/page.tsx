@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { dataCache } from '@/lib/cache';
 import {
   TruckIcon, PlusIcon, DocumentArrowUpIcon,
   ChevronDownIcon, ChevronUpIcon, ArchiveBoxIcon,
@@ -194,12 +195,18 @@ export default function FrotasPage() {
         }).filter(x => x.placa);
 
         const uniqueMap = new Map<string, any>();
-        rows.forEach(r => uniqueMap.set(r.placa, r));
+        rows.forEach(r => {
+          const existing = uniqueMap.get(r.placa);
+          if (!existing || (existing.status !== 'Ativo' && r.status === 'Ativo') || (existing.status === r.status && r.projeto)) {
+            uniqueMap.set(r.placa, r);
+          }
+        });
         const formatted = Array.from(uniqueMap.values());
 
         if (confirm(`Importar ${formatted.length} veículos (FROTA)?`)) {
           const { error } = await supabase.from('frota_veiculos').upsert(formatted, { onConflict: 'placa' });
           if (error) throw error;
+          dataCache.clear();
           toast.success('Frota atualizada!');
           fetchVeiculos();
         }

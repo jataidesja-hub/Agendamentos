@@ -31,6 +31,7 @@ interface Abastecimento {
 export default function AbastecimentosPage() {
   const [data, setData] = useState<Abastecimento[]>([]);
   const [veiculosAtivos, setVeiculosAtivos] = useState<Set<string>>(new Set());
+  const [apenasAtivos, setApenasAtivos] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -49,15 +50,26 @@ export default function AbastecimentosPage() {
 
     setLoading(true);
     try {
-      // 1. Busca frota ativa
-      const { data: frota } = await supabase.from('frota_veiculos').select('placa').eq('status', 'Ativo');
+      // 1. Busca frota completa para mapear ativos e projetos
+      const { data: frota } = await supabase.from('frota_veiculos').select('placa, projeto, status, modelo');
       
       const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
       
       if (frota) {
-        const setAtivos = new Set<string>(frota.map(v => normalize(v.placa)));
+        const setAtivos = new Set<string>();
+        const placaToProject = new Map<string, string>();
+        const placaToModel = new Map<string, string>();
+        frota.forEach((v: any) => {
+          const norm = normalize(v.placa);
+          const isAtivo = String(v.status || '').toLowerCase() === 'ativo';
+          if (isAtivo) setAtivos.add(norm);
+          if (v.projeto && (isAtivo || !placaToProject.has(norm))) placaToProject.set(norm, v.projeto);
+          if (v.modelo && (isAtivo || !placaToModel.has(norm))) placaToModel.set(norm, v.modelo);
+        });
         setVeiculosAtivos(setAtivos);
         dataCache.veiculosAtivos = setAtivos;
+        dataCache.placaToProject = placaToProject;
+        dataCache.placaToModel = placaToModel;
       }
 
       // 2. Busca exaustiva de abastecimentos
@@ -215,22 +227,22 @@ export default function AbastecimentosPage() {
   };
 
   const filteredData = useMemo(() => {
-    // Função interna para normalizar placas na hora do filtro
     const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+    const placaToProject = dataCache.placaToProject || new Map<string, string>();
     
     return data.filter((item: Abastecimento) => {
       const placaNormalizada = normalize(item.placa);
       
-      // FILTRO: Apenas veículos ativos na frota
-      // Se não houver nenhum veículo ativo cadastrado, não filtramos nada (opcional)
-      if (veiculosAtivos.size > 0 && !veiculosAtivos.has(placaNormalizada)) return false;
+      if (apenasAtivos && veiculosAtivos.size > 0 && !veiculosAtivos.has(placaNormalizada)) return false;
 
       const search = searchTerm.toLowerCase();
+      const proj = (placaToProject.get(placaNormalizada) || "").toLowerCase();
       return item.placa.toLowerCase().includes(search) ||
              item.modelo_veiculo.toLowerCase().includes(search) ||
-             item.nome_estabelecimento.toLowerCase().includes(search);
+             (item.nome_estabelecimento || (item as any).estabelecimento || "").toLowerCase().includes(search) ||
+             proj.includes(search);
     });
-  }, [data, searchTerm, veiculosAtivos]);
+  }, [data, searchTerm, veiculosAtivos, apenasAtivos]);
 
   const stats = useMemo(() => {
     const totalLiters = filteredData.reduce((acc, curr) => acc + (Number(curr.litros) || 0), 0);
@@ -284,11 +296,19 @@ export default function AbastecimentosPage() {
            </div>
         ) : (
           <>
-            <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+            <div className="p-6 border-b border-gray-50 flex flex-wrap gap-4 justify-between items-center bg-gray-50/50">
                <div className="relative w-80">
                   <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" placeholder="Filtrar placa, projeto ou motorista..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white border-0 rounded-2xl text-sm shadow-sm" />
+                  <input type="text" placeholder="Filtrar placa, projeto ou posto..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white border-0 rounded-2xl text-sm shadow-sm" />
                </div>
+               <button
+                  onClick={() => setApenasAtivos(prev => !prev)}
+                  className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                    apenasAtivos ? 'bg-[#0b7336] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                  }`}
+               >
+                  {apenasAtivos ? 'Exibindo: Apenas Ativos' : 'Exibindo: Todos (Ativos + Desmobilizados)'}
+               </button>
             </div>
             <div className="overflow-auto custom-scrollbar">
               <table className="w-full text-left text-xs">

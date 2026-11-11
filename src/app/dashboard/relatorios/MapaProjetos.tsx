@@ -130,19 +130,17 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
       try {
         const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
 
-        // 1. Busca todos os veículos ativos com metadados estendidos (com fallback de segurança)
+        // 1. Busca todos os veículos (ativos e desmobilizados) para vincular placa -> projeto
         let { data: frota, error: errFrota } = await supabase
           .from('frota_veiculos')
-          .select('placa, projeto, email_gerente, email_administrativo, modelo')
-          .eq('status', 'Ativo');
+          .select('placa, projeto, status, email_gerente, email_administrativo, modelo');
         
         // Fallback: Se der erro (provavelmente colunas de e-mail não existem ainda no banco)
         if (errFrota) {
           console.warn("Colunas de e-mail não encontradas, tentando fallback para dados básicos.");
           const resFallback = await supabase
             .from('frota_veiculos')
-            .select('placa, projeto, modelo')
-            .eq('status', 'Ativo');
+            .select('placa, projeto, status, modelo');
           frota = resFallback.data as typeof frota;
           errFrota = resFallback.error;
         }
@@ -156,11 +154,12 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
           
           frota.forEach((v: any) => {
             const norm = normalize(v.placa);
-            setAtivos.add(norm);
-            if (v.projeto) placaToProject.set(norm, v.projeto);
-            if (v.email_gerente) placaToGerente.set(norm, v.email_gerente);
-            if (v.email_administrativo) placaToAdmin.set(norm, v.email_administrativo);
-            if (v.modelo) placaToModel.set(norm, v.modelo);
+            const isAtivo = String(v.status || '').toLowerCase() === 'ativo';
+            if (isAtivo) setAtivos.add(norm);
+            if (v.projeto && (isAtivo || !placaToProject.has(norm))) placaToProject.set(norm, v.projeto);
+            if (v.email_gerente && (isAtivo || !placaToGerente.has(norm))) placaToGerente.set(norm, v.email_gerente);
+            if (v.email_administrativo && (isAtivo || !placaToAdmin.has(norm))) placaToAdmin.set(norm, v.email_administrativo);
+            if (v.modelo && (isAtivo || !placaToModel.has(norm))) placaToModel.set(norm, v.modelo);
           });
 
           setVeiculosAtivos(setAtivos);
