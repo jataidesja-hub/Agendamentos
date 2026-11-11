@@ -324,22 +324,29 @@ export default function AbastecimentosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {filteredData.slice(0, 2000).map((item, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                  {filteredData.slice(0, 2000).map((item, idx) => {
+                    const norm = item.placa?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
+                    const isDesmob = veiculosAtivos.size > 0 && !veiculosAtivos.has(norm);
+                    return (
+                    <tr key={idx} className={`transition-colors ${isDesmob ? 'bg-gray-100/80 text-gray-400 opacity-75 hover:bg-gray-200/60' : 'hover:bg-gray-50'}`}>
                       <td className="px-6 py-4 font-bold text-gray-400 whitespace-nowrap">{item.data_transacao ? new Date(item.data_transacao + "T12:00:00").toLocaleDateString('pt-BR') : '---'}</td>
                       <td className="px-6 py-4 text-center">
-                        <span className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-2 py-1 rounded-md font-black text-[10px] border border-gray-200">{item.placa}</span>
+                        <div className="inline-flex items-center gap-1.5">
+                          <span className={`px-2 py-1 rounded-md font-black text-[10px] border ${isDesmob ? 'bg-gray-200 text-gray-500 border-gray-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-200'}`}>{item.placa}</span>
+                          {isDesmob && <span className="text-[8px] font-black uppercase bg-gray-300 text-gray-600 px-1.5 py-0.5 rounded">Desmob.</span>}
+                        </div>
                       </td>
-                      <td className="px-6 py-4 font-black text-gray-800 uppercase text-[10px]">{item.modelo_veiculo}</td>
+                      <td className={`px-6 py-4 font-black uppercase text-[10px] ${isDesmob ? 'text-gray-400' : 'text-gray-800'}`}>{item.modelo_veiculo}</td>
                       <td className="px-6 py-4 text-right font-bold tabular-nums">{item.litros.toLocaleString('pt-BR')} L</td>
-                      <td className="px-6 py-4 text-right font-black text-blue-600 tabular-nums">{item.km_litro?.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}</td>
-                      <td className="px-6 py-4 text-right font-black text-[#0b7336] tabular-nums">{Number(item.valor_emissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                      <td className={`px-6 py-4 text-right font-black tabular-nums ${isDesmob ? 'text-gray-400' : 'text-blue-600'}`}>{item.km_litro?.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}</td>
+                      <td className={`px-6 py-4 text-right font-black tabular-nums ${isDesmob ? 'text-gray-500' : 'text-[#0b7336]'}`}>{Number(item.valor_emissao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                         <div className="uppercase font-bold text-gray-500 text-[9px]">{item.nome_estabelecimento}</div>
+                         <div className="uppercase font-bold text-gray-500 text-[9px]">{item.nome_estabelecimento || (item as any).estabelecimento}</div>
                          <div className="uppercase font-medium text-gray-400 text-[8px]">{item.cidade}</div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

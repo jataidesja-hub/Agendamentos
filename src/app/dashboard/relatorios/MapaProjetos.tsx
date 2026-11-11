@@ -262,8 +262,9 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
         }
         
         const placa = a.placa || "N/A";
+        const isAtivo = veiculosAtivos.has(normPlaca);
         if (!groups[projName].vehicles[placa]) {
-          groups[projName].vehicles[placa] = { items: [], liters: 0, value: 0, km: 0, modelo };
+          groups[projName].vehicles[placa] = { items: [], liters: 0, value: 0, km: 0, modelo, isAtivo };
         }
 
         const km = Number(a.km_rodados_horas || a.km_rodados) || 0;
@@ -277,7 +278,7 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
         groups[projName].totalValue += (Number(a.valor_emissao) || 0);
       });
       return groups;
-    }, [filteredData]);
+    }, [filteredData, veiculosAtivos]);
 
     const projectHistoricalAverages = useMemo(() => {
       const totals: Record<string, { total: number, months: Set<string> }> = {};
@@ -704,31 +705,41 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                 {expandedProject === projName && (
                   <div className="px-8 pb-8 space-y-3 bg-gray-50/30">
                     <div className="h-px bg-gray-100 w-full mb-6" />
-                    {Object.keys(groupedData[projName].vehicles).map(placa => (
-                      <div key={placa} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    {Object.keys(groupedData[projName].vehicles)
+                      .sort((a, b) => Number(groupedData[projName].vehicles[b].isAtivo) - Number(groupedData[projName].vehicles[a].isAtivo) || a.localeCompare(b))
+                      .map(placa => {
+                      const vData = groupedData[projName].vehicles[placa];
+                      const isDesmob = !vData.isAtivo;
+                      return (
+                      <div key={placa} className={`rounded-2xl border shadow-sm overflow-hidden transition-all ${isDesmob ? 'bg-gray-100/90 border-gray-200 opacity-75' : 'bg-white border-gray-100'}`}>
                         <button 
                           onClick={() => setExpandedVehicle(expandedVehicle === placa ? null : placa)}
-                          className="w-full px-6 py-4 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                          className={`w-full px-6 py-4 flex justify-between items-center transition-colors ${isDesmob ? 'hover:bg-gray-200/60' : 'hover:bg-gray-50'}`}
                         >
                           <div className="flex items-center">
                             <TruckIcon className="w-4 h-4 text-gray-400 mr-3" />
-                            <span className="bg-gray-100 px-3 py-1 rounded-lg font-black text-gray-700 text-sm">{placa}</span>
-                            {groupedData[projName].vehicles[placa].modelo && (
-                              <span className="ml-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">{groupedData[projName].vehicles[placa].modelo}</span>
+                            <span className={`px-3 py-1 rounded-lg font-black text-sm ${isDesmob ? 'bg-gray-200 text-gray-500' : 'bg-gray-100 text-gray-700'}`}>{placa}</span>
+                            {isDesmob && (
+                              <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-300 text-gray-600 text-[9px] font-black uppercase tracking-widest">
+                                Desmobilizado
+                              </span>
                             )}
-                            <span className="ml-4 text-xs font-bold text-gray-500 uppercase">{groupedData[projName].vehicles[placa].items.length} abastecimentos</span>
+                            {vData.modelo && (
+                              <span className="ml-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">{vData.modelo}</span>
+                            )}
+                            <span className="ml-4 text-xs font-bold text-gray-500 uppercase">{vData.items.length} abastecimentos</span>
                           </div>
                           <div className="flex items-center gap-6">
                              <div className="text-right">
                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Média</p>
-                               <p className="text-sm font-black text-[#0b7336]">
+                               <p className={`text-sm font-black ${isDesmob ? 'text-gray-500' : 'text-[#0b7336]'}`}>
                                  {(() => {
-                                   const isSingle = groupedData[projName].vehicles[placa].items.length === 1;
+                                   const isSingle = vData.items.length === 1;
                                    let kml = 0;
                                    if (isSingle && vehicleHistoricalKmL[placa] > 0) {
                                      kml = vehicleHistoricalKmL[placa];
-                                   } else if (groupedData[projName].vehicles[placa].liters > 0) {
-                                     kml = groupedData[projName].vehicles[placa].km / groupedData[projName].vehicles[placa].liters;
+                                   } else if (vData.liters > 0) {
+                                     kml = vData.km / vData.liters;
                                    }
                                    return kml > 0 
                                      ? kml.toFixed(2) + ' km/l' + (isSingle && vehicleHistoricalKmL[placa] > 0 ? ' *' : '') 
@@ -738,11 +749,11 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                              </div>
                              <div className="text-right">
                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">KM Rodado</p>
-                               <p className="text-sm font-black text-gray-800">{groupedData[projName].vehicles[placa].km.toLocaleString('pt-BR')} km</p>
+                               <p className={`text-sm font-black ${isDesmob ? 'text-gray-500' : 'text-gray-800'}`}>{vData.km.toLocaleString('pt-BR')} km</p>
                              </div>
                              <div className="text-right">
                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Volume</p>
-                               <p className="text-sm font-black text-gray-800">{groupedData[projName].vehicles[placa].liters.toFixed(2)} L</p>
+                               <p className={`text-sm font-black ${isDesmob ? 'text-gray-500' : 'text-gray-800'}`}>{vData.liters.toFixed(2)} L</p>
                              </div>
                              {/* Limite do cartão */}
                              {(() => {
@@ -856,7 +867,8 @@ Fluxo de Aprovação: ADM → Gerente → Financeiro → Supervisor ADM → Rodr
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

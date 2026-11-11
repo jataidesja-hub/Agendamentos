@@ -85,11 +85,11 @@ export default function RelatorioGerencial() {
 
   const { grouped, topKm, topValor } = useMemo(() => {
     const normalize = (p: string) => p?.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() || "";
-    // @ts-ignore
     const placaToProject = dataCache.placaToProject || new Map();
+    const veiculosAtivos = dataCache.veiculosAtivos || new Set<string>();
 
     const currentMonthData = abastecimentos.filter(a => String(a.data_transacao).slice(0, 7) === selectedMonth);
-    const vehicleStats: Record<string, { km: number, liters: number, valor: number, proj: string }> = {};
+    const vehicleStats: Record<string, { km: number, liters: number, valor: number, proj: string, isAtivo: boolean }> = {};
 
     currentMonthData.forEach(a => {
       const placaNorm = normalize(a.placa);
@@ -99,6 +99,7 @@ export default function RelatorioGerencial() {
           liters: 0,
           valor: 0,
           proj: String(a.projeto || placaToProject.get(placaNorm) || "SEM PROJETO").toUpperCase(),
+          isAtivo: veiculosAtivos.size === 0 || veiculosAtivos.has(placaNorm),
         };
       }
       vehicleStats[placaNorm].km += Number(a.km_rodados_horas || a.km_rodados) || 0;
@@ -294,13 +295,16 @@ export default function RelatorioGerencial() {
                 <div className="bg-gray-50 p-6 border-t border-gray-100">
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {data.vehicles.map(v => (
-                      <div key={v.placa} className="bg-white p-4 rounded-xl border border-gray-100 flex items-center justify-between">
+                      <div key={v.placa} className={`p-4 rounded-xl border flex items-center justify-between ${!v.isAtivo ? 'bg-gray-100 border-gray-200 opacity-75' : 'bg-white border-gray-100'}`}>
                         <div>
-                          <p className="font-black text-gray-900">{v.placa}</p>
+                          <div className="flex items-center gap-2">
+                            <p className={`font-black ${!v.isAtivo ? 'text-gray-500' : 'text-gray-900'}`}>{v.placa}</p>
+                            {!v.isAtivo && <span className="text-[8px] font-black uppercase bg-gray-300 text-gray-600 px-1.5 py-0.5 rounded">Desmob.</span>}
+                          </div>
                           <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase">{v.km.toLocaleString('pt-BR')} km rodados</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-black text-emerald-600">{v.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                          <p className={`font-black ${!v.isAtivo ? 'text-gray-500' : 'text-emerald-600'}`}>{v.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                           <p className="text-[10px] font-bold text-gray-400 uppercase">{v.liters.toLocaleString('pt-BR')} L</p>
                         </div>
                       </div>
