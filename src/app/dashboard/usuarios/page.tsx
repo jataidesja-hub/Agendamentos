@@ -18,6 +18,7 @@ export default function UsuariosPage() {
   const [telas, setTelas] = useState<string[]>([]);
   const [projetos, setProjetos] = useState<string[]>([]);
   const [master, setMaster] = useState(false);
+  const [papelFluxo, setPapelFluxo] = useState<'adm' | 'gerente' | 'master'>('adm');
   const [abasRelatorio, setAbasRelatorio] = useState<string[]>(['projetos', 'postos', 'gestores', 'mapa']);
 
   const telasDisponiveis = [
@@ -44,6 +45,7 @@ export default function UsuariosPage() {
     { id: 'solicitacoes', nome: 'Solicitações de Manutenção (Admin)' },
     { id: 'materiais', nome: 'Materiais' },
     { id: 'portaria', nome: 'Portaria (Entrada/Saída)' },
+    { id: 'fluxos', nome: 'Fluxos (Solicitação de Abastecimento)' },
   ];
 
   // Vigilantes da Portaria states
@@ -143,23 +145,34 @@ export default function UsuariosPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload = {
+      const payload: any = {
         email,
         telas_acesso: telas,
         projetos_acesso: master ? [] : projetos,
         master,
         abas_relatorio: abasRelatorio,
+        papel_fluxo: master ? 'master' : papelFluxo,
       };
 
       if (editId) {
-        const { error } = await supabase.from('perfis_acesso').update(payload).eq('id', editId);
+        let { error } = await supabase.from('perfis_acesso').update(payload).eq('id', editId);
+        if (error && error.message.includes('papel_fluxo')) {
+          delete payload.papel_fluxo;
+          const retry = await supabase.from('perfis_acesso').update(payload).eq('id', editId);
+          error = retry.error;
+        }
         if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
         toast.success('Perfil atualizado!');
       } else {
         const { error: authError } = await supabase.auth.signUp({ email, password: senha });
         if (authError) toast.error('Erro na autenticação: ' + authError.message);
 
-        const { error } = await supabase.from('perfis_acesso').insert(payload);
+        let { error } = await supabase.from('perfis_acesso').insert(payload);
+        if (error && error.message.includes('papel_fluxo')) {
+          delete payload.papel_fluxo;
+          const retry = await supabase.from('perfis_acesso').insert(payload);
+          error = retry.error;
+        }
         if (error) { toast.error('Erro ao criar: ' + error.message); return; }
         toast.success('Perfil criado!');
       }
@@ -172,7 +185,7 @@ export default function UsuariosPage() {
   };
 
   const resetForm = () => {
-    setEmail(''); setSenha(''); setTelas([]); setProjetos([]); setMaster(false);
+    setEmail(''); setSenha(''); setTelas([]); setProjetos([]); setMaster(false); setPapelFluxo('adm');
     setAbasRelatorio(['projetos', 'postos', 'gestores', 'mapa', 'eficiencia']); setEditId(null);
   };
 
@@ -183,6 +196,7 @@ export default function UsuariosPage() {
     setTelas(u.telas_acesso || []);
     setProjetos(u.projetos_acesso || []);
     setMaster(u.master || false);
+    setPapelFluxo(u.papel_fluxo || (u.master ? 'master' : 'adm'));
     setAbasRelatorio(u.abas_relatorio || ['projetos', 'postos', 'gestores', 'mapa', 'eficiencia']);
     setShowForm(true);
   };
@@ -265,6 +279,35 @@ export default function UsuariosPage() {
               ))}
             </div>
           </div>
+
+          {/* Papel na Tela de Fluxos */}
+          {telas.includes('fluxos') && (
+            <div className="mb-8">
+              <label className="text-xs font-bold text-gray-400 uppercase ml-1 block mb-3">
+                Função na Página de Fluxos (Solicitação de Abastecimento)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { id: 'adm', label: 'ADM (Apenas Solicita)' },
+                  { id: 'gerente', label: 'Gerente (Solicita e Aprova)' },
+                  { id: 'master', label: 'Master / Confirmação (Marca Feito)' },
+                ].map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPapelFluxo(p.id as any)}
+                    className={`p-3 rounded-xl border text-xs font-black uppercase tracking-wider transition-all ${
+                      (master ? 'master' : papelFluxo) === p.id
+                        ? 'border-[#0b7336] bg-green-50 dark:bg-[#0b7336]/20 text-[#0b7336] dark:text-green-400'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-500'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Abas do Relatório */}
           {telas.includes('relatorios') && (
