@@ -18,6 +18,7 @@ import {
   MapPinIcon,
   TableCellsIcon,
   ExclamationTriangleIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigation, MOBILE_NAMES } from "@/lib/useNavigation";
 
@@ -40,6 +41,7 @@ const iconMap: Record<string, any> = {
   MapPinIcon,
   TableCellsIcon,
   ExclamationTriangleIcon,
+  ShieldCheckIcon,
 };
 
 export default function MobileNav() {

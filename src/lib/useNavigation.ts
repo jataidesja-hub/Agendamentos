@@ -35,6 +35,7 @@ const DEFAULT_NAV: NavItem[] = [
   { id: "telecom", name: "Controle Telecom", href: "/dashboard/telecom", iconName: "PhoneIcon" },
   { id: "informacoes", name: "Informações", href: "/dashboard/informacoes", iconName: "InformationCircleIcon" },
   { id: "solicitacoes", name: "Solicitações de Manut.", href: "/dashboard/solicitacoes", iconName: "WrenchScrewdriverIcon" },
+  { id: "portaria", name: "Portaria", href: "/dashboard/portaria", iconName: "ShieldCheckIcon" },
 ];
 
 // Nomes curtos para mobile
@@ -60,6 +61,7 @@ export const MOBILE_NAMES: Record<string, string> = {
   telecom: "Telecom",
   informacoes: "Info",
   solicitacoes: "Solicit.",
+  portaria: "Portaria",
 };
 
 function getSavedOrder(): string[] | null {
@@ -99,7 +101,7 @@ export function useNavigation() {
               setPermissões([
                 "agenda", "alertas", "relatorios", "configuracoes",
                 "chaves", "perfis", "veiculos", "projetos",
-                "abastecimentos", "sustentabilidade", "manutencao", "compras", "materiais", "checklist", "km",
+                "abastecimentos", "sustentabilidade", "manutencao", "compras", "materiais", "checklist", "km", "portaria",
               ]);
             }
           });

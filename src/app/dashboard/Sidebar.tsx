@@ -24,6 +24,7 @@ import {
   InformationCircleIcon,
   WrenchScrewdriverIcon,
   ArchiveBoxIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 
 import { supabase } from "@/lib/supabase";
@@ -53,6 +54,7 @@ const iconMap: Record<string, any> = {
   InformationCircleIcon,
   WrenchScrewdriverIcon,
   ArchiveBoxIcon,
+  ShieldCheckIcon,
 };
 
 export default function Sidebar() {
