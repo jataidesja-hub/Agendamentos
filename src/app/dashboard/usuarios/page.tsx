@@ -46,10 +46,62 @@ export default function UsuariosPage() {
     { id: 'portaria', nome: 'Portaria (Entrada/Saída)' },
   ];
 
+  // Vigilantes da Portaria states
+  const [vigilantes, setVigilantes] = useState<any[]>([]);
+  const [vigNome, setVigNome] = useState('');
+  const [vigUsuario, setVigUsuario] = useState('');
+  const [vigSenha, setVigSenha] = useState('');
+
   useEffect(() => {
     fetchUsuarios();
     fetchProjetos();
+    fetchVigilantes();
   }, []);
+
+  async function fetchVigilantes() {
+    const { data } = await supabase.from('portaria_vigilantes').select('*').order('nome', { ascending: true });
+    if (data) setVigilantes(data);
+  }
+
+  const handleSaveVigilante = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vigNome.trim() || !vigUsuario.trim() || !vigSenha.trim()) {
+      toast.error('Preencha nome, usuário e senha do vigilante');
+      return;
+    }
+    const { error } = await supabase.from('portaria_vigilantes').insert({
+      nome: vigNome.trim(),
+      usuario: vigUsuario.trim().toLowerCase(),
+      senha: vigSenha.trim(),
+      ativo: true,
+    });
+    if (error) {
+      toast.error('Erro ao cadastrar vigilante: ' + error.message);
+      return;
+    }
+    toast.success('Vigilante cadastrado!');
+    setVigNome('');
+    setVigUsuario('');
+    setVigSenha('');
+    fetchVigilantes();
+  };
+
+  const toggleVigilanteAtivo = async (id: string, ativoAtual: boolean) => {
+    const { error } = await supabase.from('portaria_vigilantes').update({ ativo: !ativoAtual }).eq('id', id);
+    if (!error) {
+      toast.success(!ativoAtual ? 'Vigilante ativado!' : 'Vigilante desativado!');
+      fetchVigilantes();
+    }
+  };
+
+  const handleDeleteVigilante = async (id: string, nome: string) => {
+    if (!confirm(`Excluir vigilante ${nome}?`)) return;
+    const { error } = await supabase.from('portaria_vigilantes').delete().eq('id', id);
+    if (!error) {
+      toast.success('Vigilante excluído!');
+      fetchVigilantes();
+    }
+  };
 
   async function fetchProjetos() {
     const { data } = await supabase
@@ -323,6 +375,87 @@ export default function UsuariosPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Seção de Cadastro de Vigilantes (Portaria) */}
+      <div className="mt-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-100 dark:border-gray-700/50 rounded-3xl p-6 md:p-8 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+              Vigilantes da Portaria (Login Celular)
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">
+              Cadastre o usuário e senha básicos que os vigilantes usarão na tela da Portaria
+            </p>
+          </div>
+          <a
+            href="/portaria"
+            target="_blank"
+            className="text-xs font-black uppercase tracking-wider text-[#0b7336] bg-green-50 hover:bg-green-100 px-4 py-2.5 rounded-xl self-start sm:self-auto"
+          >
+            Abrir Link Celular (/portaria)
+          </a>
+        </div>
+
+        <form onSubmit={handleSaveVigilante} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <input
+            type="text"
+            required
+            placeholder="Nome do Vigilante"
+            value={vigNome}
+            onChange={e => setVigNome(e.target.value)}
+            className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white"
+          />
+          <input
+            type="text"
+            required
+            placeholder="Usuário (ex: joao.vigia)"
+            value={vigUsuario}
+            onChange={e => setVigUsuario(e.target.value)}
+            className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white"
+          />
+          <input
+            type="text"
+            required
+            placeholder="Senha numérica ou texto"
+            value={vigSenha}
+            onChange={e => setVigSenha(e.target.value)}
+            className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#0b7336] text-gray-900 dark:text-white"
+          />
+          <button
+            type="submit"
+            className="bg-[#0b7336] hover:bg-[#298d4a] text-white font-bold rounded-xl px-5 py-3 text-sm shadow-lg transition-all"
+          >
+            + Cadastrar Vigilante
+          </button>
+        </form>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {vigilantes.map(v => (
+            <div key={v.id} className={`p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/50 flex items-center justify-between gap-3 ${v.ativo === false ? 'opacity-60' : ''}`}>
+              <div className="min-w-0">
+                <p className="font-black text-gray-900 dark:text-white truncate">{v.nome}</p>
+                <p className="text-xs font-bold text-gray-500">Usuário: <span className="text-[#0b7336]">{v.usuario}</span> • Senha: {v.senha}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => toggleVigilanteAtivo(v.id, v.ativo !== false)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${v.ativo !== false ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}
+                >
+                  {v.ativo !== false ? 'Desativar' : 'Ativar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteVigilante(v.id, v.nome)}
+                  className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

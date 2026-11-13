@@ -67,8 +67,8 @@ export default function PortariaPage() {
   const [loginPass, setLoginPass] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // Abas principais
-  const [abaAtiva, setAbaAtiva] = useState<"registro" | "historico" | "cadastros" | "vigilantes">("registro");
+  // Abas principais (somente Registro, Histórico e Cadastros de Pessoas/Veículos)
+  const [abaAtiva, setAbaAtiva] = useState<"registro" | "historico" | "cadastros">("registro");
 
   // Passo a passo do Registro
   const [tipoMovimento, setTipoMovimento] = useState<"entrada" | "saida">("entrada");
@@ -465,13 +465,12 @@ export default function PortariaPage() {
         </button>
       </div>
 
-      {/* Menu de Navegação Interno (Responsivo em Grid 2x2 no celular ou 4 col) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-gray-200/70 dark:bg-gray-800/80 p-1.5 rounded-2xl">
+      {/* Menu de Navegação Interno (Responsivo em 3 colunas no celular) */}
+      <div className="grid grid-cols-3 gap-2 bg-gray-200/70 dark:bg-gray-800/80 p-1.5 rounded-2xl">
         {[
           { id: "registro", label: "Registrar", icon: CheckCircleIcon },
           { id: "historico", label: `Registros (${movimentacoes.length})`, icon: ListBulletIcon },
           { id: "cadastros", label: `Cadastros (${cadastros.length})`, icon: IdentificationIcon },
-          { id: "vigilantes", label: "Vigilantes", icon: KeyIcon },
         ].map((tab) => {
           const Icon = tab.icon;
           const active = abaAtiva === tab.id;
@@ -927,66 +926,6 @@ export default function PortariaPage() {
                 </div>
               ))
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ── ABA 4: GERENCIAR VIGILANTES (USUÁRIO E SENHA BÁSICO) ── */}
-      {abaAtiva === "vigilantes" && (
-        <div className="bg-white dark:bg-gray-800 rounded-3xl p-4 sm:p-6 shadow-xl border border-gray-100 dark:border-gray-700 space-y-5">
-          <h2 className="text-base font-black text-gray-900 dark:text-white uppercase">
-            Cadastrar Login de Vigilante
-          </h2>
-          <form onSubmit={handleCriarVigilante} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <input
-              type="text"
-              required
-              placeholder="Nome do Vigilante"
-              value={vigNome}
-              onChange={(e) => setVigNome(e.target.value)}
-              className="px-3.5 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-gray-900 dark:text-white outline-none"
-            />
-            <input
-              type="text"
-              required
-              placeholder="Usuário (login)"
-              value={vigUser}
-              onChange={(e) => setVigUser(e.target.value)}
-              className="px-3.5 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-gray-900 dark:text-white outline-none"
-            />
-            <div className="flex gap-2">
-              <input
-                type="password"
-                required
-                placeholder="Senha"
-                value={vigSenha}
-                onChange={(e) => setVigSenha(e.target.value)}
-                className="flex-1 min-w-0 px-3.5 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-gray-900 dark:text-white outline-none"
-              />
-              <button
-                type="submit"
-                className="px-4 py-3 bg-[#0b7336] text-white rounded-xl text-xs font-black uppercase tracking-wider shrink-0"
-              >
-                Salvar
-              </button>
-            </div>
-          </form>
-
-          <div className="space-y-2 pt-2">
-            {vigilantesList.map((v) => (
-              <div
-                key={v.id}
-                className="p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex items-center justify-between"
-              >
-                <div>
-                  <p className="text-sm font-black text-gray-900 dark:text-white">{v.nome}</p>
-                  <p className="text-xs font-bold text-gray-400">Usuário: {v.usuario}</p>
-                </div>
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-700">
-                  Ativo
-                </span>
-              </div>
-            ))}
           </div>
         </div>
       )}

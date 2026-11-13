@@ -91,18 +91,16 @@ export function useNavigation() {
 
         supabase
           .from("perfis_acesso")
-          .select("telas_acesso")
+          .select("telas_acesso, master")
           .eq("email", email)
           .single()
           .then(({ data }) => {
-            if (data?.telas_acesso) {
+            if (data?.master) {
+              setPermissões(DEFAULT_NAV.map((n) => n.id));
+            } else if (data?.telas_acesso) {
               setPermissões(data.telas_acesso);
             } else if (email === "logistica@cymi.com.br") {
-              setPermissões([
-                "agenda", "alertas", "relatorios", "configuracoes",
-                "chaves", "perfis", "veiculos", "projetos",
-                "abastecimentos", "sustentabilidade", "manutencao", "compras", "materiais", "checklist", "km", "portaria",
-              ]);
+              setPermissões(DEFAULT_NAV.map((n) => n.id));
             }
           });
       }
