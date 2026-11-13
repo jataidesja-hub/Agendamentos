@@ -51,6 +51,68 @@ export interface FluxoAbastecimento {
   created_at: string;
 }
 
+// Empacota metadados extras dentro de observacao_fluxo para sincronizar entre todos os usuários sem precisar alterar colunas do banco
+const parseMeta = (raw: string | null | undefined) => {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
+
+const rowToFluxo = (r: any): FluxoAbastecimento => {
+  const meta = parseMeta(r.observacao_fluxo);
+  return {
+    id: r.id,
+    placa: r.placa || null,
+    cartao: r.cartao || null,
+    projeto: r.projeto || null,
+    justificativa: r.justificativa || "",
+    valor: Number(r.valor) || 0,
+    status: (r.status as any) || "solicitado",
+    solicitado_por: r.solicitado_por || "",
+    solicitado_em: r.solicitado_em || r.created_at,
+    aprovado_por: r.aprovado_por || null,
+    aprovado_em: r.aprovado_em || null,
+    recusado_por: meta.recusado_por || null,
+    recusado_em: meta.recusado_em || null,
+    motivo_recusa: meta.motivo_recusa || null,
+    feito_por: r.feito_por || null,
+    feito_em: r.feito_em || null,
+    pdf_assinado_nome: meta.pdf_assinado_nome || null,
+    pdf_assinado_url: meta.pdf_assinado_url || null,
+    created_at: r.created_at || new Date().toISOString(),
+  };
+};
+
+const fluxoToRow = (f: FluxoAbastecimento) => {
+  const meta = {
+    recusado_por: f.recusado_por || null,
+    recusado_em: f.recusado_em || null,
+    motivo_recusa: f.motivo_recusa || null,
+    pdf_assinado_nome: f.pdf_assinado_nome || null,
+    pdf_assinado_url: f.pdf_assinado_url || null,
+  };
+  return {
+    id: f.id,
+    placa: f.placa,
+    cartao: f.cartao,
+    projeto: f.projeto,
+    justificativa: f.justificativa,
+    valor: f.valor,
+    status: f.status,
+    solicitado_por: f.solicitado_por,
+    solicitado_em: f.solicitado_em,
+    aprovado_por: f.aprovado_por,
+    aprovado_em: f.aprovado_em,
+    feito_por: f.feito_por,
+    feito_em: f.feito_em,
+    observacao_fluxo: JSON.stringify(meta),
+    created_at: f.created_at,
+  };
+};
+
 const fmtCurrency = (v: number) =>
   Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -95,7 +157,7 @@ export default function FluxosAbastecimentoPage() {
   const [motivoRecusaInput, setMotivoRecusaInput] = useState("");
   const [novoValorRecusa, setNovoValorRecusa] = useState("");
 
-  // Modal Alterar Valor pelo ADM (quando recusado)
+  // Modal Alterar Valor pelo ADM
   const [itemEditarValor, setItemEditarValor] = useState<FluxoAbastecimento | null>(null);
   const [valorEditadoInput, setValorEditadoInput] = useState("");
   const [justificativaEditadaInput, setJustificativaEditadaInput] = useState("");
@@ -186,13 +248,45 @@ export default function FluxosAbastecimentoPage() {
     }
   };
 
-  // Carrega solicitações do Google Drive (se conectado) ou cache local (sem usar tabela de solicitações no Supabase)
+  // Carrega e mescla solicitações entre o banco compartilhado (para todos os usuários verem) + itens locais criados anteriormente + Google Drive
   const carregarFluxos = async (webhookUrl = gdriveWebhookUrl) => {
     try {
+      // 1. Lê qualquer item que o usuário tenha criado localmente no navegador antes
+      let localItems: FluxoAbastecimento[] = [];
       const localRaw = localStorage.getItem(STORAGE_FLUXOS_KEY);
       if (localRaw) {
-        setFluxos(JSON.parse(localRaw));
+        try {
+          localItems = JSON.parse(localRaw);
+        } catch {}
       }
+
+      // 2. Busca da tabela compartilhada para todos os computadores verem em tempo real
+      const { data: dbRows, error } = await supabase
+        .from("fluxos_abastecimento")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && dbRows) {
+        const dbItems = dbRows.map(rowToFluxo);
+        const dbIds = new Set(dbItems.map((d) => d.id));
+
+        // Se existia algum item apenas no navegador local deste usuário (ex: do teste do Joaquim), sobe automaticamente para todos verem
+        const missingInDb = localItems.filter((l) => l.id && !dbIds.has(l.id));
+        if (missingInDb.length > 0) {
+          await supabase
+            .from("fluxos_abastecimento")
+            .upsert(missingInDb.map(fluxoToRow), { onConflict: "id" });
+        }
+
+        const merged = [...missingInDb, ...dbItems].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setFluxos(merged);
+        localStorage.setItem(STORAGE_FLUXOS_KEY, JSON.stringify(merged));
+        return;
+      }
+
+      // Fallback Drive / Local
       if (webhookUrl) {
         const res = await fetch(webhookUrl, { method: "GET" });
         if (res.ok) {
@@ -200,19 +294,31 @@ export default function FluxosAbastecimentoPage() {
           if (Array.isArray(remoteData)) {
             setFluxos(remoteData);
             localStorage.setItem(STORAGE_FLUXOS_KEY, JSON.stringify(remoteData));
+            return;
           }
         }
       }
+
+      setFluxos(localItems);
     } catch (e) {
-      console.warn("Usando cache local dos fluxos:", e);
+      console.warn("Erro ao carregar fluxos:", e);
     }
   };
 
-  // Persiste lista no Google Drive e no navegador
-  const persistirFluxos = async (novaLista: FluxoAbastecimento[]) => {
+  // Salva um item modificado/criado para que apareça imediatamente na tela de todos os usuários + envia ao Google Drive
+  const salvarItemCompartilhado = async (
+    itemAtualizado: FluxoAbastecimento,
+    novaLista: FluxoAbastecimento[]
+  ) => {
     setFluxos(novaLista);
     localStorage.setItem(STORAGE_FLUXOS_KEY, JSON.stringify(novaLista));
 
+    // Sincroniza no banco compartilhado para aparecer em todas as telas
+    await supabase
+      .from("fluxos_abastecimento")
+      .upsert(fluxoToRow(itemAtualizado), { onConflict: "id" });
+
+    // Se tiver webhook do Google Drive configurado, espelha também no Drive
     if (gdriveWebhookUrl) {
       try {
         await fetch(gdriveWebhookUrl, {
@@ -254,7 +360,6 @@ export default function FluxosAbastecimentoPage() {
   const gerarPDFParaAssinatura = (item: FluxoAbastecimento) => {
     const doc = new jsPDF();
 
-    // Cabeçalho Verde CYMI
     doc.setFillColor(11, 115, 54);
     doc.rect(0, 0, 210, 32, "F");
     doc.setTextColor(255, 255, 255);
@@ -266,7 +371,6 @@ export default function FluxosAbastecimentoPage() {
     doc.text(`Protocolo ID: ${item.id.slice(0, 8).toUpperCase()}`, 14, 24);
     doc.text(`Data/Hora Emissao: ${fmtDateTime(item.solicitado_em)}`, 130, 24);
 
-    // Quadro de Dados da Solicitação
     doc.setTextColor(30, 30, 30);
     doc.setDrawColor(210, 210, 210);
     doc.setFillColor(248, 250, 249);
@@ -302,7 +406,6 @@ export default function FluxosAbastecimentoPage() {
     doc.setTextColor(11, 115, 54);
     doc.text(fmtCurrency(item.valor), 68, 96);
 
-    // Justificativa
     doc.setTextColor(30, 30, 30);
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
@@ -312,7 +415,6 @@ export default function FluxosAbastecimentoPage() {
     const splitJust = doc.splitTextToSize(item.justificativa || "---", 180);
     doc.text(splitJust, 14, 136);
 
-    // Campos de Assinatura (ADM e Gerente)
     const yAssin = 200;
     doc.setDrawColor(100, 100, 100);
     doc.line(20, yAssin, 95, yAssin);
@@ -335,7 +437,7 @@ export default function FluxosAbastecimentoPage() {
     toast.success("PDF gerado! Envie para o Gerente assinar e depois suba o PDF assinado.");
   };
 
-  // ── UPLOAD DO PDF ASSINADO PELO GERENTE (SALVA NO GOOGLE DRIVE) ────────────
+  // ── UPLOAD DO PDF ASSINADO PELO GERENTE ────────────────────────────────────
   const handleUploadPdfAssinado = async (item: FluxoAbastecimento, file: File) => {
     const reader = new FileReader();
     reader.onload = async () => {
@@ -368,17 +470,14 @@ export default function FluxosAbastecimentoPage() {
         }
       }
 
-      const novaLista = fluxos.map((f) =>
-        f.id === item.id
-          ? {
-              ...f,
-              pdf_assinado_nome: file.name,
-              pdf_assinado_url: fileUrl,
-            }
-          : f
-      );
-      await persistirFluxos(novaLista);
-      toast.success("PDF assinado anexado à solicitação!");
+      const itemAtualizado: FluxoAbastecimento = {
+        ...item,
+        pdf_assinado_nome: file.name,
+        pdf_assinado_url: fileUrl,
+      };
+      const novaLista = fluxos.map((f) => (f.id === item.id ? itemAtualizado : f));
+      await salvarItemCompartilhado(itemAtualizado, novaLista);
+      toast.success("PDF assinado anexado! Agora você já pode clicar em Aprovado.");
     };
     reader.readAsDataURL(file);
   };
@@ -408,7 +507,7 @@ export default function FluxosAbastecimentoPage() {
         null;
 
       const novoItem: FluxoAbastecimento = {
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        id: crypto.randomUUID(),
         placa: placa.trim().toUpperCase() || null,
         cartao: cartao.trim().toUpperCase() || null,
         projeto: projFinal,
@@ -430,7 +529,7 @@ export default function FluxosAbastecimentoPage() {
       };
 
       const novaLista = [novoItem, ...fluxos];
-      await persistirFluxos(novaLista);
+      await salvarItemCompartilhado(novoItem, novaLista);
 
       toast.success("Solicitação criada! Baixe o PDF para assinatura do Gerente.");
       setPlaca("");
@@ -444,53 +543,44 @@ export default function FluxosAbastecimentoPage() {
     }
   };
 
-  // 2A. Aprovar Solicitação
+  // 2A. Aprovar Solicitação (Qualquer usuário/ADM com acesso ou Gerente/Master pode aprovar após anexar a autorização)
   const handleAprovar = async (item: FluxoAbastecimento) => {
-    if (!podeAprovar) {
-      toast.error("Apenas Gerente ou Master pode aprovar.");
-      return;
-    }
-    const novaLista = fluxos.map((f) =>
-      f.id === item.id
-        ? {
-            ...f,
-            status: "aprovado" as const,
-            aprovado_por: userEmail,
-            aprovado_em: new Date().toISOString(),
-            motivo_recusa: null,
-          }
-        : f
-    );
-    await persistirFluxos(novaLista);
+    const itemAtualizado: FluxoAbastecimento = {
+      ...item,
+      status: "aprovado",
+      aprovado_por: userEmail,
+      aprovado_em: new Date().toISOString(),
+      motivo_recusa: null,
+    };
+    const novaLista = fluxos.map((f) => (f.id === item.id ? itemAtualizado : f));
+    await salvarItemCompartilhado(itemAtualizado, novaLista);
     toast.success("Solicitação APROVADA!");
   };
 
-  // 2B. Recusar Solicitação (com opção de já sugerir/alterar o valor ou devolver para o ADM alterar)
+  // 2B. Recusar Solicitação (com opção de alterar o valor)
   const handleConfirmarRecusa = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!itemParaRecusar) return;
     const valorAlterado = Number(String(novoValorRecusa).replace(",", "."));
 
-    const novaLista = fluxos.map((f) =>
-      f.id === itemParaRecusar.id
-        ? {
-            ...f,
-            status: "recusado" as const,
-            valor: valorAlterado > 0 ? valorAlterado : f.valor,
-            recusado_por: userEmail,
-            recusado_em: new Date().toISOString(),
-            motivo_recusa: motivoRecusaInput.trim() || "Valor/solicitação recusada para ajuste",
-          }
-        : f
-    );
-    await persistirFluxos(novaLista);
+    const itemAtualizado: FluxoAbastecimento = {
+      ...itemParaRecusar,
+      status: "recusado",
+      valor: valorAlterado > 0 ? valorAlterado : itemParaRecusar.valor,
+      recusado_por: userEmail,
+      recusado_em: new Date().toISOString(),
+      motivo_recusa: motivoRecusaInput.trim() || "Valor/solicitação recusada para ajuste",
+    };
+
+    const novaLista = fluxos.map((f) => (f.id === itemParaRecusar.id ? itemAtualizado : f));
+    await salvarItemCompartilhado(itemAtualizado, novaLista);
     setItemParaRecusar(null);
     setMotivoRecusaInput("");
     setNovoValorRecusa("");
     toast.success("Solicitação marcada como RECUSADA para alteração de valor.");
   };
 
-  // 2C. Alterar Valor após Recusa e Reenviar para Aprovação
+  // 2C. Alterar Valor e Reenviar
   const handleSalvarNovoValor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!itemEditarValor) return;
@@ -500,21 +590,19 @@ export default function FluxosAbastecimentoPage() {
       return;
     }
 
-    const novaLista = fluxos.map((f) =>
-      f.id === itemEditarValor.id
-        ? {
-            ...f,
-            valor: vNum,
-            justificativa: justificativaEditadaInput.trim() || f.justificativa,
-            status: "solicitado" as const,
-            solicitado_por: userEmail || f.solicitado_por,
-            solicitado_em: new Date().toISOString(),
-          }
-        : f
-    );
-    await persistirFluxos(novaLista);
+    const itemAtualizado: FluxoAbastecimento = {
+      ...itemEditarValor,
+      valor: vNum,
+      justificativa: justificativaEditadaInput.trim() || itemEditarValor.justificativa,
+      status: "solicitado",
+      solicitado_por: userEmail || itemEditarValor.solicitado_por,
+      solicitado_em: new Date().toISOString(),
+    };
+
+    const novaLista = fluxos.map((f) => (f.id === itemEditarValor.id ? itemAtualizado : f));
+    await salvarItemCompartilhado(itemAtualizado, novaLista);
     setItemEditarValor(null);
-    toast.success("Valor atualizado e reenviado para aprovação!");
+    toast.success("Valor atualizado!");
   };
 
   // 3. Master Marca como FEITO
@@ -523,29 +611,28 @@ export default function FluxosAbastecimentoPage() {
       toast.error("Apenas o login principal (Master) pode marcar como Feito.");
       return;
     }
-    const novaLista = fluxos.map((f) =>
-      f.id === item.id
-        ? {
-            ...f,
-            status: "feito" as const,
-            feito_por: userEmail,
-            feito_em: new Date().toISOString(),
-          }
-        : f
-    );
-    await persistirFluxos(novaLista);
+    const itemAtualizado: FluxoAbastecimento = {
+      ...item,
+      status: "feito",
+      feito_por: userEmail,
+      feito_em: new Date().toISOString(),
+    };
+    const novaLista = fluxos.map((f) => (f.id === item.id ? itemAtualizado : f));
+    await salvarItemCompartilhado(itemAtualizado, novaLista);
     toast.success("Confirmado como FEITO!");
   };
 
   const handleExcluir = async (id: string) => {
     if (!confirm("Deseja excluir esta solicitação?")) return;
     const novaLista = fluxos.filter((f) => f.id !== id);
-    await persistirFluxos(novaLista);
+    setFluxos(novaLista);
+    localStorage.setItem(STORAGE_FLUXOS_KEY, JSON.stringify(novaLista));
+    await supabase.from("fluxos_abastecimento").delete().eq("id", id);
     toast.success("Solicitação removida.");
   };
 
-  const podeAprovar =
-    isMaster || papelFluxo === "gerente" || papelFluxo === "master" || placasGerenteSet.size > 0;
+  // Agora quem subiu a solicitação (ADM) também pode aprovar ou recusar, pois anexa a autorização assinada
+  const podeAprovar = true;
   const podeMarcarFeito = isMaster || papelFluxo === "master";
 
   const fluxosFiltrados = useMemo(() => {
@@ -587,7 +674,7 @@ export default function FluxosAbastecimentoPage() {
   if (loading) {
     return (
       <div className="p-12 text-center text-gray-400 font-black uppercase tracking-widest animate-pulse">
-        Carregando Fluxos (Google Drive)...
+        Carregando Fluxos...
       </div>
     );
   }
@@ -605,10 +692,9 @@ export default function FluxosAbastecimentoPage() {
               Fluxos • Solicitação de Abastecimento
             </h1>
             <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mt-0.5">
-              Logado como: <span className="text-[#0b7336] dark:text-green-400">{userEmail}</span> •
-              Armazenamento:{" "}
+              Logado como: <span className="text-[#0b7336] dark:text-green-400">{userEmail}</span> •{" "}
               <span className="uppercase font-black text-blue-600 dark:text-blue-400">
-                Google Drive (Sem Supabase)
+                Sincronizado em Tempo Real + Pasta Google Drive
               </span>
             </p>
           </div>
@@ -733,7 +819,7 @@ export default function FluxosAbastecimentoPage() {
           </div>
         </div>
 
-        {/* COLUNA 2: APROVADOS PELO GERENTE */}
+        {/* COLUNA 2: APROVADOS */}
         <div className="bg-blue-50/60 dark:bg-gray-800/50 border border-blue-200/70 dark:border-gray-700 rounded-3xl p-4 sm:p-5 flex flex-col gap-4">
           <div className="flex items-center justify-between border-b border-blue-200/60 dark:border-gray-700 pb-3">
             <div className="flex items-center gap-2.5">
@@ -945,7 +1031,7 @@ export default function FluxosAbastecimentoPage() {
         </div>
       )}
 
-      {/* MODAL RECUSAR SOLICITAÇÃO (GERENTE/MASTER) */}
+      {/* MODAL RECUSAR SOLICITAÇÃO */}
       {itemParaRecusar && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3">
           <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
@@ -1010,7 +1096,7 @@ export default function FluxosAbastecimentoPage() {
         </div>
       )}
 
-      {/* MODAL ALTERAR VALOR PELO SOLICITANTE (ADM) */}
+      {/* MODAL ALTERAR VALOR PELO SOLICITANTE */}
       {itemEditarValor && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3">
           <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
@@ -1102,9 +1188,9 @@ export default function FluxosAbastecimentoPage() {
               >
                 {GDRIVE_FOLDER_ID}
               </a>
-              . Para que o sistema grave os PDFs assinados e o arquivo JSON direto nessa pasta do seu
-              Google Drive automaticamente, cole abaixo a URL do Web App do arquivo{" "}
-              <code className="bg-gray-100 px-1 py-0.5 rounded">google_drive_fluxos_script.js</code>.
+              . Cole abaixo a URL do Web App do arquivo{" "}
+              <code className="bg-gray-100 px-1 py-0.5 rounded">google_drive_fluxos_script.js</code>{" "}
+              para enviar uma cópia dos PDFs assinados automaticamente para sua pasta do Drive.
             </p>
 
             <form onSubmit={handleSalvarWebhook} className="space-y-3">
@@ -1226,7 +1312,7 @@ function CardFluxo({
         {item.justificativa}
       </div>
 
-      {/* Motivo da Recusa (se foi recusado) */}
+      {/* Motivo da Recusa */}
       {isRecusado && item.motivo_recusa && (
         <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs font-bold text-red-700 dark:text-red-300">
           Motivo da Recusa: {item.motivo_recusa}
@@ -1333,7 +1419,7 @@ function CardFluxo({
         )}
       </div>
 
-      {/* Botões Aprovado / Recusado / Marcar Feito */}
+      {/* Botões Aprovado / Recusado (liberados para o solicitante/ADM e gerente) + Marcar Feito (somente Master) */}
       <div className="flex items-center gap-2 pt-2">
         {(item.status === "solicitado" || item.status === "recusado") && podeAprovar && (
           <>
