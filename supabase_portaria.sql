@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS portaria_cadastros (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   nome TEXT NOT NULL,
   documento TEXT, -- CPF ou RG
-  tipo_pessoa TEXT NOT NULL DEFAULT 'funcionario', -- 'funcionario' | 'terceiro'
+  tipo_pessoa TEXT NOT NULL DEFAULT 'funcionario', -- 'funcionario' | 'terceiro' | 'veiculo'
   empresa TEXT,
   placa TEXT,
   tipo_veiculo TEXT DEFAULT 'empresa', -- 'proprio' | 'empresa' | 'sem_veiculo'
